@@ -39,7 +39,7 @@ npx playwright install chromium   # npm test の閲覧テストに使う
 
 ```
 content/
-  lines.yml                       路線(記号・名前・色・配置)
+  lines.yml                       路線(記号・名前・色・配置・未執筆の章)
   fields/<分野ID>.yml             分野(名前・紹介文・目標の駅)
   chapters/<章番号>-<章ID>/
     index.md                      章の本文
@@ -50,6 +50,7 @@ content/
 - 章の md は、front matter(`title`・`subtitle`・`line`)、章頭、`## 駅名 {#ID …}` で始まる駅、章末で書く。駅の中身は `::: definition` などの囲むブロックで書く
 - 数式は KaTeX。別行立ての式 `$$…$$` には章ごとの式番号 (3.1) が付き、`{#ID}` を付けると `[[@ID]]` で参照できる
 - 用語や駅へのリンクは `[[コーシー列]]` や `[[banach|バナッハの不動点定理]]` と書く
+- まだ書いていない章は、`lines.yml` の路線に `planned`(章番号・タイトル・予定の駅名)として書くと、全体の路線図に灰色で出る。章フォルダの仮原稿は要らない
 
 書き方の規則と、ビルドが検査する内容は [docs/spec/content-format.md](docs/spec/content-format.md) にある。完成した章の例は [第3章](content/chapters/03-completeness-fixed-point/index.md)。
 

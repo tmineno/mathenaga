@@ -73,6 +73,7 @@ content/
 | color_dark | ダークテーマで使う路線の色。`#RRGGBB`。書かなければ color を使う | 任意 |
 | style | 線の種類。`solid`(実線)か `dotted`(点線)。書かなければ `solid` | 任意 |
 | layout | 幹線から分岐する向き。`up`・`down`・`right` のどれか。書かない路線は幹線になる | 任意 |
+| planned | この路線に載る、まだ書いていない章の配列(下の「未執筆の章」) | 任意 |
 
 - 幹線は1つ以上要る。
 - 0番線は `style: dotted` にして、同じ色の本線と見分けられるようにする。
@@ -99,6 +100,34 @@ content/
   color: "#0F7F73"
   color_dark: "#4DC1B3"
   layout: down
+```
+
+#### 未執筆の章(planned)
+
+まだ章フォルダを置いていない章を、路線図に予定として描くための項目である。章フォルダの仮原稿は要らない。
+
+| 項目 | 内容 | 必須 |
+|---|---|---|
+| chapter | 章番号。0 以上の整数。章フォルダの章番号とも、ほかの planned の章番号とも重複できない | 必須 |
+| title | 章のタイトル | 必須 |
+| stations | 予定の駅名の配列。1つ以上 | 必須 |
+| requires | 前提にする駅の ID の配列。路線図で、支線の分岐駅を決めるのに使う。読む順で前の駅だけを指せる | 任意 |
+
+- 未執筆の章は、全体の路線図にだけ現れる([route-map.md](route-map.md))。章ページ・定義索引・次の章の案内・分野の範囲・参照範囲には入らない。
+- 未執筆の駅には ID も表示番号もなく、`[[…]]` の参照先にならない。表示番号は書いた駅だけで振るので、途中の章を書き終えると、その後ろの駅の表示番号は変わる。
+- 支線の最初の章が未執筆なら、requires に幹線の駅を書く。書かなければ E12 で止まる([route-map.md](route-map.md))。
+- 章を書き終えたら、章フォルダを置き、planned からその章を消す。消し忘れると章番号の重複で E04 になる。
+
+```yaml
+- id: analysis
+  code: A
+  name: 解析線
+  color: "#5B45B8"
+  layout: up
+  planned:
+    - chapter: 10
+      title: 作用素
+      stations: [有界作用素, スペクトル]
 ```
 
 ### 分野ファイル(fields/<分野ID>.yml)
@@ -296,11 +325,11 @@ $$\forall \varepsilon > 0,\ \exists N,\ \forall m, n \ge N: d(x_m, x_n) < \varep
 | コード | 種類 | 対象 |
 |---|---|---|
 | E01 | 読み取りの失敗 | YAML・front matter が解釈できない。章フォルダに index.md がない |
-| E02 | 知らない名前 | 表にないブロック名・属性・YAML の項目。kind・layout・style の値の誤り |
-| E03 | 値の形式 | ID の形式、`def-` で始まる ID、「章番号-章の ID」の形でない章フォルダ名、color・color_dark・code の形式 |
-| E04 | 重複 | 名前空間での ID の重複、章番号の重複、路線記号の重複、同じ分野の goals での駅の重複、駅と ID を共有する定義が2つ以上 |
-| E05 | 参照先の誤り | 存在しない ID や種類の違う ID を指している。requires、line、goals の station、field 属性、`[[ID]]`、`[[@ID]]` が対象 |
-| E06 | 前提の順序 | requires が、読む順で後ろの駅か自分自身を指している。循環があれば循環の一覧も出す |
+| E02 | 知らない名前 | 表にないブロック名・属性・YAML の項目(planned の中を含む)。kind・layout・style の値の誤り |
+| E03 | 値の形式 | ID の形式、`def-` で始まる ID、「章番号-章の ID」の形でない章フォルダ名、color・color_dark・code の形式、planned の形(配列でない、chapter が 0 以上の整数でない、stations・requires が文字列の配列でない、stations が空) |
+| E04 | 重複 | 名前空間での ID の重複、章番号の重複(planned の章番号を含む)、路線記号の重複、同じ分野の goals での駅の重複、駅と ID を共有する定義が2つ以上 |
+| E05 | 参照先の誤り | 存在しない ID や種類の違う ID を指している。requires(planned の requires を含む)、line、goals の station、field 属性、`[[ID]]`、`[[@ID]]` が対象 |
+| E06 | 前提の順序 | requires が、読む順で後ろの駅か自分自身を指している。planned の requires が、その章より章番号の大きい章の駅を指している。循環があれば循環の一覧も出す |
 | E07 | 名前の解決 | `[[名前]]` の候補が参照範囲にない、または2つ以上ある |
 | E08 | 必須の欠落 | front matter と YAML の必須項目、駅のない章、駅の summary、定理のある駅の proof-sketch、共通版の goal と motivation、review、definition の name と en、theorem の ID と name、application の field と title、answer のない question、final の目標がない分野、幹線のない路線ファイル |
 | E09 | 個数・位置の誤り | summary・review・共通版が2つ以上、同じ分野の分野版が2つ以上、章頭の外の goal と motivation、駅の外の駅のブロック、章末の後の駅や地の文、question のない answer、ブロックの入れ子、1段目の見出し、ID のない2段目の見出し、駅の見出しの数式と参照 |
@@ -354,6 +383,11 @@ $$\forall \varepsilon > 0,\ \exists N,\ \forall m, n \ge N: d(x_m, x_n) < \varep
    18. 路線ファイルに `style: dashed` と `color_dark: purple` を書く(E02 と E03)。
    19. 章フォルダの名前から接頭辞の番号を外す(E03)。
    20. 章の front matter に `chapter: 3` を書く(E02)。
+   21. 路線ファイルの planned に、章フォルダと同じ章番号 3 を書く(E04)。
+   22. planned の requires に存在しない ID を書く(E05)。
+   23. planned から stations を消す(E08)。
+   24. 第9章のフォルダを `11-manifolds` に変え、planned の第10章の requires に manifold を書く(E06)。
+   25. planned に `id: operators` を書く(E02)。
 5. 4 の誤りのうち、別々のファイルにある2つを同時に入れると、1回のビルドで両方が出る。
 6. 本文に `<script>alert(1)</script>` と書いた章をビルドすると、ページにはその文字列が文字として出て、script 要素はできない。
 

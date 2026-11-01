@@ -105,12 +105,23 @@ export function checkMaps(site, linesFile) {
   const errors = [];
   const notices = [];
   const maps = [
-    { name: '全体の図', drawn: new Set(site.stations.map((s) => s.id)) },
-    ...site.fields.map((f) => ({ name: `${f.title}の図`, drawn: site.scope.get(f.id) ?? new Set() })),
+    { name: '全体の図', drawn: new Set(site.stations.map((s) => s.id)), planned: true },
+    ...site.fields.map((f) => ({ name: `${f.title}の図`, drawn: site.scope.get(f.id) ?? new Set(), planned: false })),
   ];
   for (const m of maps) {
-    const layout = layoutMap(site, m.drawn);
+    const layout = layoutMap(site, m.drawn, { planned: m.planned });
     for (const x of layout.missing) {
+      if (x.first.planned) {
+        errors.push(
+          issue(
+            'E12',
+            linesFile,
+            null,
+            `${m.name}:支線 ${x.line.name} の最初の駅は未執筆の第${x.first.chapter.number}章の「${x.first.name}」で、planned の requires が幹線の駅を指していない`,
+          ),
+        );
+        continue;
+      }
       errors.push(
         issue(
           'E12',

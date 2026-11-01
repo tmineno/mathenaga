@@ -23,6 +23,7 @@ export const KIND_NAMES = {
  * @property {number} index     読む順での位置(0 から)
  * @property {string[]} requires  存在する駅の ID だけ
  * @property {string} code      表示番号(A01 など)
+ * @property {boolean} [planned]  未執筆の章の駅(路線図だけで使う。map.js の mapStations)
  */
 
 /**
@@ -52,6 +53,7 @@ export const KIND_NAMES = {
  * @property {Set<string>} transfers   乗換駅
  * @property {Map<string, Set<string>>} scope   分野 → 分野の範囲
  * @property {Map<string, import('./chapter.js').ChapterModel[]>} fieldChapters  分野 → 分野内の章の順序
+ * @property {import('./schema.js').PlannedChapter[]} planned   未執筆の章(章番号の順。requires は存在する駅だけ)
  */
 
 /**
@@ -110,6 +112,30 @@ export function buildSite(input) {
       errors.push(issue('E05', c.file, 1, `line の参照先 ${c.lineId} が路線ファイルにない`));
     }
   }
+  /** @type {import('./schema.js').PlannedChapter[]} */
+  const planned = [];
+  /** 未執筆の章 → 書いた requires @type {Map<object, string[]>} */
+  const declared = new Map();
+  for (const l of lines) {
+    for (const pc of l.planned ?? []) {
+      if (numbers.has(pc.number)) {
+        errors.push(
+          issue(
+            'E04',
+            input.linesFile,
+            null,
+            `planned の章番号 ${pc.number}(${pc.title})が重複している(${numbers.get(pc.number)} と同じ)`,
+          ),
+        );
+      } else {
+        numbers.set(pc.number, `${input.linesFile} の planned`);
+        const copy = { ...pc, requires: [] };
+        declared.set(copy, pc.requires);
+        planned.push(copy);
+      }
+    }
+  }
+  planned.sort((a, b) => a.number - b.number);
 
   // 駅(読む順)
   /** @type {StationInfo[]} */
@@ -196,6 +222,36 @@ export function buildSite(input) {
       info.requires.push(r);
     }
   }
+  // 未執筆の章の requires
+  for (const pc of planned) {
+    const where = `planned の第${pc.number}章(${pc.title})`;
+    for (const r of declared.get(pc) ?? []) {
+      const kind = kinds.get(r);
+      if (!kind) {
+        errors.push(issue('E05', input.linesFile, null, `${where}の requires の参照先 ${r} がない`));
+        continue;
+      }
+      if (kind !== 'station') {
+        errors.push(
+          issue('E05', input.linesFile, null, `${where}の requires の ${r} は駅ではない(${KIND_NAMES[kind]})`),
+        );
+        continue;
+      }
+      const target = /** @type {StationInfo} */ (stationById.get(r));
+      if (target.chapter.number > pc.number) {
+        errors.push(
+          issue(
+            'E06',
+            input.linesFile,
+            null,
+            `${where}の requires の ${r} は、章番号の大きい第${target.chapter.number}章の駅を指している`,
+          ),
+        );
+        continue;
+      }
+      pc.requires.push(r);
+    }
+  }
   for (const cycle of findCycles(stations, stationById)) {
     const head = /** @type {StationInfo} */ (stationById.get(cycle[0]));
     errors.push(
@@ -256,6 +312,7 @@ export function buildSite(input) {
     transfers,
     scope: new Map(),
     fieldChapters: new Map(),
+    planned,
   };
 
   // 分野の範囲と章の順序

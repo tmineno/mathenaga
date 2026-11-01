@@ -215,17 +215,27 @@ class Renderer {
 
   /**
    * @param {Set<string>} drawn
-   * @param {{ goals?: any[], highlight?: string | null, title: string, idPrefix: string, hrefFor: (s: any) => string }} opts
+   * @param {{ goals?: any[], highlight?: string | null, planned?: boolean, title: string, idPrefix: string, hrefFor: (s: any) => string, chapterHref: (chapterId: string) => string | null }} opts
    */
   mapBlock(drawn, opts) {
-    const layout = layoutMap(this.site, drawn, { goals: opts.goals, highlight: opts.highlight ?? null });
-    const svg = renderMapSvg(layout, { title: opts.title, idPrefix: opts.idPrefix, hrefFor: opts.hrefFor });
+    const layout = layoutMap(this.site, drawn, {
+      goals: opts.goals,
+      highlight: opts.highlight ?? null,
+      planned: opts.planned ?? false,
+    });
+    const svg = renderMapSvg(layout, {
+      title: opts.title,
+      idPrefix: opts.idPrefix,
+      hrefFor: opts.hrefFor,
+      chapterHref: opts.chapterHref,
+    });
     const legend = layout.linesShown.map(
       (l) => `<li><span class="sw l-${l.id}${l.style === 'dotted' ? ' dotted' : ''}"></span>${h(l.name)}</li>`,
     );
     if (layout.stations.some((s) => s.final)) legend.push('<li><span class="mk final"></span>終着駅</li>');
     if (layout.stations.some((s) => s.transfer)) legend.push('<li><span class="mk transfer"></span>乗換駅</li>');
     if (layout.stations.some((s) => s.partial)) legend.push('<li><span class="mk pill"></span>途中下車OK</li>');
+    if (layout.bands.some((b) => b.planned)) legend.push('<li><span class="mk planned"></span>未執筆</li>');
     return { html: `<ul class="legend">${legend.join('')}</ul><div class="map-scroll">${svg}</div>`, layout };
   }
 
@@ -270,7 +280,9 @@ ${p.main}
     const map = this.mapBlock(all, {
       title: '全体の路線図',
       idPrefix: '_map-all',
+      planned: true,
       hrefFor: (s) => `${this.chapterUrl(s.chapter.id)}#${s.id}`,
+      chapterHref: (id) => this.chapterUrl(id),
     });
     const fields = this.site.fields
       .map(
@@ -303,6 +315,7 @@ ${p.main}
       title: `${f.title}の路線図`,
       idPrefix: `_map-${f.id}`,
       hrefFor: (s) => `${this.chapterUrl(s.chapter.id, f.id)}#${s.id}`,
+      chapterHref: (id) => this.chapterUrl(id, f.id),
     });
     const rows = (this.site.fieldChapters.get(f.id) ?? [])
       .map((c) => {
@@ -401,15 +414,20 @@ ${c.subtitle ? `<p class="ch-sub">${h(c.subtitle)}</p>` : ''}
         title: `${f.title}の路線図`,
         idPrefix: `_map-${f.id}`,
         hrefFor: (s) => (s.chapter === c ? `#${s.id}` : `${this.chapterUrl(s.chapter.id, f.id)}#${s.id}`),
+        chapterHref: (id) => (id === c.id ? '#' : this.chapterUrl(id, f.id)),
       });
-      const note = m.layout.band ? '' : `<p class="note">この章は${h(f.title)}の路線図に載っていません。</p>`;
+      const note = m.layout.bands.some((b) => b.current)
+        ? ''
+        : `<p class="note">この章は${h(f.title)}の路線図に載っていません。</p>`;
       return `<div class="map-v" data-for="${h(f.id)}" hidden>${m.html}${note}</div>`;
     });
     const all = this.mapBlock(new Set(site.stations.map((s) => s.id)), {
       highlight: c.id,
       title: '全体の路線図',
       idPrefix: '_map-all',
+      planned: true,
       hrefFor: (s) => (s.chapter === c ? `#${s.id}` : `${this.chapterUrl(s.chapter.id)}#${s.id}`),
+      chapterHref: (id) => (id === c.id ? '#' : this.chapterUrl(id)),
     });
     maps.push(`<div class="map-v" data-for="">${all.html}</div>`);
     const mapSec = `<section class="mapsec" aria-labelledby="_map-h"><h2 id="_map-h" class="sec-h">路線図</h2>${maps.join('')}</section>`;

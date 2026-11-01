@@ -17,6 +17,16 @@ const LINE_CODE = /^[A-Z]+$/;
  * @property {'solid' | 'dotted'} style
  * @property {'up' | 'down' | 'right' | null} layout
  * @property {number} order  路線ファイルでの順
+ * @property {PlannedChapter[]} planned  未執筆の章(書いた順)
+ */
+
+/**
+ * @typedef {object} PlannedChapter  路線ファイルの planned に書いた、未執筆の章
+ * @property {number} number   章番号
+ * @property {string} title
+ * @property {string[]} stations  予定の駅名
+ * @property {string[]} requires  前提にする駅の ID(書いたまま。存在の検査は graph.js)
+ * @property {string} lineId
  */
 
 /**
@@ -53,7 +63,7 @@ export function checkLines(data, file) {
     errors.push(issue('E01', file, null, '路線ファイルは路線の配列で書く'));
     return { lines, errors };
   }
-  const allowed = ['id', 'code', 'name', 'color', 'color_dark', 'style', 'layout'];
+  const allowed = ['id', 'code', 'name', 'color', 'color_dark', 'style', 'layout', 'planned'];
   const codes = new Map();
   data.forEach((item, index) => {
     const where = `${index + 1}番目の路線`;
@@ -90,6 +100,7 @@ export function checkLines(data, file) {
     if (item.layout !== undefined && !['up', 'down', 'right'].includes(item.layout)) {
       errors.push(issue('E02', file, null, `${where}の layout「${item.layout}」は up・down・right のどれか`));
     }
+    const planned = nonEmptyString(item.id) ? checkPlanned(item.planned, item.id, file, where, errors) : [];
     if (!nonEmptyString(item.id)) return;
     lines.push({
       id: item.id,
@@ -105,12 +116,77 @@ export function checkLines(data, file) {
       style: item.style === 'dotted' ? 'dotted' : 'solid',
       layout: ['up', 'down', 'right'].includes(item.layout) ? item.layout : null,
       order: index,
+      planned,
     });
   });
   if (lines.length > 0 && !lines.some((l) => l.layout === null)) {
     errors.push(issue('E08', file, null, '幹線(layout を書かない路線)が1つもない'));
   }
   return { lines, errors };
+}
+
+/**
+ * 路線の planned(未執筆の章)を検査する。
+ * @param {unknown} value
+ * @param {string} lineId
+ * @param {string} file
+ * @param {string} where
+ * @param {import('./issues.js').Issue[]} errors
+ * @returns {PlannedChapter[]}
+ */
+function checkPlanned(value, lineId, file, where, errors) {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    errors.push(issue('E03', file, null, `${where}の planned は章の配列で書く`));
+    return [];
+  }
+  /** @type {PlannedChapter[]} */
+  const out = [];
+  value.forEach((item, j) => {
+    const w = `${where}の planned の${j + 1}番目`;
+    if (!isObject(item)) {
+      errors.push(issue('E01', file, null, `${w}が項目の組になっていない`));
+      return;
+    }
+    unknownKeys(item, ['chapter', 'title', 'stations', 'requires'], file, w, errors);
+    let ok = true;
+    for (const key of ['chapter', 'title', 'stations']) {
+      if (item[key] === undefined || item[key] === null) {
+        errors.push(issue('E08', file, null, `${w}に ${key} がない`));
+        ok = false;
+      }
+    }
+    if (item.chapter !== undefined && item.chapter !== null && !(Number.isInteger(item.chapter) && item.chapter >= 0)) {
+      errors.push(issue('E03', file, null, `${w}の chapter「${item.chapter}」は 0 以上の整数で書く`));
+      ok = false;
+    }
+    if (item.title !== undefined && item.title !== null && !nonEmptyString(item.title)) {
+      errors.push(issue('E03', file, null, `${w}の title は文字列で書く`));
+      ok = false;
+    }
+    const strings = (/** @type {unknown} */ v) => Array.isArray(v) && v.every((x) => nonEmptyString(x));
+    if (
+      item.stations !== undefined &&
+      item.stations !== null &&
+      !(strings(item.stations) && item.stations.length > 0)
+    ) {
+      errors.push(issue('E03', file, null, `${w}の stations は駅名の配列で、1つ以上書く`));
+      ok = false;
+    }
+    if (item.requires !== undefined && !strings(item.requires)) {
+      errors.push(issue('E03', file, null, `${w}の requires は駅の ID の配列で書く`));
+      ok = false;
+    }
+    if (!ok) return;
+    out.push({
+      number: item.chapter,
+      title: item.title,
+      stations: item.stations.map((x) => x.trim()),
+      requires: item.requires ?? [],
+      lineId,
+    });
+  });
+  return out;
 }
 
 /**
