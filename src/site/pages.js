@@ -82,13 +82,25 @@ export async function generateSite(ctx) {
 
 /**
  * 路線の色を CSS の変数にする。ダークテーマでは color_dark を使う。
+ * ダークは、OS の設定に合わせるとき(テーマをライトに固定していない)と、表示の設定でダークを選んだときの2つ
+ * (site.md「表示の設定」)。
  * @param {import('../core/schema.js').Line[]} lines
  */
 export function lineCss(lines) {
   const light = lines.map((l) => `.l-${l.id}{--lc:${l.color}}`).join('\n');
-  const dark = lines.map((l) => `.l-${l.id}{--lc:${l.colorDark}}`).join('\n');
-  return `${light}\n@media (prefers-color-scheme: dark){\n${dark}\n}\n`;
+  /** @param {string} scope */
+  const dark = (scope) => lines.map((l) => `${scope} .l-${l.id}{--lc:${l.colorDark}}`).join('\n');
+  return `${light}\n@media (prefers-color-scheme: dark){\n${dark(":root:not([data-theme='light'])")}\n}\n${dark(":root[data-theme='dark']")}\n`;
 }
+
+/**
+ * ページを描く前に、保存した表示の設定のうちテーマ・文字の大きさ・本文の幅を html の属性に移す
+ * (site.md「表示の設定」。開いたときに初期値の表示が一瞬見えないように、head の中で動かす)。
+ * 選択肢にない値は無視する(初期値のまま)。設定の読み書きと残りの項目は app.js が受け持つ。
+ */
+const LOOK_SCRIPT =
+  "try{var s=JSON.parse(localStorage.getItem('mathenaga-settings')||'null'),r=document.documentElement,o={theme:['light','dark'],text:['small','large'],width:['narrow','wide']};" +
+  "if(s&&typeof s==='object')for(var k in o)if(o[k].indexOf(s[k])>=0)r.setAttribute('data-'+k,s[k])}catch(e){}";
 
 /**
  * トークン i が段落として数えるもの(site.md「位置情報つきのコピー」)なら、data-p を付けるトークンを返す。
@@ -350,6 +362,7 @@ class Renderer {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>${LOOK_SCRIPT}</script>
 <title>${h(p.title)}</title>
 <link rel="icon" href="${this.base}assets/favicon.png" type="image/png" sizes="${FAVICON_SIZE}x${FAVICON_SIZE}">
 <link rel="icon" href="${this.base}assets/favicon.svg" type="image/svg+xml">
@@ -552,7 +565,7 @@ ${c.subtitle ? `<p class="ch-sub">${h(c.subtitle)}</p>` : ''}
             (q) =>
               `<li><div class="q flow">${this.inner(c, q.question)}</div>${
                 q.answer
-                  ? `<details class="fold"><summary>答え</summary><div class="fold-body flow">${this.inner(c, q.answer)}</div></details>`
+                  ? `<details class="fold answer"><summary>答え</summary><div class="fold-body flow">${this.inner(c, q.answer)}</div></details>`
                   : ''
               }</li>`,
           )
@@ -564,7 +577,7 @@ ${c.subtitle ? `<p class="ch-sub">${h(c.subtitle)}</p>` : ''}
     ].join('');
     const aheadSec = `<section class="ahead" id="_ahead"><h2 class="sec-h">この先</h2>${ahead}</section>`;
 
-    const main = `<article class="chapter" data-chapter="${c.number}">
+    const main = `<article class="chapter" data-chapter="${c.number}" data-id="${h(c.id)}">
 ${head}
 ${chooser}
 ${this.versionGroup(c, c.head.goals, 'goal', 'この章のゴール', 'この章のゴール')}

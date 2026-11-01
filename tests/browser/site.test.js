@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import zlib from 'node:zlib';
 import { after, before, describe, test } from 'node:test';
 import { chromium } from 'playwright';
 import {
@@ -978,5 +979,386 @@ describe('route-map: 12. ダークテーマの路線の色(ブラウザ)', () =>
     assert.equal(dark.analysis, 'rgb(170, 152, 242)');
     assert.equal(light.main, 'rgb(135, 144, 161)');
     assert.equal(dark.main, 'rgb(135, 144, 161)');
+  });
+});
+
+// ---------- 表示の設定(P-09)としおり(P-10) ----------
+
+/**
+ * 設定のメニューを開き(閉じていれば)、項目を選ぶ。checks の項目は value に true/false を渡す。
+ * @param {import('playwright').Page} page @param {string} key @param {string | boolean} value
+ */
+async function choose(page, key, value) {
+  if (await page.locator('#_settings').isHidden()) await page.locator('.settings-btn').click();
+  if (typeof value === 'boolean') {
+    const box = page.locator(`#_settings input[name="_set-${key}"]`);
+    if (value) await box.check();
+    else await box.uncheck();
+  } else {
+    await page.locator(`#_settings input[name="_set-${key}"][value="${value}"]`).check();
+  }
+}
+
+/** @param {import('playwright').Page} page */
+const look = (page) =>
+  page.evaluate(() => ({
+    theme: document.documentElement.getAttribute('data-theme'),
+    text: document.documentElement.getAttribute('data-text'),
+    width: document.documentElement.getAttribute('data-width'),
+    bg: getComputedStyle(document.body).backgroundColor,
+    ink: getComputedStyle(document.body).color,
+  }));
+
+/**
+ * 1×1 の PNG の画素(R, G, B)。画素が1つなら、どの filter でも生の値と同じになる。
+ * @param {Buffer} png
+ */
+function pixelOf(png) {
+  /** @type {Buffer[]} */
+  const idat = [];
+  for (let i = 8; i < png.length;) {
+    const len = png.readUInt32BE(i);
+    if (png.toString('ascii', i + 4, i + 8) === 'IDAT') idat.push(png.subarray(i + 8, i + 8 + len));
+    i += 12 + len;
+  }
+  const raw = zlib.inflateSync(Buffer.concat(idat));
+  return [raw[1], raw[2], raw[3]];
+}
+
+/** @param {import('playwright').Page} page */
+const mapScale = (page) =>
+  page
+    .locator('.map-v:visible svg.map')
+    .first()
+    .evaluate((svg) => Number(/scale\(([^)]+)\)/.exec(/** @type {SVGElement} */ (svg).style.transform)?.[1]));
+
+describe('site: 表示の設定(P-09)', () => {
+  test('35. 右下の設定のボタンとメニュー', async () => {
+    const { context, page } = await open();
+    for (const u of ['', 'fields/physics/']) {
+      await page.goto(server.url + u);
+      assert.ok(await page.locator('.settings-btn').isVisible(), u);
+    }
+    await page.goto(`${server.url}${CH3}`);
+    const btn = page.locator('.settings-btn');
+    assert.equal(await btn.getAttribute('aria-label'), '表示の設定');
+    const before = await btn.boundingBox();
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await page.waitForTimeout(100);
+    assert.deepEqual(await btn.boundingBox(), before);
+    const vp = /** @type {{ width: number, height: number }} */ (page.viewportSize());
+    assert.ok(before && before.x + before.width > vp.width - 40 && before.y + before.height > vp.height - 40);
+
+    await btn.click();
+    const panel = page.locator('#_settings');
+    assert.ok(await panel.isVisible());
+    assert.ok(await page.evaluate(() => document.activeElement?.matches('#_settings input')));
+    await page.keyboard.press('Escape');
+    assert.ok(await panel.isHidden());
+    assert.ok(await page.evaluate(() => document.activeElement?.classList.contains('settings-btn')));
+    await btn.click();
+    assert.ok(await panel.isVisible());
+    await page.mouse.click(40, 400);
+    assert.ok(await panel.isHidden());
+    await context.close();
+
+    const off = await open({ javaScriptEnabled: false });
+    await off.page.goto(`${server.url}${CH3}`);
+    assert.equal(await off.page.locator('.settings-btn').count(), 0);
+    await off.context.close();
+  });
+
+  test('36. テーマを選ぶと OS の設定によらずその配色になり、図の SVG も合わせる', async () => {
+    const root = await tempRoot();
+    try {
+      await addFigures(root);
+      // 画像の中の prefers-color-scheme で塗りを変える SVG(ライトは白、ダークは黒)
+      await fs.writeFile(
+        path.join(root, 'content', path.dirname(CH3_SOURCE), 'figures', 'a.svg'),
+        '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200"><style>rect{fill:#ffffff}@media (prefers-color-scheme: dark){rect{fill:#000000}}</style><rect width="300" height="200"/></svg>\n',
+      );
+      const r = await buildIn(root);
+      assert.deepEqual(r.errors, []);
+      const s = await serve(path.join(root, 'dist'));
+      try {
+        /** @param {import('playwright').Page} page */
+        const figPixel = async (page) => {
+          const img = page.locator('figure#fig-one img');
+          await img.scrollIntoViewIfNeeded();
+          await page.waitForFunction(
+            () => /** @type {HTMLImageElement} */ (document.querySelector('#fig-one img'))?.complete,
+          );
+          const b = /** @type {any} */ (await img.boundingBox());
+          return pixelOf(
+            await page.screenshot({
+              clip: { x: Math.round(b.x + b.width / 2), y: Math.round(b.y + b.height / 2), width: 1, height: 1 },
+            }),
+          );
+        };
+        const osDark = await open({ colorScheme: 'dark' });
+        await osDark.page.goto(`${s.url}${CH3}`);
+        const dark = await look(osDark.page);
+        assert.deepEqual(await figPixel(osDark.page), [0, 0, 0]);
+
+        const { context, page } = await open({ colorScheme: 'light' });
+        await page.goto(`${s.url}${CH3}`);
+        const light = await look(page);
+        assert.notEqual(light.bg, dark.bg);
+        await choose(page, 'theme', 'dark');
+        assert.deepEqual([(await look(page)).bg, (await look(page)).ink], [dark.bg, dark.ink]);
+        await page.keyboard.press('Escape');
+        assert.deepEqual(await figPixel(page), [0, 0, 0]);
+        await page.reload();
+        assert.equal((await look(page)).bg, dark.bg);
+        assert.deepEqual(await figPixel(page), [0, 0, 0]);
+        await page.goto(s.url);
+        assert.equal((await look(page)).bg, dark.bg);
+        await choose(page, 'theme', 'auto');
+        assert.equal((await look(page)).bg, light.bg);
+
+        await choose(osDark.page, 'theme', 'light');
+        assert.equal((await look(osDark.page)).bg, light.bg);
+        await osDark.page.keyboard.press('Escape');
+        assert.deepEqual(await figPixel(osDark.page), [255, 255, 255]);
+        await context.close();
+        await osDark.context.close();
+      } finally {
+        await s.close();
+      }
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('37. 文字の大きさは本文の段だけを変え、バーと路線図は変えない', async () => {
+    const { context, page } = await open();
+    await page.goto(`${server.url}${CH3}`);
+    const sizes = () =>
+      page.evaluate(() => {
+        const fs = (/** @type {string} */ sel) =>
+          getComputedStyle(/** @type {Element} */ (document.querySelector(sel))).fontSize;
+        const label = [...document.querySelectorAll('.map .label')].find((e) => e.getBoundingClientRect().width > 0);
+        return {
+          body: fs('#banach > p[data-p]'),
+          mark: fs('.bar .mark'),
+          map: label ? getComputedStyle(label).fontSize : '',
+        };
+      });
+    const medium = await sizes();
+    assert.equal(medium.body, '16px');
+    await choose(page, 'text', 'large');
+    assert.deepEqual(await sizes(), { ...medium, body: '18px' });
+    await choose(page, 'text', 'small');
+    assert.deepEqual(await sizes(), { ...medium, body: '14px' });
+    await context.close();
+  });
+
+  test('38. 本文の幅で段と路線図の枠の幅が変わり、広くしても横スクロールは出ない', async () => {
+    const { context, page } = await open({ viewport: { width: 1580, height: 900 } });
+    await page.goto(`${server.url}${CH3}`);
+    for (const [value, page_] of /** @type {const} */ ([
+      ['narrow', 860],
+      ['wide', 1400],
+    ])) {
+      await choose(page, 'width', value);
+      const m = await page.evaluate(() => {
+        const wrap = getComputedStyle(/** @type {Element} */ (document.querySelector('.wrap')));
+        const col = /** @type {Element} */ (document.querySelector('.chapter')).getBoundingClientRect();
+        const frame = /** @type {Element} */ (
+          [...document.querySelectorAll('.map-scroll')].find((el) => el.getBoundingClientRect().width > 0)
+        ).getBoundingClientRect();
+        return {
+          max: wrap.maxWidth,
+          pad: parseFloat(wrap.paddingLeft) + parseFloat(wrap.paddingRight),
+          col: { left: col.left, right: col.right, width: col.width },
+          frame: { left: frame.left, right: frame.right },
+        };
+      });
+      assert.equal(m.max, `${page_}px`, value);
+      assert.ok(Math.abs(m.col.width - (page_ - m.pad)) <= 1, `${value}: 段の幅 ${m.col.width}`);
+      assert.ok(Math.abs(m.col.left - m.frame.left) <= 1 && Math.abs(m.col.right - m.frame.right) <= 1, value);
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.reload();
+    assert.equal((await look(page)).width, 'wide');
+    assert.equal(await page.locator('section.station a.issue').count(), 5);
+    assert.equal(
+      await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth),
+      false,
+    );
+    await context.close();
+  });
+
+  test('39. 最初から開く', async () => {
+    const { context, page } = await open();
+    await page.goto(`${server.url}${CH3}`);
+    const states = (/** @type {string} */ sel) =>
+      page.locator(sel).evaluateAll((els) => els.map((d) => /** @type {HTMLDetailsElement} */ (d).open));
+    assert.ok((await states('details.fold.proof')).length > 0);
+    assert.ok((await states('details.fold.answer')).length > 0);
+    await choose(page, 'openProof', true);
+    await choose(page, 'openAnswer', true);
+    assert.ok((await states('details.fold.proof')).every(Boolean), '選んだときに開かない');
+    await page.reload();
+    assert.ok((await states('details.fold.proof')).every(Boolean));
+    assert.ok((await states('details.fold.answer')).every(Boolean));
+    await choose(page, 'openOther', true);
+    await page.goto(`${server.url}${CH3}?field=physics`);
+    assert.ok((await states('details.v[data-field=cs]')).every(Boolean));
+    await choose(page, 'openProof', false);
+    await choose(page, 'openAnswer', false);
+    await choose(page, 'openOther', false);
+    await page.reload();
+    assert.ok(!(await states('details.fold.proof')).some(Boolean));
+    assert.ok(!(await states('details.fold.answer')).some(Boolean));
+    assert.ok(!(await states('details.v[data-field=cs]')).some(Boolean));
+    assert.ok((await states('details.v[data-field=physics]')).every(Boolean));
+    await context.close();
+  });
+
+  test('40. 用語ポップアップを押したときだけ出す', async () => {
+    const { context, page } = await open();
+    await page.goto(`${server.url}${CH3}`);
+    await choose(page, 'popup', 'click');
+    await page.keyboard.press('Escape');
+    const term = page.locator('#completeness .def .term').first();
+    const pop = page.locator('#_pop');
+    await term.hover();
+    await page.waitForTimeout(300);
+    assert.ok(await pop.isHidden(), '重ねただけで出た');
+    await term.focus();
+    await page.waitForTimeout(300);
+    assert.ok(await pop.isHidden(), 'フォーカスだけで出た');
+    await term.click();
+    await pop.locator('.pop-h').waitFor();
+    await page.mouse.move(5, 5);
+    await page.waitForTimeout(400);
+    assert.ok(await pop.isVisible(), 'ポインターを離すと閉じた');
+    await page.keyboard.press('Escape');
+    assert.ok(await pop.isHidden());
+    await context.close();
+  });
+
+  test('42. 壊れた値は初期値として扱い、保存できなくても効き、元に戻せる', async () => {
+    const a = await open();
+    await a.page.goto(`${server.url}${CH3}`);
+    await a.page.evaluate(() => localStorage.setItem('mathenaga-settings', '{"theme":"neon","text":"large"}'));
+    await a.page.reload();
+    const v = await look(a.page);
+    assert.deepEqual([v.theme, v.text], [null, 'large']);
+    assert.equal(
+      await a.page
+        .locator('#banach > p[data-p]')
+        .first()
+        .evaluate((e) => getComputedStyle(e).fontSize),
+      '18px',
+    );
+    assert.deepEqual(a.errors, []);
+    await a.context.close();
+
+    const b = await open();
+    await b.context.addInitScript(() => {
+      Object.defineProperty(window, 'localStorage', {
+        get() {
+          throw new Error('denied');
+        },
+      });
+    });
+    await b.page.goto(`${server.url}${CH3}`);
+    await choose(b.page, 'theme', 'dark');
+    assert.equal((await look(b.page)).theme, 'dark');
+    assert.deepEqual(b.errors, []);
+    await b.context.close();
+
+    const c = await open();
+    await c.page.goto(`${server.url}${CH3}?field=physics`);
+    await c.page.locator('.map-v:visible .map-tools button[aria-label="拡大"]').click();
+    await choose(c.page, 'theme', 'dark');
+    await choose(c.page, 'text', 'large');
+    await choose(c.page, 'openProof', true);
+    await c.page.locator('#_settings button', { hasText: '元に戻す' }).click();
+    const after = await look(c.page);
+    assert.deepEqual([after.theme, after.text, after.width], [null, null, null]);
+    assert.ok(await c.page.locator('#_settings input[name="_set-theme"][value="auto"]').isChecked());
+    assert.equal(await mapScale(c.page), 1);
+    assert.ok(
+      !(await c.page
+        .locator('details.fold.proof')
+        .evaluateAll((els) => els.some((d) => /** @type {HTMLDetailsElement} */ (d).open))),
+    );
+    const stored = await c.page.evaluate(() => ({
+      settings: localStorage.getItem('mathenaga-settings'),
+      zoom: localStorage.getItem('mathenaga-map-zoom'),
+      field: localStorage.getItem('mathenaga-field'),
+    }));
+    assert.deepEqual(stored, { settings: null, zoom: null, field: 'physics' });
+    await c.context.close();
+  });
+});
+
+describe('site: しおり(P-10)', () => {
+  test('41. 前回の続きから読む', async () => {
+    const { context, page } = await open({ reducedMotion: 'reduce' });
+    await page.goto(`${server.url}${CH3}`);
+    await page
+      .locator('#banach')
+      .evaluate((el) => window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY + el.clientHeight / 2));
+    await page.waitForFunction(
+      () => JSON.parse(localStorage.getItem('mathenaga-bookmarks') || '{}')['completeness-fixed-point'],
+    );
+    const mark = await page.evaluate(
+      () => JSON.parse(localStorage.getItem('mathenaga-bookmarks') || '{}')['completeness-fixed-point'],
+    );
+    assert.equal(mark.st, 'banach');
+    assert.ok(mark.p > 0);
+
+    await page.goto(`${server.url}${CH3}`);
+    const resume = page.locator('.resume');
+    assert.equal(await resume.locator('.resume-text').innerText(), '前回の続き:A04 バナッハの不動点定理');
+    const banner = await resume.boundingBox();
+    const head = await page.locator('.ch-head').boundingBox();
+    assert.ok(banner && head && banner.y < head.y, '案内が章の見出しの上にない');
+    await resume.getByRole('button', { name: '続きから読む' }).click();
+    assert.equal(await resume.count(), 0);
+    const gap = await page.evaluate(
+      (p) =>
+        /** @type {Element} */ (document.querySelector(`#banach [data-p="${p}"]`)).getBoundingClientRect().top -
+        /** @type {Element} */ (document.querySelector('.bar')).getBoundingClientRect().bottom,
+      mark.p,
+    );
+    assert.ok(gap >= 0 && gap <= 16, `しおりの段落とバーの間 ${gap}px`);
+
+    await page.goto(`${server.url}${CH3}#banach`);
+    assert.equal(await page.locator('.resume').count(), 0);
+    await choose(page, 'theme', 'auto');
+    await page.locator('#_settings button', { hasText: 'しおりを消す' }).click();
+    await page.goto(`${server.url}${CH3}`);
+    assert.equal(await page.locator('.resume').count(), 0);
+
+    await page.goto(`${server.url}chapters/norm-inner-product/`);
+    await page.waitForTimeout(400);
+    await page.goto(`${server.url}chapters/norm-inner-product/`);
+    assert.equal(await page.locator('.resume').count(), 0);
+    await context.close();
+  });
+});
+
+describe('route-map: 24. 倍率を覚える(ブラウザ)', () => {
+  test('拡大した倍率でほかの章の図も開き、元に戻すと 1 倍', async () => {
+    const { context, page } = await open();
+    await page.goto(`${server.url}${CH3}`);
+    const zoomIn = page.locator('.map-v:visible .map-tools button[aria-label="拡大"]');
+    await zoomIn.click();
+    await zoomIn.click();
+    await page.goto(`${server.url}chapters/norm-inner-product/`);
+    assert.equal(await mapScale(page), 1.5625);
+    const frame = /** @type {any} */ (await page.locator('.map-v:visible .map-scroll').boundingBox());
+    const band = /** @type {any} */ (await page.locator('.map-v:visible rect.band.current').boundingBox());
+    assert.ok(Math.abs(band.x + band.width / 2 - (frame.x + frame.width / 2)) <= 1, '今の章の帯が枠の横の中央にない');
+    await choose(page, 'theme', 'auto');
+    await page.locator('#_settings button', { hasText: '元に戻す' }).click();
+    await page.goto(`${server.url}chapters/norm-inner-product/`);
+    assert.equal(await mapScale(page), 1);
+    await context.close();
   });
 });
