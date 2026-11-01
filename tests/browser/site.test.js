@@ -56,7 +56,7 @@ describe('site: 受け入れテスト', () => {
     assert.ok(!(await isOpen(page, '.vgroup[data-kind=goal] > details[data-field=cs]')));
     assert.ok(await visible(page, '.map-v[data-for=physics]'));
     assert.ok(!(await visible(page, '.map-v[data-for=""]')));
-    assert.equal(await page.locator('.map-v[data-for=physics] rect.band').count(), 1);
+    assert.equal(await page.locator('.map-v[data-for=physics] rect.band.current').count(), 1);
     assert.match(await text(page, '.here-next [data-for=physics]'), /第4章/);
     assert.equal(await page.locator('.out-label:visible').count(), 0);
     assert.ok(await isOpen(page, '#completeness details[data-field=physics]'));
@@ -74,7 +74,7 @@ describe('site: 受け入れテスト', () => {
     const { context, page } = await open();
     await page.goto(`${server.url}${CH3}?field=cs`);
     assert.ok(await isOpen(page, '.vgroup[data-kind=goal] > details[data-field=cs]'));
-    assert.equal(await page.locator('.map-v[data-for=cs] rect.band').count(), 1);
+    assert.equal(await page.locator('.map-v[data-for=cs] rect.band.current').count(), 1);
     assert.ok(await visible(page, '.map-v[data-for=cs]'));
     assert.equal(await text(page, '.here-next [data-for=cs]'), 'なし(この章の A04 が終着駅)');
     const ahead = await text(page, '.next[data-for=cs]');
@@ -92,7 +92,7 @@ describe('site: 受け入れテスト', () => {
     assert.ok(await visible(page, '.vgroup[data-kind=goal] > .v.common'));
     assert.equal(await page.locator('details.v[open]').count(), 0);
     assert.ok(await visible(page, '.map-v[data-for=""]'));
-    assert.equal(await page.locator('.map-v[data-for=""] rect.band').count(), 1);
+    assert.equal(await page.locator('.map-v[data-for=""] rect.band.current').count(), 1);
     assert.match(await text(page, '.here-next [data-for=""] a'), /第4章/);
     assert.ok(await visible(page, '.chooser'));
     await context.close();
@@ -343,6 +343,21 @@ describe('site: 受け入れテスト', () => {
       }
       await context.close();
     }
+  });
+});
+
+describe('route-map: 14. 章の帯を押すと章のページの先頭へ移る(ブラウザ)', () => {
+  test('全体の図の第3章の帯の、駅のない部分を押す', async () => {
+    const { context, page } = await open();
+    await page.goto(server.url);
+    const band = page.locator('svg.map a.ch[aria-label="第3章 完備性と不動点"] rect.band');
+    const box = await band.boundingBox();
+    assert.ok(box);
+    // 帯の右下の隅(駅の札と駅名のない場所)を押す
+    await page.mouse.click(box.x + box.width - 4, box.y + box.height - 4);
+    await page.waitForURL(/\/chapters\/completeness-fixed-point\/$/);
+    assert.equal(await page.evaluate(() => window.scrollY), 0);
+    await context.close();
   });
 });
 

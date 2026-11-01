@@ -4,10 +4,8 @@
 
 数学の概念を「駅」、分野の流れを「路線」に見立て、路線図で今いる場所と目標までの道のりを示す。読者は自分の分野(理論物理・情報科学)を選んで、その分野に必要な範囲と応用を読める。
 
-- 公開先:GitHub Pages のプロジェクトサイト `https://<owner>.github.io/mathenaga/`
-- 最初の題材:集合位相(距離空間から、ヒルベルト空間と多様体まで)、全10章
-
-コンセプトと用語は [docs/spec/README.md](docs/spec/README.md) にある。
+[公開先](https://tmineno.github.io/mathenaga/)
+[コンセプト](docs/spec/README.md)
 
 ## 必要なもの
 
@@ -41,7 +39,7 @@ npx playwright install chromium   # npm test の閲覧テストに使う
 
 ```
 content/
-  lines.yml                       路線(記号・名前・色・配置)
+  lines.yml                       路線(記号・名前・色・配置・未執筆の章)
   fields/<分野ID>.yml             分野(名前・紹介文・目標の駅)
   chapters/<章番号>-<章ID>/
     index.md                      章の本文
@@ -52,6 +50,7 @@ content/
 - 章の md は、front matter(`title`・`subtitle`・`line`)、章頭、`## 駅名 {#ID …}` で始まる駅、章末で書く。駅の中身は `::: definition` などの囲むブロックで書く
 - 数式は KaTeX。別行立ての式 `$$…$$` には章ごとの式番号 (3.1) が付き、`{#ID}` を付けると `[[@ID]]` で参照できる
 - 用語や駅へのリンクは `[[コーシー列]]` や `[[banach|バナッハの不動点定理]]` と書く
+- まだ書いていない章は、`lines.yml` の路線に `planned`(章番号・タイトル・予定の駅名)として書くと、全体の路線図に灰色で出る。章フォルダの仮原稿は要らない
 
 書き方の規則と、ビルドが検査する内容は [docs/spec/content-format.md](docs/spec/content-format.md) にある。完成した章の例は [第3章](content/chapters/03-completeness-fixed-point/index.md)。
 

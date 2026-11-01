@@ -723,6 +723,10 @@ details.fold[open] > summary {
   border-color: var(--ok);
   background: var(--ok-soft);
 }
+.mk.planned {
+  border-style: dashed;
+  border-color: var(--muted);
+}
 .map-scroll {
   overflow-x: auto;
   background: var(--surface);
@@ -775,14 +779,57 @@ svg.map {
   fill: var(--ink);
   text-anchor: middle;
 }
+/* 章の帯(route-map.md「印と凡例」)。今の章は強調の色、未執筆の章は灰色の破線の枠。 */
 .map .band {
+  fill: var(--paper);
+}
+.map .band.current {
   fill: var(--accent-soft);
+}
+.map .band.planned {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
 }
 .map .band-label {
   font-family: var(--font-body);
   font-size: 12px;
   font-weight: 700;
+  fill: var(--muted);
+}
+.map .band-label.current {
   fill: var(--accent);
+}
+/* 章の帯は章のページの先頭へのリンク */
+.map a.ch:hover .band:not(.current),
+.map a.ch:focus .band:not(.current) {
+  fill: var(--accent-soft);
+}
+.map a.ch:hover .band-label,
+.map a.ch:focus .band-label {
+  fill: var(--accent);
+  text-decoration: underline;
+}
+.map a.ch:focus-visible {
+  outline: none;
+}
+.map a.ch:focus-visible .band {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+/* 未執筆の駅と、そこへつながる線 */
+.map .ln.planned {
+  stroke: var(--rule);
+}
+.map .plate.planned {
+  fill: var(--surface);
+  stroke: var(--muted);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 2;
+}
+.map .label.planned {
+  fill: var(--muted);
 }
 .map .pill rect {
   fill: var(--ok-soft);
