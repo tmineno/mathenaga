@@ -143,11 +143,20 @@ code {
   padding: 10px 16px;
 }
 .mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 19px;
   color: var(--ink);
   text-decoration: none;
+}
+/* ロゴの鳥(docs/spec/site.md「ロゴと favicon」)。線の色は currentColor で本文の文字色に従う */
+.mark-icon {
+  flex: none;
+  width: auto;
+  height: 32px;
 }
 .crumb {
   font-size: 13px;
@@ -1026,6 +1035,17 @@ svg.map {
 }
 .intro h1 {
   font-size: clamp(1.9rem, 4.2vw, 2.6rem);
+}
+/* トップページの見出しのロゴ。1 ドットを 3px の整数倍で表示し、ドットの大きさをそろえる */
+.intro h1.logo-h {
+  margin: 0;
+  line-height: 0;
+}
+.logo {
+  display: block;
+  width: 258px;
+  height: 234px;
+  color: var(--ink);
 }
 .lede {
   font-size: 1.06rem;
