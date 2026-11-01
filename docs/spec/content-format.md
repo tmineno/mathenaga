@@ -30,13 +30,15 @@ content/
     physics.yml                 分野ファイル(ファイル名が分野の ID)
     cs.yml
   chapters/
-    completeness-fixed-point/   章フォルダ(フォルダ名が章の ID)
+    03-completeness-fixed-point/  章フォルダ(接頭辞の数字が章番号、残りが章の ID)
       index.md                  章の md
       figures/                  章で使う図(任意)
         step-function.svg
 ```
 
 - `content/chapters/` の下のフォルダは、すべて章フォルダとみなす。
+- 章フォルダの名前は「章番号-章の ID」と書く(`03-completeness-fixed-point`)。章番号は先頭の数字を 0 以上の整数として読むので、`03` と `3` は同じ番号である。フォルダ名を章の順に並べるための 0 埋めは任意。
+- 章の順序は章番号だけで決まる。章番号は飛んでもよい(0, 1, 2, 4 など)。章番号を変えても章の ID は変わらないので、URL と `[[@ID]]` はそのまま使える。
 - 章フォルダの中で読むのは `index.md` と `figures/` だけで、ほかのファイルは無視する。
 - 図は md から相対パスで参照する(`![階段関数](figures/step-function.svg)`)。
 
@@ -44,7 +46,7 @@ content/
 
 - ID は英小文字・数字・ハイフンで書く(`^[a-z0-9]+(-[a-z0-9]+)*$`)。`def-` で始まる ID は使えない(定義のアンカー `#def-<ID>` と衝突させないため)。
 - 路線・分野・章・駅・定義・定理・式の ID は、サイト全体で1つの名前空間に属する。重複はエラーにする。例外は、駅と、その駅の中の定義1つが同じ ID を共有する場合だけである。
-- 章の ID はフォルダ名、分野の ID はファイル名(拡張子を除く)で決まる。ファイルの中に ID を書く項目はない。
+- 章の ID はフォルダ名から章番号とハイフンを除いた部分、分野の ID はファイル名(拡張子を除く)で決まる。ファイルの中に ID を書く項目はない。
 - 定義の ID を省略すると、その定義を含む駅の ID になる。駅と同じ ID を持てる定義は駅ごとに1つまでで、省略した定義と、駅の ID を明示した定義の両方を数える。
 - 定理の ID は省略できない。定理の ID はページ内のアンカーに使い、`[[…]]` の参照先にはならない。
 - 式の ID は任意で、ページ内のアンカーと `[[@ID]]` に使う(下の「式番号」)。
@@ -131,12 +133,11 @@ goals:
 
 | 項目 | 内容 | 必須 |
 |---|---|---|
-| chapter | 章番号。0 以上の整数で、章どうしで重複できない。章の順序はここだけで決まる | 必須 |
 | title | 章のタイトル | 必須 |
 | subtitle | 副題 | 任意 |
 | line | 章が属する路線の ID | 必須 |
 
-章番号は飛んでもよい(0, 1, 2, 4 など)。フォルダ名には章番号を入れない。
+章番号は front matter に書かない。章フォルダの名前で決まる(「ファイル配置」)。
 
 ### 章の md:本文の構成
 
@@ -234,9 +235,10 @@ goals:
 
 ### 例
 
+`chapters/03-completeness-fixed-point/index.md`(章番号 3、章の ID は completeness-fixed-point):
+
 ```markdown
 ---
-chapter: 3
 title: 完備性と不動点
 subtitle: 逐次近似はいつ答えにたどり着くか
 line: analysis
@@ -285,7 +287,7 @@ $$\forall \varepsilon > 0,\ \exists N,\ \forall m, n \ge N: d(x_m, x_n) < \varep
 :::
 ```
 
-この例では、`[[コーシー列]]` は駅 cauchy-sequence と、その駅の定義(ID を省略したので cauchy-sequence)の両方の名前に一致する。同じ ID を共有するので1つの候補として数え、定義に解決する。`[[@cauchy-sequence]]` は A01 になる。コーシー列の定義の別行立ての式には、ID がなくても式番号 (3.1) が付く。完成した章の全体は `content/chapters/completeness-fixed-point/index.md` にある。
+この例では、`[[コーシー列]]` は駅 cauchy-sequence と、その駅の定義(ID を省略したので cauchy-sequence)の両方の名前に一致する。同じ ID を共有するので1つの候補として数え、定義に解決する。`[[@cauchy-sequence]]` は A01 になる。コーシー列の定義の別行立ての式には、ID がなくても式番号 (3.1) が付く。完成した章の全体は `content/chapters/03-completeness-fixed-point/index.md` にある。
 
 ## Failure modes
 
@@ -295,7 +297,7 @@ $$\forall \varepsilon > 0,\ \exists N,\ \forall m, n \ge N: d(x_m, x_n) < \varep
 |---|---|---|
 | E01 | 読み取りの失敗 | YAML・front matter が解釈できない。章フォルダに index.md がない |
 | E02 | 知らない名前 | 表にないブロック名・属性・YAML の項目。kind・layout・style の値の誤り |
-| E03 | 値の形式 | ID の形式、`def-` で始まる ID、0 以上の整数でない章番号、color・color_dark・code の形式 |
+| E03 | 値の形式 | ID の形式、`def-` で始まる ID、「章番号-章の ID」の形でない章フォルダ名、color・color_dark・code の形式 |
 | E04 | 重複 | 名前空間での ID の重複、章番号の重複、路線記号の重複、同じ分野の goals での駅の重複、駅と ID を共有する定義が2つ以上 |
 | E05 | 参照先の誤り | 存在しない ID や種類の違う ID を指している。requires、line、goals の station、field 属性、`[[ID]]`、`[[@ID]]` が対象 |
 | E06 | 前提の順序 | requires が、読む順で後ろの駅か自分自身を指している。循環があれば循環の一覧も出す |
@@ -328,7 +330,7 @@ $$\forall \varepsilon > 0,\ \exists N,\ \forall m, n \ge N: d(x_m, x_n) < \varep
 
 ## Acceptance tests
 
-1. 基準原稿の第3章の banach 駅から proof-sketch を消すと、エラーは E08 の1件だけ(`chapters/completeness-fixed-point/index.md` の banach 駅に proof-sketch がない)で、終了コードは 1、`dist/` は変わらない。
+1. 基準原稿の第3章の banach 駅から proof-sketch を消すと、エラーは E08 の1件だけ(`chapters/03-completeness-fixed-point/index.md` の banach 駅に proof-sketch がない)で、終了コードは 1、`dist/` は変わらない。
 2. 基準原稿をビルドすると、エラーはなく終了コードは 0 である。通知は N01 が理論物理で17駅(cauchy-sequence と contraction を含む)、情報科学で5駅(reading-symbols、reading-proofs、convergence、metric-space、cauchy-sequence)、N02 が第3章以外の9章である。
 3. 基準原稿の第3章で、completeness 駅の定義の中の `[[コーシー列]]` は定義 cauchy-sequence に、章頭の `[[banach|バナッハの不動点定理]]` は駅 banach へのリンクに、banach 駅の定理の中の `[[completeness|完備]]` は定義 completeness に、picard-lindelof 駅の定理の中の `[[一様収束]]` は第1章の定義 uniform-convergence に解決する。
 4. 基準原稿を次のように壊すと、括弧の中のコードのエラーが、壊したファイルと行で出る。
@@ -344,12 +346,14 @@ $$\forall \varepsilon > 0,\ \exists N,\ \forall m, n \ge N: d(x_m, x_n) < \varep
    10. ID のない `## 見出し` を書く(E09)。
    11. 閉じていない `$` と、`$\frac{1}{$` を書く(E10)。
    12. 存在しない図を参照する(E11)。
-   13. 2つの章の chapter を同じ番号にする(E04)。
+   13. 2つの章フォルダの接頭辞を同じ番号にする(`03-…` と `3-…`。E04)。
    14. 分野ファイルに `id: physics` を書く(E02)。
    15. 別行立ての式に `\tag{1}` を書く(E10)。
    16. 閉じる `$$` の後ろに `{#banach-error-bound name="誤差"}` と書く(E02)。
    17. 2つの式に同じ ID を付ける(E04)。
    18. 路線ファイルに `style: dashed` と `color_dark: purple` を書く(E02 と E03)。
+   19. 章フォルダの名前から接頭辞の番号を外す(E03)。
+   20. 章の front matter に `chapter: 3` を書く(E02)。
 5. 4 の誤りのうち、別々のファイルにある2つを同時に入れると、1回のビルドで両方が出る。
 6. 本文に `<script>alert(1)</script>` と書いた章をビルドすると、ページにはその文字列が文字として出て、script 要素はできない。
 
