@@ -348,6 +348,20 @@ describe('site: 受け入れテスト', () => {
   });
 });
 
+describe('site: 22. 出発点と落とし穴の札', () => {
+  test('出発点の共通版は札なし、分野版は「〈分野名〉では」。pitfall は「落とし穴」', async () => {
+    const { context, page } = await open();
+    await page.goto(`${server.url}${CH3}`);
+    const start = page.locator('section#_start');
+    assert.equal(await start.locator('.v.common .tag').count(), 0);
+    assert.deepEqual(await start.locator('details.v > summary').allInnerTexts(), ['情報科学では', '理論物理では']);
+    assert.ok(!(await start.innerText()).includes('出発点('));
+    assert.equal(await page.locator('section#cauchy-sequence .box.pitfall > .tag').first().innerText(), '落とし穴');
+    assert.equal(await page.locator('text=つまずきポイント').count(), 0);
+    await context.close();
+  });
+});
+
 describe('site: 改善案の起票(P-07)', () => {
   test('18. 各駅の起票のリンクと、Issue フォームの欄', async () => {
     const { context, page } = await open();
