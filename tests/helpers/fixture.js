@@ -10,6 +10,68 @@ import { createStaticHandler } from '../../src/dev/static.js';
 export const CONTENT = path.join(ROOT, 'content');
 export const CH3 = 'chapters/03-completeness-fixed-point/index.md';
 
+/**
+ * 原稿の数式を数える。数式の個数の期待値を手で書かずに原稿から作るためのもので、
+ * ビルドの字句解析(src/render/markdown.js)とは別の、単純な数え方にしてある。
+ * front matter、コードブロック、行内のコードは除く。`\$` は数式にしない。
+ * @param {string} text 章の Markdown
+ * @returns {{ inline: number, display: number }}
+ */
+export function countMath(text) {
+  const s = text
+    .replace(/^---\n[\s\S]*?\n---\n/, '')
+    .replace(/^(```|~~~)[\s\S]*?^\1/gm, '')
+    .replace(/`[^`\n]*`/g, '');
+  let inline = 0;
+  let display = 0;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '\\') {
+      i++;
+      continue;
+    }
+    if (s[i] !== '$') continue;
+    const width = s[i + 1] === '$' ? 2 : 1;
+    let j = i + width;
+    while (j < s.length && !(s[j] === '$' && (width === 1 || s[j + 1] === '$'))) j += s[j] === '\\' ? 2 : 1;
+    if (j >= s.length) throw new Error(`閉じていない数式: ${s.slice(i, i + 30)}`);
+    if (width === 2) display++;
+    else inline++;
+    i = j + width - 1;
+  }
+  return { inline, display };
+}
+
+/**
+ * 原稿の定義(definition)の ID を書いた順に集める。defs.json の期待値を手で書かずに原稿から作るためのもの。
+ * `{#ID}` のない定義は、その駅の ID を使う(content-format.md)。
+ * @param {string} text 章の Markdown
+ * @returns {string[]}
+ */
+export function definitionIds(text) {
+  const ids = [];
+  let station = null;
+  for (const line of text.split('\n')) {
+    const h = /^## .*\{#([^\s}]+)/.exec(line);
+    if (h) station = h[1];
+    const d = /^:::\s*definition\b(?:\s*\{([^}]*)\})?/.exec(line);
+    if (!d) continue;
+    const id = /(?:^|\s)#([^\s}]+)/.exec(d[1] ?? '')?.[1] ?? station;
+    if (!id) throw new Error(`ID の決まらない定義: ${line}`);
+    ids.push(id);
+  }
+  return ids;
+}
+
+/** 基準原稿の章(content/ からの相対パス)の定義の ID を集める。 @param {string} rel */
+export async function definitionIdsIn(rel) {
+  return definitionIds(await fs.readFile(path.join(CONTENT, rel), 'utf8'));
+}
+
+/** 基準原稿の章(content/ からの相対パス)の数式を数える。 @param {string} rel */
+export async function countMathIn(rel) {
+  return countMath(await fs.readFile(path.join(CONTENT, rel), 'utf8'));
+}
+
 /** 基準原稿をコピーした一時ディレクトリを作る。中に content/ がある。 */
 export async function tempRoot() {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mathenaga-test-'));

@@ -7,7 +7,18 @@ import path from 'node:path';
 import { after, describe, test } from 'node:test';
 import { ROOT, analyze } from '../../src/build.js';
 import { chapterInField, nextChapter, prerequisiteChapters, transferGuide } from '../../src/core/navigation.js';
-import { CH3, buildIn, edit, listFiles, readDist, referenceBuild, replaceOnce, tempRoot } from '../helpers/fixture.js';
+import {
+  CH3,
+  buildIn,
+  countMathIn,
+  definitionIdsIn,
+  edit,
+  listFiles,
+  readDist,
+  referenceBuild,
+  replaceOnce,
+  tempRoot,
+} from '../helpers/fixture.js';
 
 const roots = [];
 after(async () => {
@@ -111,28 +122,31 @@ describe('build: 受け入れテスト', () => {
     assert.deepEqual(transferGuide(site, ch(3), 'cs'), []);
   });
 
-  test('8. 第3章の参照がすべて解決し、数式がすべて描画される', async () => {
-    const { ctx, ch } = await ref();
+  test('8. 第3章の参照がすべて解決し、原稿の数式がすべて描画される', async () => {
+    const { ctx, ch, dist } = await ref();
     const c3 = ch(3);
     for (const r of c3.refs) assert.ok(ctx.resolved.has(r.token), `[[${r.token.content}]] が解決していない`);
-    assert.equal(c3.maths.length, 178);
-    const all = ctx.site.chapters.reduce((n, c) => n + c.maths.length, 0);
-    assert.equal(all, 564);
-    assert.equal(ctx.mathHtml.size, 564);
+    assert.ok(c3.maths.length > 0, '第3章に数式がない(テストの前提が崩れている)');
+    let total = 0;
+    for (const c of ctx.site.chapters) {
+      const { inline, display } = await countMathIn(c.file);
+      const n = inline + display;
+      total += n;
+      assert.equal(c.maths.length, n, `第${c.number}章: ビルドが読み取った数式の数が原稿と違う`);
+      const html = await readDist(dist, `chapters/${c.id}/index.html`);
+      assert.equal((html.match(/class="katex"/g) ?? []).length, n, `第${c.number}章: ページの KaTeX の数式の数`);
+    }
+    assert.equal(ctx.mathHtml.size, total);
   });
 
   test('9. defs.json の項目と並び', async () => {
-    const { dist } = await ref();
+    const { dist, site } = await ref();
     const defs = JSON.parse(await readDist(dist, 'defs.json'));
-    assert.deepEqual(Object.keys(defs), [
-      'cauchy-sequence',
-      'completeness',
-      'contraction',
-      'convergence',
-      'lipschitz',
-      'metric-space',
-      'uniform-convergence',
-    ]);
+    /** @type {string[]} */
+    const expected = [];
+    for (const c of site.chapters) expected.push(...(await definitionIdsIn(c.file)));
+    assert.ok(expected.includes('cauchy-sequence'), 'cauchy-sequence の定義がない(テストの前提が崩れている)');
+    assert.deepEqual(Object.keys(defs), [...expected].sort());
     const c = defs['cauchy-sequence'];
     assert.equal(c.code, 'A01');
     assert.equal(c.chapter, 3);
@@ -148,16 +162,26 @@ describe('build: 受け入れテスト', () => {
     assert.ok(html.includes('<a class="num" href="#banach">A04</a>'));
   });
 
-  test('11. 式番号は第3章が (3.1)〜(3.14)、第0章が (0.1)〜(0.4)、第1章が (1.1)〜(1.7)', async () => {
+  test('11. 式番号は章ごとに (N.1) から、原稿の別行立ての式の数だけ振られる', async () => {
     const { ctx, ch } = await ref();
     const labels = ctx.equations.labels;
+    const byNumber = (/** @type {string} */ a, /** @type {string} */ b) =>
+      Number(a.split('.')[1]) - Number(b.split('.')[1]);
+    for (const c of ctx.site.chapters) {
+      const { display } = await countMathIn(c.file);
+      const got = c.tokens
+        .filter((t) => t.type === 'math_block')
+        .map((t) => labels.get(t))
+        .sort(byNumber);
+      assert.deepEqual(
+        got,
+        Array.from({ length: display }, (_, i) => `${c.number}.${i + 1}`),
+        `第${c.number}章`,
+      );
+    }
     const c3 = ch(3);
-    const eqs = c3.tokens.filter((t) => t.type === 'math_block').map((t) => labels.get(t));
-    assert.equal(eqs.length, 14);
-    assert.deepEqual(
-      [...eqs].sort((a, b) => Number(a.split('.')[1]) - Number(b.split('.')[1])),
-      Array.from({ length: 14 }, (_, i) => `3.${i + 1}`),
-    );
+    const last = (await countMathIn(c3.file)).display;
+    assert.ok(last >= 4, '第3章の別行立ての式が少なすぎる(テストの前提が崩れている)');
     const labelOf = (
       /** @type {string} */ blockName,
       /** @type {string} */ stationId,
@@ -172,24 +196,7 @@ describe('build: 受け入れテスト', () => {
     };
     assert.equal(labelOf('definition', 'cauchy-sequence'), '3.1');
     assert.equal(labelOf('definition', 'contraction'), '3.4');
-    assert.equal(labelOf('application', 'picard-lindelof', 'physics'), '3.14');
-    const expected = new Map([
-      [0, 4],
-      [1, 7],
-    ]);
-    for (const c of ctx.site.chapters) {
-      if (c.number === 3) continue;
-      const got = c.tokens
-        .filter((t) => t.type === 'math_block')
-        .map((t) => labels.get(t))
-        .sort((a, b) => Number(a.split('.')[1]) - Number(b.split('.')[1]));
-      const n = expected.get(c.number) ?? 0;
-      assert.deepEqual(
-        got,
-        Array.from({ length: n }, (_, i) => `${c.number}.${i + 1}`),
-        `第${c.number}章`,
-      );
-    }
+    assert.equal(labelOf('application', 'picard-lindelof', 'physics'), `3.${last}`);
   });
 
   test('12. 式の ID と [[@ID]] による参照', async () => {
