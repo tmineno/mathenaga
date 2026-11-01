@@ -493,8 +493,9 @@
       var f = box();
       return Math.min(1, f.w / W, f.h / H);
     }
+    /** 保存した倍率を、この図で選べる範囲(全体を表示の倍率から 3 倍まで)に収める */
     function clampZoom(s) {
-      return Math.max(Math.min(ZOOM_MIN, fitScale()), Math.min(ZOOM_MAX, s));
+      return Math.max(fitScale(), Math.min(ZOOM_MAX, s));
     }
     function draw() {
       var f = box();
@@ -506,7 +507,10 @@
     }
     function zoomBy(k) {
       var f = box();
-      var s2 = clampZoom(view.s * k);
+      // 縮小は、図全体が枠に収まる倍率(0.3 倍より小さければ 0.3 倍)まで(route-map.md「図の操作」)
+      var s2 = Math.min(ZOOM_MAX, Math.max(Math.max(ZOOM_MIN, fitScale()), view.s * k));
+      // 全体を表示でそれより小さくしていても、縮小で大きくはしない
+      if (k < 1) s2 = Math.min(s2, view.s);
       view.x = f.w / 2 - ((f.w / 2 - view.x) * s2) / view.s;
       view.y = f.h / 2 - ((f.h / 2 - view.y) * s2) / view.s;
       view.s = s2;

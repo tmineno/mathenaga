@@ -941,6 +941,30 @@ describe('route-map: 図の操作(ブラウザ)', () => {
     await context.close();
   });
 
+  test('縮小は、図全体が枠に収まる倍率(0.3 倍より小さければ 0.3 倍)で止まる', async () => {
+    for (const width of [1200, 400]) {
+      const { context, page } = await open({ viewport: { width, height: 900 } });
+      await page.goto(server.url);
+      const frame = frameOf(page);
+      const svg = frame.locator('svg.map');
+      const natural = Number(await svg.getAttribute('width'));
+      const naturalH = Number(await svg.getAttribute('height'));
+      const f = /** @type {any} */ (await frame.boundingBox());
+      const fit = Math.min(1, f.width / natural, f.height / naturalH);
+      const scale = async () => (await svgBox(page)).width / natural;
+      for (let i = 0; i < 12; i++) await page.locator('.map-tools button[aria-label="縮小"]').first().click();
+      const floor = Math.max(0.3, fit);
+      assert.ok(Math.abs((await scale()) - floor) < 0.01, `幅 ${width}: ${await scale()} (期待 ${floor})`);
+      // 全体を表示で下限より小さくしても、縮小で大きくはならない
+      await page.locator('.map-tools button[aria-label="全体を表示"]').first().click();
+      const fitted = await scale();
+      assert.ok(Math.abs(fitted - fit) < 0.01, `全体を表示 ${fitted} (期待 ${fit})`);
+      await page.locator('.map-tools button[aria-label="縮小"]').first().click();
+      assert.ok((await scale()) <= fitted + 0.001, `縮小で大きくなった ${fitted} → ${await scale()}`);
+      await context.close();
+    }
+  });
+
   test('20. 幅 400px の第3章では、今の章の帯の中央が枠の中に見える', async () => {
     const { context, page } = await open({ viewport: { width: 400, height: 800 } });
     await page.goto(`${server.url}${CH3}`);
