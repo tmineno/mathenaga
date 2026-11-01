@@ -16,7 +16,11 @@ export const BLOCK_CLOSE = `container_${BLOCK}_close`;
  * @property {(token: any) => string} mathBlock
  * @property {(token: any) => string} ref
  * @property {(src: string) => string} imageSrc
+ * @property {(token: any) => number | undefined} [paragraphNo]  段落の番号(data-p)。番号がなければ undefined
  */
+
+/** 段落の番号(data-p)を付けるトークン。別行立ての数式は env.mathBlock が付ける。 */
+const NUMBERED = ['paragraph_open', 'list_item_open', 'heading_open', 'table_open', 'fence', 'code_block'];
 
 /**
  * MathEnaga の記法を読める markdown-it を作る。
@@ -24,6 +28,7 @@ export const BLOCK_CLOSE = `container_${BLOCK}_close`;
  * Postconditions: html を解釈しない(タグは文字のまま)markdown-it を返す。
  *   次のトークンが加わる:math_inline、math_block、math_error、wikiref、ブロックの開閉。
  *   2段目の見出しの末尾の {…} は取り除いて heading_open.meta.attrsSrc に入れる。
+ *   env.paragraphNo が番号を返すブロックには data-p 属性を付ける。
  * Failure modes: なし。
  * Side effects: なし。
  */
@@ -48,6 +53,23 @@ export function createMarkdown() {
     if (src !== null && env.imageSrc) token.attrSet('src', env.imageSrc(src));
     return defaultImage ? defaultImage(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options);
   };
+  for (const type of NUMBERED) {
+    const base = md.renderer.rules[type];
+    md.renderer.rules[type] = (tokens, idx, options, env, self) => {
+      const render = () => (base ? base(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options));
+      const no = env?.paragraphNo?.(tokens[idx]);
+      if (no === undefined) return render();
+      // 描画の間だけ属性を足す(トークンは共有なので、ほかの描画に残さない)
+      const token = tokens[idx];
+      const saved = token.attrs;
+      token.attrs = [...(saved ?? []), ['data-p', String(no)]];
+      try {
+        return render();
+      } finally {
+        token.attrs = saved;
+      }
+    };
+  }
   return md;
 }
 
