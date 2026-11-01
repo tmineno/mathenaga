@@ -466,7 +466,7 @@ describe('site: 改善案の起票(P-07)', () => {
     }
   });
 
-  test('29. トップページの見出しはロゴの SVG で、線の色は本文の文字色', async () => {
+  test('29. トップページの見出しはロゴの SVG で、鳥の塗りはテーマによらず、文字は本文の文字色', async () => {
     for (const scheme of /** @type {const} */ (['light', 'dark'])) {
       const { context, page } = await open({ colorScheme: scheme });
       await page.goto(server.url);
@@ -474,13 +474,13 @@ describe('site: 改善案の起票(P-07)', () => {
       assert.equal(await h1.count(), 1);
       const logo = h1.getByRole('img', { name: 'MathEnaga' });
       const box = await logo.boundingBox();
-      assert.deepEqual([box?.width, box?.height], [258, 234]);
-      const [fill, ink] = await page.evaluate(() => [
-        getComputedStyle(/** @type {Element} */ (document.querySelector('h1 svg path'))).fill,
+      assert.deepEqual([box?.width, box?.height], [264, 240]);
+      const [fills, ink] = await page.evaluate(() => [
+        [...document.querySelectorAll('h1 svg path')].map((p) => getComputedStyle(p).fill),
         getComputedStyle(document.body).color,
       ]);
-      assert.equal(fill, ink, scheme);
       assert.equal(ink, scheme === 'dark' ? 'rgb(228, 232, 239)' : 'rgb(24, 32, 46)');
+      assert.deepEqual(fills, ['rgb(255, 255, 255)', 'rgb(24, 32, 46)', ink], scheme);
       await context.close();
     }
   });
@@ -532,7 +532,7 @@ describe('site: 改善案の起票(P-07)', () => {
         colors: [...colors].sort(),
       };
     }, icons[0][1]);
-    assert.deepEqual(png.size, [64, 64]);
+    assert.deepEqual(png.size, [66, 66]);
     assert.deepEqual(png.corners, Array(4).fill('0,0,0,0'));
     assert.equal(png.center, '255,255,255,255');
     assert.deepEqual(png.colors, ['0,0,0,0', '24,32,46,255', '255,255,255,255']);

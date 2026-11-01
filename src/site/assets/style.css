@@ -1040,8 +1040,9 @@ svg.map {
 }
 .logo {
   display: block;
-  width: 258px;
-  height: 234px;
+  /* 1 ドット 3px。ロゴ 86×78 ドットに、鳥の縁の分の余白を上下左右 1 ドットずつ足す */
+  width: 264px;
+  height: 240px;
   color: var(--ink);
 }
 .lede {

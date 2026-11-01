@@ -10,10 +10,13 @@ import {
   BANNER_GAP,
   backing,
   bannerSvg,
+  birdSvg,
   blocks,
   faviconSvg,
   interior,
+  logoSvg,
   parseBitmap,
+  placedBlocks,
   svgPath,
   trim,
 } from '../../src/site/logo.js';
@@ -64,6 +67,26 @@ describe('logo: ドットマップ', () => {
     assert.equal(interior(open).dots[1][1], true);
     const leak = parseBitmap('#.#\n#.#\n###\n');
     assert.equal(interior(leak).dots[1][1], false);
+  });
+
+  test('placedBlocks は塊を元の位置と一緒に返し、その位置に置き直すと元に戻る', () => {
+    const bm = parseBitmap('..#.\n.##.\n....\n#..#\n');
+    const placed = placedBlocks(bm);
+    assert.deepEqual(
+      placed.map((b) => [b.x, b.y]),
+      [
+        [1, 0],
+        [0, 3],
+      ],
+    );
+    assert.deepEqual(
+      placed.map((b) => b.bm),
+      blocks(bm),
+    );
+    const back = bm.dots.map((row) => row.map(() => false));
+    for (const { x, y, bm: b } of placed)
+      b.dots.forEach((row, j) => row.forEach((d, i) => d && (back[y + j][x + i] = true)));
+    assert.deepEqual(back, bm.dots);
   });
 
   test('svgPath は横に続くドットを1つの長方形にまとめる', () => {
@@ -118,11 +141,37 @@ describe('logo: リポジトリのロゴ', () => {
     assert.throws(() => bannerSvg(parseBitmap('#\n.\n#\n#\n')), /鳥\(高さ 1\)より高い/);
   });
 
-  test('favicon の SVG はダークで線の色を変え、体の内側を塗らない', async () => {
+  test('サイトの鳥は、白(体の内側と縁)と #18202e(線)で塗り、縁の分だけ広い', async () => {
+    const logo = trim(parseBitmap(await fs.readFile(LOGO, 'utf8')));
+    const [bird, word] = placedBlocks(logo);
+    const fills = (/** @type {string} */ svg) => [...svg.matchAll(/fill="([^"]+)"/g)].map((m) => m[1]);
+    const icon = birdSvg(bird.bm, 'mark-icon');
+    assert.match(icon, new RegExp(`viewBox="-1 -1 ${bird.bm.width + 2} ${bird.bm.height + 2}" aria-hidden="true"`));
+    assert.deepEqual(fills(icon), ['#ffffff', '#18202e']);
+    const head = logoSvg(logo, { className: 'logo', label: 'MathEnaga' });
+    assert.match(
+      head,
+      new RegExp(`viewBox="-1 -1 ${logo.width + 2} ${logo.height + 2}" role="img" aria-label="MathEnaga"`),
+    );
+    assert.deepEqual(fills(head), ['#ffffff', '#18202e', 'currentColor']);
+    assert.ok(head.includes(`d="${svgPath(word.bm, word.x, word.y)}"`), 'サイト名の文字は元の位置に置く');
+    assert.ok(head.includes(`d="${svgPath(bird.bm, bird.x, bird.y)}"`), '鳥は元の位置に置く');
+  });
+
+  test('favicon の SVG は、縁を含めた鳥を 66 四方の中央に置き、ダークでも色を変えない', async () => {
     const bird = blocks(trim(parseBitmap(await fs.readFile(LOGO, 'utf8'))))[0];
     const svg = faviconSvg(bird);
-    assert.match(svg, /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" viewBox="0 0 64 64"/);
-    assert.match(svg, /\.b\{fill:#ffffff\}\.i\{fill:#18202e\}/);
-    assert.match(svg, /@media \(prefers-color-scheme:dark\)\{\.b\{fill:none\}\.i\{fill:#e4e8ef\}\}/);
+    assert.match(svg, /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" viewBox="0 0 66 66"/);
+    assert.deepEqual(
+      [...svg.matchAll(/fill="([^"]+)"/g)].map((m) => m[1]),
+      ['#ffffff', '#18202e'],
+    );
+    assert.doesNotMatch(svg, /prefers-color-scheme|<style/);
+    const [dx, dy] = [(66 - (bird.width + 2)) >> 1, (66 - (bird.height + 2)) >> 1];
+    assert.ok(svg.includes(`d="${svgPath(bird, dx + 1, dy + 1)}"`), '鳥は縁を含めて中央に置く');
+  });
+
+  test('縁を含めた鳥が favicon に収まらなければ止まる', () => {
+    assert.throws(() => faviconSvg(parseBitmap(`${'#'.repeat(65)}\n`)), /縁を含めて 67×3\)が 66×66 に収まらない/);
   });
 });

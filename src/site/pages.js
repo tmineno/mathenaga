@@ -14,7 +14,7 @@ import {
 } from '../core/navigation.js';
 import { byFieldOrder, stationItems } from '../core/order.js';
 import { escapeHtml as h } from '../core/text.js';
-import { blocks, faviconPng, faviconSvg, inlineSvg, parseBitmap, trim } from './logo.js';
+import { birdSvg, blocks, FAVICON_SIZE, faviconPng, faviconSvg, logoSvg, parseBitmap, trim } from './logo.js';
 
 const ASSETS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'assets');
 const KATEX_DIR = path.dirname(createRequire(import.meta.url).resolve('katex'));
@@ -116,9 +116,9 @@ class Renderer {
   constructor(ctx, art) {
     this.ctx = ctx;
     /** トップページの見出しのロゴ */
-    this.logoSvg = inlineSvg(art.logo, { className: 'logo', label: SITE_NAME, crisp: true });
+    this.logoSvg = logoSvg(art.logo, { className: 'logo', label: SITE_NAME });
     /** 上端のバーのアイコン */
-    this.birdSvg = inlineSvg(art.bird, { className: 'mark-icon' });
+    this.birdSvg = birdSvg(art.bird, 'mark-icon');
     /** @type {import('../core/graph.js').Site} */
     this.site = ctx.site;
     this.base = ctx.basePath;
@@ -329,7 +329,7 @@ class Renderer {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${h(p.title)}</title>
-<link rel="icon" href="${this.base}assets/favicon.png" type="image/png" sizes="64x64">
+<link rel="icon" href="${this.base}assets/favicon.png" type="image/png" sizes="${FAVICON_SIZE}x${FAVICON_SIZE}">
 <link rel="icon" href="${this.base}assets/favicon.svg" type="image/svg+xml">
 ${FONTS}
 <link rel="stylesheet" href="${this.base}assets/katex/katex.min.css">
