@@ -58,13 +58,15 @@ describe('content-format: 受け入れテスト', () => {
     const n01 = result.notices.filter((n) => n.code === 'N01');
     const physics = n01.find((n) => n.file === 'fields/physics.yml');
     const cs = n01.find((n) => n.file === 'fields/cs.yml');
-    assert.match(physics.message, /17駅/);
+    assert.match(physics.message, /13駅/);
     assert.match(physics.message, /cauchy-sequence/);
     assert.match(physics.message, /contraction/);
-    assert.match(cs.message, /5駅\(reading-symbols、reading-proofs、convergence、metric-space、cauchy-sequence\)/);
+    assert.match(cs.message, /1駅\(cauchy-sequence\)/);
     const n02 = result.notices.filter((n) => n.code === 'N02').map((n) => n.file);
-    assert.equal(n02.length, 9);
-    assert.ok(!n02.includes(CH3));
+    assert.equal(n02.length, 7);
+    for (const done of [CH3, 'chapters/00-reading-basics/index.md', 'chapters/01-convergence-metric/index.md']) {
+      assert.ok(!n02.includes(done), done);
+    }
     assert.deepEqual(
       result.notices.map((n) => n.code).filter((c) => c !== 'N01' && c !== 'N02'),
       [],
