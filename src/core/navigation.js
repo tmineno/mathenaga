@@ -63,15 +63,16 @@ export function chapterStations(site, chapter) {
 /**
  * @typedef {object} TransferItem
  * @property {import('./schema.js').Line} line
- * @property {import('./graph.js').StationInfo} branch
+ * @property {Array<{ station: import('./graph.js').StationInfo, here: boolean }>} branches
+ *   分岐駅(1つ以上、読む順)と、それがこの章にあるか
  * @property {import('./graph.js').StationInfo} first
- * @property {boolean} here   分岐駅がこの章にある
  */
 
 /**
  * 乗換案内。分野を選んだ章で、章の路線と違い、分野の範囲に駅がある支線ごとに1項目。
  * Preconditions: fieldId は分野の ID。
  * Postconditions: 路線ファイルの順に項目を返す。分岐駅が決まらない支線は含めない。
+ *   分岐駅が2つ以上ある支線(合流する支線)は、そのすべてを読む順に持つ。
  * Failure modes: なし。
  * Side effects: なし。
  * @param {import('./graph.js').Site} site
@@ -87,7 +88,11 @@ export function transferGuide(site, chapter, fieldId) {
     if (line.layout === null || line.id === chapter.lineId) continue;
     const info = branches.get(line.id);
     if (!info) continue;
-    items.push({ line, branch: info.branch, first: info.first, here: info.branch.chapter === chapter });
+    items.push({
+      line,
+      branches: info.stations.map((station) => ({ station, here: station.chapter === chapter })),
+      first: info.first,
+    });
   }
   return items;
 }
@@ -117,7 +122,7 @@ export function checkMaps(site, linesFile) {
             'E12',
             linesFile,
             null,
-            `${m.name}:支線 ${x.line.name} の最初の駅は未執筆の第${x.first.chapter.number}章の「${x.first.name}」で、planned の requires が幹線の駅を指していない`,
+            `${m.name}:支線 ${x.line.name} の最初の駅は未執筆の第${x.first.chapter.number}章の「${x.first.name}」で、planned の requires が幹線の駅も、路線ファイルで前にある支線の駅も指していない`,
           ),
         );
         continue;
@@ -127,12 +132,12 @@ export function checkMaps(site, linesFile) {
           'E12',
           x.first.chapter.file,
           x.first.model.line,
-          `${m.name}:支線 ${x.line.name} の最初の駅 ${x.first.id} が、幹線の駅を前提にしていない`,
+          `${m.name}:支線 ${x.line.name} の最初の駅 ${x.first.id} が、幹線の駅も、路線ファイルで前にある支線の駅も前提にしていない`,
         ),
       );
     }
     for (const f of layout.fallbacks) {
-      notices.push(issue('N03', linesFile, null, `${m.name}:支線 ${f.line.name} を down と同じに描いた(${f.reason})`));
+      notices.push(issue('N03', linesFile, null, `${m.name}:支線 ${f.line.name} を${f.drawn}描いた(${f.reason})`));
     }
   }
   return { errors, notices };

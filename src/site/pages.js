@@ -755,9 +755,13 @@ ${notes}${items.join('')}${appHtml}${this.stationTools(c, st)}
     }
     for (const t of transferGuide(site, c, f.id)) {
       const first = `<a href="${this.chapterUrl(t.first.chapter.id, f.id)}">第${t.first.chapter.number}章 ${h(t.first.chapter.title)}</a>`;
-      const from = t.here
-        ? `この章の ${this.badge(t.branch)} ${h(t.branch.name)} から`
-        : `${this.badge(t.branch)} ${h(t.branch.name)}(<a href="${this.chapterUrl(t.branch.chapter.id, f.id)}#${h(t.branch.id)}">第${t.branch.chapter.number}章</a>)から`;
+      // 分岐駅が2つ以上あれば(合流する支線)、読む順に「・」でつなぐ(site.md「この先」)
+      const stations = t.branches.map(({ station: b, here }) =>
+        here
+          ? `この章の ${this.badge(b)} ${h(b.name)}`
+          : `${this.badge(b)} ${h(b.name)}(<a href="${this.chapterUrl(b.chapter.id, f.id)}#${h(b.id)}">第${b.chapter.number}章</a>)`,
+      );
+      const from = `${stations.join('・')}${t.branches[t.branches.length - 1].here ? ' から' : 'から'}`;
       items.push(`<li><b>${h(t.line.name)}に乗り換える</b>${from}、${first}へ</li>`);
     }
     return items.join('');

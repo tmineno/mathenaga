@@ -71,9 +71,17 @@ export function wrapLabel(name) {
 }
 
 /**
+ * @typedef {object} BranchInfo  支線の分岐駅
+ * @property {import('./graph.js').StationInfo} branch     主な分岐駅(分岐駅のうち読む順で最も後ろ)
+ * @property {import('./graph.js').StationInfo[]} stations 分岐駅(1つ以上、読む順)
+ * @property {import('./graph.js').StationInfo} first      その図に描く、支線の最初の駅
+ */
+
+/**
  * 図ごとの分岐駅を決める(docs/spec/route-map.md「分岐駅」)。
  * Preconditions: drawn は requires をさかのぼって閉じた駅の集合。
- * Postconditions: 支線 → { branch, first } と、分岐駅が決まらない支線の一覧を返す。
+ * Postconditions: 支線 → BranchInfo と、分岐駅が決まらない支線の一覧を返す。候補は幹線と、
+ *   路線ファイルでその支線より前にある支線の駅に限るので、支線の親子は循環しない。
  * Failure modes: なし。
  * Side effects: なし。
  * @param {import('./graph.js').Site} site
@@ -82,22 +90,128 @@ export function wrapLabel(name) {
  */
 export function branchStations(site, drawn, all = site.stations) {
   const trunk = new Set(site.lines.filter((l) => l.layout === null).map((l) => l.id));
-  /** @type {Map<string, { branch: import('./graph.js').StationInfo, first: import('./graph.js').StationInfo }>} */
+  /** @type {Map<string, BranchInfo>} */
   const branches = new Map();
   /** @type {Array<{ line: import('./schema.js').Line, first: import('./graph.js').StationInfo }>} */
   const missing = [];
+  /** 駅から requires をさかのぼって届く駅の ID @type {Map<string, Set<string>>} */
+  const memo = new Map();
+  /** @param {string} id @returns {Set<string>} */
+  const ancestors = (id) => {
+    const known = memo.get(id);
+    if (known) return known;
+    const out = new Set();
+    for (const r of site.stationById.get(id)?.requires ?? []) {
+      out.add(r);
+      for (const a of ancestors(r)) out.add(a);
+    }
+    memo.set(id, out);
+    return out;
+  };
+  const earlier = new Set(trunk);
   for (const line of site.lines) {
     if (line.layout === null) continue;
     const first = all.find((s) => s.lineId === line.id && drawn.has(s.id));
-    if (!first) continue;
-    const candidates = first.requires
-      .map((id) => /** @type {import('./graph.js').StationInfo} */ (site.stationById.get(id)))
-      .filter((s) => s && drawn.has(s.id) && trunk.has(s.lineId))
-      .sort((a, b) => b.index - a.index);
-    if (candidates.length === 0) missing.push({ line, first });
-    else branches.set(line.id, { branch: candidates[0], first });
+    if (first) {
+      let candidates = first.requires
+        .map((id) => /** @type {import('./graph.js').StationInfo} */ (site.stationById.get(id)))
+        .filter((s) => s && drawn.has(s.id) && earlier.has(s.lineId));
+      // ほかの候補を通して前提がつながる候補には線を引かない(手順 3)
+      candidates = candidates.filter((c) => !candidates.some((o) => o !== c && ancestors(o.id).has(c.id)));
+      // 幹線はすべての支線の根なので、ほかの路線の候補があれば幹線の候補は除く(手順 4)
+      if (candidates.some((c) => !trunk.has(c.lineId))) candidates = candidates.filter((c) => !trunk.has(c.lineId));
+      // 路線ごとに読む順で最も後ろの駅(幹線の路線はまとめて1つ。手順 5)
+      /** @type {Map<string, import('./graph.js').StationInfo>} */
+      const best = new Map();
+      for (const c of candidates) {
+        const key = trunk.has(c.lineId) ? '' : c.lineId;
+        const cur = best.get(key);
+        if (!cur || c.index > cur.index) best.set(key, c);
+      }
+      const stations = [...best.values()].sort((a, b) => a.index - b.index);
+      if (stations.length === 0) missing.push({ line, first });
+      else branches.set(line.id, { branch: stations[stations.length - 1], stations, first });
+    }
+    earlier.add(line.id);
   }
   return { branches, missing };
+}
+
+/**
+ * @typedef {object} RowPlan  支線の置き方
+ * @property {import('./schema.js').Line} line
+ * @property {'up' | 'down' | 'right' | 'merge'} dir  merge は上下の両方から合流し、幹線の高さで右に置く支線
+ * @property {number} row      同じ向きの段のうち幹線から何番目か(0 が最も近い)。right と merge は 0
+ * @property {boolean} simple  分岐駅が幹線の駅1つだけ(幹線から分かれる従来の描き方)
+ * @property {BranchInfo} info
+ */
+
+/**
+ * @typedef {object} Fallback  N03
+ * @property {import('./schema.js').Line} line
+ * @property {string} reason
+ * @property {string} drawn  どう描いたか(「down と同じに」「主な分岐駅の側に」)
+ */
+
+/**
+ * 支線の向きと段を決める(route-map.md「配置」3・4)。座標は使わない。
+ * Preconditions: branches は branchStations の結果。親の路線は路線ファイルで前にある。
+ * Postconditions: 路線ファイルの順に RowPlan を返す。親の路線が描けない支線は含めない。
+ * Failure modes: なし。
+ * Side effects: なし。
+ * @param {import('./graph.js').Site} site
+ * @param {Map<string, BranchInfo>} branches
+ * @param {Set<string>} trunkIds
+ * @param {import('./graph.js').StationInfo | undefined} lastTrunk  その図の幹線の最後の駅
+ */
+function planRows(site, branches, trunkIds, lastTrunk) {
+  /** @type {RowPlan[]} */
+  const rows = [];
+  /** @type {Fallback[]} */
+  const fallbacks = [];
+  /** 路線が置かれた側。幹線と、幹線の高さに置いた支線は mid @type {Map<string, 'up' | 'down' | 'mid'>} */
+  const side = new Map([...trunkIds].map((id) => [id, /** @type {'mid'} */ ('mid')]));
+  let ups = 0;
+  let downs = 0;
+  let midUsed = false;
+  for (const line of site.lines) {
+    const info = branches.get(line.id);
+    if (line.layout === null || !info) continue;
+    const sides = info.stations.map((s) => side.get(s.lineId));
+    if (sides.some((s) => s === undefined)) continue;
+    const hasUp = sides.includes('up');
+    const hasDown = sides.includes('down');
+    /** @type {RowPlan['dir']} */
+    let dir;
+    if (!hasUp && !hasDown) {
+      dir = line.layout;
+      if (dir === 'right') {
+        if (info.branch !== lastTrunk) {
+          dir = 'down';
+          fallbacks.push({
+            line,
+            reason: `分岐駅 ${info.branch.code} がこの図の幹線の最後の駅ではない`,
+            drawn: 'down と同じに',
+          });
+        } else if (midUsed) {
+          dir = 'down';
+          fallbacks.push({ line, reason: '幹線より右の場所をほかの支線が使った', drawn: 'down と同じに' });
+        } else midUsed = true;
+      }
+    } else if (hasUp !== hasDown) {
+      dir = hasUp ? 'up' : 'down';
+    } else if (!midUsed) {
+      dir = 'merge';
+      midUsed = true;
+    } else {
+      dir = side.get(info.branch.lineId) === 'up' ? 'up' : 'down';
+      fallbacks.push({ line, reason: '幹線より右の場所をほかの支線が使った', drawn: '主な分岐駅の側に' });
+    }
+    const simple = info.stations.length === 1 && trunkIds.has(info.branch.lineId);
+    rows.push({ line, dir, row: dir === 'up' ? ups++ : dir === 'down' ? downs++ : 0, simple, info });
+    side.set(line.id, dir === 'up' || dir === 'down' ? dir : 'mid');
+  }
+  return { rows, fallbacks };
 }
 
 /**
@@ -156,6 +270,87 @@ function reservedLabelW(chapter) {
 const UP_CLEAR_TOP = (GEOM.upDx * (GEOM.plateH / 2 + 8 + GEOM.bandFont)) / GEOM.row;
 const UP_CLEAR_BOTTOM = (GEOM.upDx * (GEOM.plateH / 2 + 8 - 3)) / GEOM.row;
 
+/** 線と、札・駅名・印・章の札との間にあけるすき間。 */
+const CLEAR = 3;
+/** 線をよけて駅をずらす配置を、何回までやり直すか。 */
+const MAX_PASSES = 10;
+
+/**
+ * @typedef {object} Segment  よける対象の線分
+ * @property {number} x1
+ * @property {number} y1
+ * @property {number} x2
+ * @property {number} y2
+ * @property {string} lineId
+ * @property {string | null} from  分岐駅から出る線なら、その分岐駅の ID
+ * @property {string | null} to    支線の最初の駅に入る線なら、その駅の ID
+ */
+
+/** 章の札の外接矩形(layoutBoxes の band-label と同じ形)。 @param {boolean} above @param {number} y @param {number} x @param {number} w */
+function chapterLabelBox(above, y, x, w) {
+  const ty = above ? y + GEOM.plateH / 2 + 8 + GEOM.bandFont : y - GEOM.plateH / 2 - 8;
+  return { x, y: ty - GEOM.bandFont, w, h: GEOM.bandFont + 3 };
+}
+
+/**
+ * 線分のうち矩形の内側にある部分の、両端の x を返す(Liang–Barsky)。交わらなければ null。
+ * @param {Segment} s @param {number} x0 @param {number} y0 @param {number} x1 @param {number} y1
+ */
+function clipX(s, x0, y0, x1, y1) {
+  const dx = s.x2 - s.x1;
+  const dy = s.y2 - s.y1;
+  let t0 = 0;
+  let t1 = 1;
+  for (const [p, q] of [
+    [-dx, s.x1 - x0],
+    [dx, x1 - s.x1],
+    [-dy, s.y1 - y0],
+    [dy, y1 - s.y1],
+  ]) {
+    if (p === 0) {
+      if (q < 0) return null;
+      continue;
+    }
+    const r = q / p;
+    if (p < 0) t0 = Math.max(t0, r);
+    else t1 = Math.min(t1, r);
+    if (t0 > t1) return null;
+  }
+  if (t1 - t0 < 1e-9) return null;
+  return [s.x1 + dx * t0, s.x1 + dx * t1];
+}
+
+/**
+ * 矩形が線分に重ならないように、右へずらす量を返す。
+ * @param {Array<{ x: number, y: number, w: number, h: number }>} boxes
+ * @param {Segment[]} segments
+ * @param {string} id      駅の ID(この駅から出る線・入る線はよけない)
+ * @param {string} lineId  駅の路線(自分の路線の線はよけない)
+ */
+function shiftToClear(boxes, segments, id, lineId) {
+  let shift = 0;
+  for (const s of segments) {
+    if (s.from === id || s.to === id || s.lineId === lineId) continue;
+    for (const b of boxes) {
+      const hit = clipX(s, b.x - CLEAR, b.y - CLEAR, b.x + b.w + CLEAR, b.y + b.h + CLEAR);
+      if (hit) shift = Math.max(shift, Math.max(hit[0], hit[1]) + CLEAR - b.x);
+    }
+  }
+  return shift;
+}
+
+/** 折れ線を線分に分ける。 @param {number[][]} pts @param {string} lineId @param {string | null} from @param {string | null} to */
+function toSegments(pts, lineId, from, to) {
+  /** @type {Segment[]} */
+  const out = [];
+  for (let i = 1; i < pts.length; i++) {
+    const [x1, y1] = pts[i - 1];
+    const [x2, y2] = pts[i];
+    if (x1 !== x2 || y1 !== y2) out.push({ x1, y1, x2, y2, lineId, from, to });
+  }
+  return out;
+}
+
 /**
  * @typedef {object} Band  章の帯
  * @property {number} number      章番号
@@ -177,7 +372,7 @@ const UP_CLEAR_BOTTOM = (GEOM.upDx * (GEOM.plateH / 2 + 8 - 3)) / GEOM.row;
  * @property {import('./graph.js').StationInfo} info
  * @property {number} x
  * @property {number} y
- * @property {'trunk' | 'up' | 'down' | 'right'} dir
+ * @property {'trunk' | 'up' | 'down' | 'right' | 'merge'} dir
  * @property {string[]} label
  * @property {number} plateW
  * @property {number} labelW
@@ -196,15 +391,16 @@ const UP_CLEAR_BOTTOM = (GEOM.upDx * (GEOM.plateH / 2 + 8 - 3)) / GEOM.row;
  * @property {Band[]} bands  章の帯(章番号の順)
  * @property {{ minX: number, minY: number, maxX: number, maxY: number }} bounds
  * @property {Array<{ line: import('./schema.js').Line, first: import('./graph.js').StationInfo }>} missing  E12
- * @property {Array<{ line: import('./schema.js').Line, reason: string }>} fallbacks  N03
+ * @property {Fallback[]} fallbacks  N03
  * @property {import('./schema.js').Line[]} linesShown
  */
 
 /**
  * 路線図を配置する。
  * Preconditions: drawn は requires をさかのぼって閉じた駅の集合。
- * Postconditions: 駅・線・章の帯の座標を返す。分岐駅が決まらない支線は描かず、missing に入れる。
- *   opts.planned が true なら、未執筆の章の駅も描く(全体の図)。
+ * Postconditions: 駅・線・章の帯の座標を返す。分岐駅が決まらない支線と、親の路線が描けない支線は描かず、
+ *   前者を missing に入れる。opts.planned が true なら、未執筆の章の駅も描く(全体の図)。
+ *   分岐駅が2つ以上ある支線は、分岐駅ごとに線(paths の1項目)を持ち、主な分岐駅からの線に支線の駅が続く。
  * Failure modes: なし。
  * Side effects: なし。
  * @param {import('./graph.js').Site} site
@@ -220,9 +416,7 @@ export function layoutMap(site, drawn, opts = {}) {
   const byLine = new Map(site.lines.map((l) => [l.id, shown.filter((s) => s.lineId === l.id)]));
   const { branches, missing } = branchStations(site, drawn, all);
 
-  /** @type {Map<string, PlacedStation>} */
-  const placed = new Map();
-  /** @param {import('./graph.js').StationInfo} info @param {'trunk' | 'up' | 'down' | 'right'} dir */
+  /** @param {import('./graph.js').StationInfo} info @param {PlacedStation['dir']} dir @returns {PlacedStation} */
   const measure = (info, dir) => {
     const label = wrapLabel(info.name);
     const plateW = Math.max(GEOM.minPlateW, Math.round(textWidth(info.code) + 14));
@@ -251,127 +445,234 @@ export function layoutMap(site, drawn, opts = {}) {
 
   // 幹線
   const trunkLines = site.lines.filter((l) => l.layout === null);
+  const trunkIds = new Set(trunkLines.map((l) => l.id));
   const trunk = trunkLines.flatMap((l) => byLine.get(l.id) ?? []);
   const lastTrunk = trunk[trunk.length - 1];
   // 支線の向きと段
-  /** @type {Array<{ line: import('./schema.js').Line, dir: 'up' | 'down' | 'right', row: number }>} */
-  const rows = [];
-  /** @type {Array<{ line: import('./schema.js').Line, reason: string }>} */
-  const fallbacks = [];
-  let ups = 0;
-  let downs = 0;
-  let rightUsed = false;
-  for (const line of site.lines) {
-    if (line.layout === null || !branches.has(line.id)) continue;
-    const b = /** @type {any} */ (branches.get(line.id)).branch;
-    /** @type {'up' | 'down' | 'right'} */
-    let dir = line.layout;
-    if (dir === 'right') {
-      if (b !== lastTrunk) {
-        dir = 'down';
-        fallbacks.push({ line, reason: `分岐駅 ${b.code} がこの図の幹線の最後の駅ではない` });
-      } else if (rightUsed) {
-        dir = 'down';
-        fallbacks.push({ line, reason: '右へ続ける支線がすでにある' });
-      } else rightUsed = true;
-    }
-    rows.push({ line, dir, row: dir === 'up' ? ups++ : dir === 'down' ? downs++ : 0 });
-  }
-  const downFrom = new Set(
-    rows.filter((r) => r.dir === 'down').map((r) => /** @type {any} */ (branches.get(r.line.id)).branch.id),
-  );
-  const upFrom = new Set(
-    rows.filter((r) => r.dir === 'up').map((r) => /** @type {any} */ (branches.get(r.line.id)).branch.id),
-  );
+  const { rows, fallbacks } = planRows(site, branches, trunkIds, lastTrunk);
+  const simpleRows = rows.filter((r) => r.simple);
+  const downFrom = new Set(simpleRows.filter((r) => r.dir === 'down').map((r) => r.info.branch.id));
+  const upFrom = new Set(simpleRows.filter((r) => r.dir === 'up').map((r) => r.info.branch.id));
+  const otherLines = new Set(rows.filter((r) => !r.simple).map((r) => r.line.id));
+  /** @param {RowPlan} r */
+  const rowY = (r) => (r.dir === 'up' ? -GEOM.row * (r.row + 1) : r.dir === 'down' ? GEOM.row * (r.row + 1) : 0);
 
-  // 章の札(route-map.md「配置」7)。段ごとに直前の章の札を覚え、札が重ならないように駅を右へずらす。
-  /** @type {Map<number, { number: number, start: number, w: number }>} */
-  const lastLabel = new Map();
-  /** 章番号 → 章の札の左端 @type {Map<number, number>} */
-  const labelStart = new Map();
-  /** 章の札の左端の、章の最初の駅からの差。上へ分かれる線の出る幹線の駅なら、その線の右に置く。 @param {PlacedStation} p */
-  const labelOffset = (p) => (p.dir === 'trunk' && upFrom.has(p.info.id) ? UP_CLEAR_TOP + 2 : -p.plateW / 2);
-  /** @param {PlacedStation} p */
-  const settle = (p) => {
-    const n = p.info.chapter.number;
-    const last = lastLabel.get(p.y);
-    if (last && last.number !== n) {
-      p.x = Math.max(p.x, last.start + last.w + GEOM.gap - labelOffset(p));
-    } else if (last && p.dir === 'trunk' && upFrom.has(p.info.id)) {
-      // 同じ章の途中から上へ分かれるときは、章の札がその線に届かないところまで駅を離す
-      p.x = Math.max(p.x, last.start + last.w - UP_CLEAR_BOTTOM + 2);
-    }
-    if (!last || last.number !== n) {
-      const start = p.x + labelOffset(p);
-      lastLabel.set(p.y, { number: n, start, w: reservedLabelW(p.info.chapter) });
-      labelStart.set(n, start);
-    }
-  };
+  /**
+   * 1回分の配置。reserved は前の回の線で、駅はそれをよけて右へずれる。幹線と、幹線の駅1つから分かれる
+   * 支線の駅は、ほかの路線から分かれる線(connectors)だけをよける。それ以外の支線の駅は、すべての線をよける。
+   * @param {{ connectors: Segment[], all: Segment[] }} reserved
+   */
+  const placeAll = (reserved) => {
+    /** @type {Map<string, PlacedStation>} */
+    const placed = new Map();
+    /** @type {Array<{ lineId: string, style: string, points: number[][], planned: boolean[] }>} */
+    const paths = [];
+    /** ほかの路線から分かれる線(幹線の駅1つから分かれる線を除く) @type {Segment[]} */
+    const connectors = [];
+    /** すべての線 @type {Segment[]} */
+    const segments = [];
 
-  let prev = null;
-  for (const info of trunk) {
-    const p = measure(info, 'trunk');
-    if (prev) {
-      let dx = Math.max(GEOM.minDx, prev.half + p.half + GEOM.gap);
-      if (downFrom.has(prev.info.id)) {
-        const sx = stubFor(prev);
-        dx = Math.max(dx, sx + GEOM.downDx * 0.55 + p.half + GEOM.gap);
+    // 章の札(route-map.md「配置」7)。段ごとに直前の章の札を覚え、札が重ならないように駅を右へずらす。
+    /** @type {Map<number, { number: number, start: number, w: number }>} */
+    const lastLabel = new Map();
+    /** 章番号 → 章の札の左端 @type {Map<number, number>} */
+    const labelStart = new Map();
+    /** 章の札の左端の、章の最初の駅からの差。上へ分かれる線の出る幹線の駅なら、その線の右に置く。 @param {PlacedStation} p */
+    const labelOffset = (p) => (p.dir === 'trunk' && upFrom.has(p.info.id) ? UP_CLEAR_TOP + 2 : -p.plateW / 2);
+    /** @param {PlacedStation} p */
+    const settle = (p) => {
+      const n = p.info.chapter.number;
+      const segs = otherLines.has(p.info.lineId) ? reserved.all : reserved.connectors;
+      const last = lastLabel.get(p.y);
+      const starts = !last || last.number !== n;
+      for (let guard = 0; guard < 100; guard++) {
+        if (last && last.number !== n) {
+          p.x = Math.max(p.x, last.start + last.w + GEOM.gap - labelOffset(p));
+        } else if (last && p.dir === 'trunk' && upFrom.has(p.info.id)) {
+          // 同じ章の途中から上へ分かれるときは、章の札がその線に届かないところまで駅を離す
+          p.x = Math.max(p.x, last.start + last.w - UP_CLEAR_BOTTOM + 2);
+        }
+        if (segs.length === 0) break;
+        /** @type {Array<{ x: number, y: number, w: number, h: number }>} */
+        const boxes = stationBoxes(p);
+        if (starts) boxes.push(chapterLabelBox(p.above, p.y, p.x + labelOffset(p), reservedLabelW(p.info.chapter)));
+        const shift = shiftToClear(boxes, segs, p.info.id, p.info.lineId);
+        if (shift <= 1e-6) break;
+        p.x += shift;
       }
-      p.x = prev.x + dx;
-    }
-    settle(p);
-    placed.set(info.id, p);
-    prev = p;
-  }
+      if (starts) {
+        const start = p.x + labelOffset(p);
+        lastLabel.set(p.y, { number: n, start, w: reservedLabelW(p.info.chapter) });
+        labelStart.set(n, start);
+      }
+    };
+    /** @param {number[][]} pts @param {boolean[]} flags @param {string} lineId @param {string} style */
+    const addPath = (pts, flags, lineId, style) => {
+      paths.push({ lineId, style, points: pts, planned: flags });
+      segments.push(...toSegments(pts, lineId, null, null));
+    };
 
-  const paths = [];
-  // 幹線の線:前の幹線の駅を前提にしていれば、そこから引く
-  for (const line of trunkLines) {
-    const list = (byLine.get(line.id) ?? []).map((s) => /** @type {PlacedStation} */ (placed.get(s.id)));
-    if (list.length === 0) continue;
-    const from = list[0].info.requires
-      .map((id) => placed.get(id))
-      .filter((s) => s && s.dir === 'trunk' && s.info.lineId !== line.id)
-      .sort((a, b) => b.x - a.x)[0];
-    const pts = [...(from ? [[from.x, 0]] : []), ...list.map((s) => [s.x, 0])];
-    const flags = [...(from ? [false] : []), ...list.map((s) => !!s.info.planned)];
-    if (pts.length > 1) paths.push({ lineId: line.id, style: line.style, points: pts, planned: flags });
-  }
-
-  for (const r of rows) {
-    const { branch } = /** @type {any} */ (branches.get(r.line.id));
-    const b = /** @type {PlacedStation} */ (placed.get(branch.id));
-    const list = byLine.get(r.line.id) ?? [];
-    const y = r.dir === 'up' ? -GEOM.row * (r.row + 1) : r.dir === 'down' ? GEOM.row * (r.row + 1) : 0;
-    const pts = [[b.x, 0]];
-    const firstPlanned = !!list[0]?.planned;
-    const flags = [false];
-    let x;
-    if (r.dir === 'up') {
-      pts.push([b.x + GEOM.upDx, y]);
-      flags.push(firstPlanned);
-      x = b.x + GEOM.upDx;
-    } else if (r.dir === 'down') {
-      const sx = stubFor(b);
-      pts.push([b.x + sx, 0], [b.x + sx + GEOM.downDx, y]);
-      flags.push(firstPlanned, firstPlanned);
-      x = b.x + sx + GEOM.downDx;
-    } else x = b.x;
-    let before = null;
-    for (const info of list) {
-      const p = measure(info, r.dir);
-      p.y = y;
-      if (before) p.x = before.x + Math.max(GEOM.minDx, before.half + p.half + GEOM.gap);
-      else if (r.dir === 'right') p.x = x + Math.max(GEOM.minDx, b.half + p.half + GEOM.gap);
-      else p.x = x + Math.max(p.plateW / 2 + 12, p.half - 10);
+    let prev = null;
+    for (const info of trunk) {
+      const p = measure(info, 'trunk');
+      if (prev) {
+        let dx = Math.max(GEOM.minDx, prev.half + p.half + GEOM.gap);
+        if (downFrom.has(prev.info.id)) {
+          const sx = stubFor(prev);
+          dx = Math.max(dx, sx + GEOM.downDx * 0.55 + p.half + GEOM.gap);
+        }
+        p.x = prev.x + dx;
+      }
       settle(p);
       placed.set(info.id, p);
-      pts.push([p.x, y]);
-      flags.push(!!info.planned);
-      before = p;
+      prev = p;
     }
-    paths.push({ lineId: r.line.id, style: r.line.style, points: pts, planned: flags });
+
+    // 幹線の線:前の幹線の駅を前提にしていれば、そこから引く
+    for (const line of trunkLines) {
+      const list = (byLine.get(line.id) ?? []).map((s) => /** @type {PlacedStation} */ (placed.get(s.id)));
+      if (list.length === 0) continue;
+      const from = list[0].info.requires
+        .map((id) => placed.get(id))
+        .filter((s) => s && s.dir === 'trunk' && s.info.lineId !== line.id)
+        .sort((a, b) => /** @type {PlacedStation} */ (b).x - /** @type {PlacedStation} */ (a).x)[0];
+      const pts = [...(from ? [[from.x, 0]] : []), ...list.map((s) => [s.x, 0])];
+      const flags = [...(from ? [false] : []), ...list.map((s) => !!s.info.planned)];
+      if (pts.length > 1) addPath(pts, flags, line.id, line.style);
+    }
+
+    /** 幹線の高さにある札・駅名・印・章の札の範囲(合流する支線は、この右に入れる) */
+    const trunkZone = () => {
+      /** @type {Array<{ x: number, y: number, w: number, h: number }>} */
+      const boxes = trunk.flatMap((info) => stationBoxes(/** @type {PlacedStation} */ (placed.get(info.id))));
+      for (const c of new Set(trunk.map((s) => s.chapter))) {
+        const start = labelStart.get(c.number);
+        if (start !== undefined) boxes.push(chapterLabelBox(false, 0, start, reservedLabelW(c)));
+      }
+      return {
+        right: Math.max(...boxes.map((b) => b.x + b.w)),
+        top: Math.min(...boxes.map((b) => b.y)),
+        bottom: Math.max(...boxes.map((b) => b.y + b.h)),
+      };
+    };
+
+    /**
+     * 分岐駅 P から、高さ y の段の支線へ向かう線の形(route-map.md「配置」2)。P の段を少し右へ進んで
+     * 自分の駅名(または章の札)をよけ、斜めに y まで進む。幹線の高さに入るときは、幹線の駅より右で入る。
+     * @param {PlacedStation} P @param {number} y @param {{ right: number, top: number, bottom: number } | null} zone
+     */
+    const connect = (P, y, zone) => {
+      const dirY = Math.sign(y - P.y);
+      const D = dirY < 0 ? GEOM.upDx : GEOM.downDx;
+      const nameSide = P.above ? -1 : 1;
+      let clear = P.half + 4;
+      if (dirY !== nameSide) {
+        const start = labelStart.get(P.info.chapter.number);
+        const end = start === undefined ? -Infinity : start + reservedLabelW(P.info.chapter);
+        clear = Math.max(P.plateW / 2, end - P.x) + 4;
+      }
+      const xd = P.x + clear;
+      let a = xd + (D * Math.abs(y - P.y)) / GEOM.row;
+      if (y === 0 && zone) {
+        const edge = dirY > 0 ? zone.top : zone.bottom;
+        const f = (edge - P.y) / (0 - P.y);
+        const need = zone.right + CLEAR;
+        if (f > 0 && f < 1 && xd + (a - xd) * f < need) a = xd + (need - xd) / f;
+      }
+      return { P, xd, a };
+    };
+
+    for (const r of rows) {
+      const list = byLine.get(r.line.id) ?? [];
+      const y = rowY(r);
+      if (r.simple) {
+        const b = /** @type {PlacedStation} */ (placed.get(r.info.branch.id));
+        const pts = [[b.x, 0]];
+        const firstPlanned = !!list[0]?.planned;
+        const flags = [false];
+        let x;
+        if (r.dir === 'up') {
+          pts.push([b.x + GEOM.upDx, y]);
+          flags.push(firstPlanned);
+          x = b.x + GEOM.upDx;
+        } else if (r.dir === 'down') {
+          const sx = stubFor(b);
+          pts.push([b.x + sx, 0], [b.x + sx + GEOM.downDx, y]);
+          flags.push(firstPlanned, firstPlanned);
+          x = b.x + sx + GEOM.downDx;
+        } else x = b.x;
+        let before = null;
+        for (const info of list) {
+          const p = measure(info, r.dir);
+          p.y = y;
+          if (before) p.x = before.x + Math.max(GEOM.minDx, before.half + p.half + GEOM.gap);
+          else if (r.dir === 'right') p.x = x + Math.max(GEOM.minDx, b.half + p.half + GEOM.gap);
+          else p.x = x + Math.max(p.plateW / 2 + 12, p.half - 10);
+          settle(p);
+          placed.set(info.id, p);
+          pts.push([p.x, y]);
+          flags.push(!!info.planned);
+          before = p;
+        }
+        addPath(pts, flags, r.line.id, r.line.style);
+        continue;
+      }
+
+      // 前の支線から分かれる支線、複数の路線から合流する支線
+      const parents = r.info.stations.map((s) => placed.get(s.id));
+      if (parents.some((p) => !p) || list.length === 0) continue;
+      const zone = r.dir === 'merge' ? trunkZone() : null;
+      const conns = parents.map((P) => connect(/** @type {PlacedStation} */ (P), y, zone));
+      let before = null;
+      for (const info of list) {
+        const p = measure(info, r.dir);
+        p.y = y;
+        if (before) p.x = before.x + Math.max(GEOM.minDx, before.half + p.half + GEOM.gap);
+        else p.x = Math.max(...conns.map((c) => c.a)) + Math.max(p.plateW / 2 + 12, p.half - 10);
+        settle(p);
+        placed.set(info.id, p);
+        before = p;
+      }
+      const first = /** @type {PlacedStation} */ (placed.get(list[0].id));
+      const firstPlanned = !!list[0].planned;
+      // 主な分岐駅からの線に、支線の駅を続ける。ほかの分岐駅からの線は、支線の最初の駅で合わせる
+      const ordered = [...conns].sort(
+        (c1, c2) => Number(c2.P.info === r.info.branch) - Number(c1.P.info === r.info.branch),
+      );
+      ordered.forEach((c, i) => {
+        const pts = [
+          [c.P.x, c.P.y],
+          [c.xd, c.P.y],
+          [c.a, y],
+        ];
+        if (c.a !== first.x) pts.push([first.x, y]);
+        const seg = toSegments(pts, r.line.id, c.P.info.id, first.info.id);
+        connectors.push(...seg);
+        segments.push(...seg);
+        const flags = [false, ...pts.slice(1).map(() => firstPlanned)];
+        if (i === 0) {
+          const rest = list.slice(1).map((s) => /** @type {PlacedStation} */ (placed.get(s.id)));
+          segments.push(...toSegments([[first.x, y], ...rest.map((s) => [s.x, y])], r.line.id, null, null));
+          for (const s of rest) {
+            pts.push([s.x, y]);
+            flags.push(!!s.info.planned);
+          }
+        }
+        paths.push({ lineId: r.line.id, style: r.line.style, points: pts, planned: flags });
+      });
+    }
+    return { placed, paths, labelStart, connectors, segments };
+  };
+
+  // 線をよけて駅をずらすと、線の位置も変わりうる。駅が動かなくなるまで配置をやり直す
+  let out = placeAll({ connectors: [], all: [] });
+  for (let i = 0; i < MAX_PASSES && out.connectors.length > 0; i++) {
+    const next = placeAll({ connectors: out.connectors, all: out.segments });
+    const stable = [...next.placed].every(([id, p]) => Math.abs(p.x - (out.placed.get(id)?.x ?? NaN)) < 1e-6);
+    out = next;
+    if (stable) break;
   }
+  const { placed, paths, labelStart } = out;
 
   const stations = /** @type {PlacedStation[]} */ (all.map((s) => placed.get(s.id)).filter((p) => p !== undefined));
   for (const st of stations) {
@@ -488,6 +789,32 @@ function makeBands(stations, highlight, labelStart) {
 }
 
 /**
+ * 1つの駅の札・駅名・途中下車の印の外接矩形。
+ * @param {PlacedStation} s
+ */
+function stationBoxes(s) {
+  const id = s.info.id;
+  const out = [
+    {
+      kind: 'plate',
+      owner: id,
+      x: s.x - s.plateW / 2,
+      y: s.y - GEOM.plateH / 2,
+      w: s.plateW,
+      h: GEOM.plateH,
+    },
+  ];
+  const lh = s.label.length * GEOM.lineH;
+  const ly = s.above ? s.y - GEOM.plateH / 2 - GEOM.labelGap - lh : s.y + GEOM.plateH / 2 + GEOM.labelGap;
+  out.push({ kind: 'label', owner: id, x: s.x - s.labelW / 2, y: ly, w: s.labelW, h: lh });
+  if (s.partial) {
+    const py = s.above ? ly - 4 - GEOM.pillH : ly + lh + 4;
+    out.push({ kind: 'pill', owner: id, x: s.x - GEOM.pillW / 2, y: py, w: GEOM.pillW, h: GEOM.pillH });
+  }
+  return out;
+}
+
+/**
  * 駅の札・駅名・印・帯の文字の外接矩形と、線の線分を返す(重なりの検査に使う)。
  * Preconditions: layout は layoutMap の結果。
  * Postconditions: boxes(kind と持ち主の駅 ID 付き)と segments を返す。
@@ -498,24 +825,7 @@ function makeBands(stations, highlight, labelStart) {
 export function layoutBoxes(layout) {
   /** @type {Array<{ kind: string, owner: string, x: number, y: number, w: number, h: number }>} */
   const boxes = [];
-  for (const s of layout.stations) {
-    const id = s.info.id;
-    boxes.push({
-      kind: 'plate',
-      owner: id,
-      x: s.x - s.plateW / 2,
-      y: s.y - GEOM.plateH / 2,
-      w: s.plateW,
-      h: GEOM.plateH,
-    });
-    const lh = s.label.length * GEOM.lineH;
-    const ly = s.above ? s.y - GEOM.plateH / 2 - GEOM.labelGap - lh : s.y + GEOM.plateH / 2 + GEOM.labelGap;
-    boxes.push({ kind: 'label', owner: id, x: s.x - s.labelW / 2, y: ly, w: s.labelW, h: lh });
-    if (s.partial) {
-      const py = s.above ? ly - 4 - GEOM.pillH : ly + lh + 4;
-      boxes.push({ kind: 'pill', owner: id, x: s.x - GEOM.pillW / 2, y: py, w: GEOM.pillW, h: GEOM.pillH });
-    }
-  }
+  for (const s of layout.stations) boxes.push(...stationBoxes(s));
   for (const b of layout.bands) {
     const w = textWidth(b.text, GEOM.bandFont);
     boxes.push({
