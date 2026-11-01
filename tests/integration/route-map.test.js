@@ -5,7 +5,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { after, describe, test } from 'node:test';
 import { layoutBoxes, layoutMap, mapDescription, wrapLabel } from '../../src/core/map.js';
-import { analyzeIn, buildIn, edit, readDist, referenceBuild, replaceOnce, tempRoot } from '../helpers/fixture.js';
+import { analyzeIn, edit, readDist, referenceBuild, replaceOnce, tempRoot } from '../helpers/fixture.js';
 
 const roots = [];
 after(async () => {
@@ -21,7 +21,7 @@ async function maps() {
     site,
     dist,
     all,
-    overall: layoutMap(site, all),
+    overall: layoutMap(site, all, { planned: true }),
     cs: layoutMap(site, site.scope.get('cs'), { goals: field('cs').goals }),
     physics: layoutMap(site, site.scope.get('physics'), { goals: field('physics').goals }),
   };
@@ -31,7 +31,9 @@ async function maps() {
 const at = (layout, id) => layout.stations.find((s) => s.info.id === id);
 
 /** 解析線の第10章(作用素)を未執筆として足す。 */
-const PLANNED_10 = '  planned:\n    - chapter: 10\n      title: 作用素\n      stations: [有界作用素, スペクトル]\n';
+/** 未執筆の章だけでできた、下へ分かれる新しい路線(第14章) */
+const PROBABILITY =
+  '- id: probability\n  code: P\n  name: 確率線\n  color: "#B5562A"\n  layout: down\n  planned:\n    - chapter: 14\n      title: 測度と確率\n      stations: [測度空間, 積分, 確率空間]\n';
 
 /**
  * 基準原稿の路線ファイルを書き換えた一時ディレクトリ。
@@ -49,16 +51,17 @@ const covers = (band, station) =>
   band.y <= station.y && station.y <= band.y + band.h && band.x <= station.x && station.x <= band.x + band.w;
 
 describe('route-map: 受け入れテスト', () => {
-  test('1. 全体の図:21駅、幹線の並び、分岐', async () => {
+  test('1. 全体の図:書いた21駅と未執筆の12駅、幹線の並び、分岐', async () => {
     const { overall } = await maps();
-    assert.equal(overall.stations.length, 21);
+    assert.equal(overall.stations.filter((s) => !s.info.planned).length, 21);
+    assert.equal(overall.stations.filter((s) => s.info.planned).length, 12);
     const trunk = overall.stations
       .filter((s) => s.y === 0)
       .sort((a, b) => a.x - b.x)
       .map((s) => s.info.code);
     assert.deepEqual(trunk, ['Z01', 'Z02', 'M01', 'M02', 'M03', 'M04']);
-    const analysis = overall.stations.filter((s) => s.info.lineId === 'analysis');
-    const geometry = overall.stations.filter((s) => s.info.lineId === 'geometry');
+    const analysis = overall.stations.filter((s) => s.info.lineId === 'analysis' && !s.info.planned);
+    const geometry = overall.stations.filter((s) => s.info.lineId === 'geometry' && !s.info.planned);
     assert.equal(analysis.length, 8);
     assert.equal(geometry.length, 7);
     assert.ok(
@@ -116,10 +119,10 @@ describe('route-map: 受け入れテスト', () => {
 
   test('6. どの図でも札・駅名・印・帯の文字・線が重ならない', async () => {
     const { site, all } = await maps();
-    const layouts = [['全体', layoutMap(site, all)]];
+    const layouts = [['全体', layoutMap(site, all, { planned: true })]];
     for (const f of site.fields) layouts.push([f.id, layoutMap(site, site.scope.get(f.id), { goals: f.goals })]);
     for (const c of site.chapters) {
-      layouts.push([`第${c.number}章/全体`, layoutMap(site, all, { highlight: c.id })]);
+      layouts.push([`第${c.number}章/全体`, layoutMap(site, all, { planned: true, highlight: c.id })]);
       for (const f of site.fields) {
         layouts.push([
           `第${c.number}章/${f.id}`,
@@ -127,12 +130,8 @@ describe('route-map: 受け入れテスト', () => {
         ]);
       }
     }
-    // 未執筆の章(解析線の続きと、新しい路線)を足した全体の図
-    const root = await rootWithLines(
-      (t) =>
-        replaceOnce(t, '  layout: up\n', `  layout: up\n${PLANNED_10}`) +
-        '- id: probability\n  code: P\n  name: 確率線\n  color: "#B5562A"\n  layout: down\n  planned:\n    - chapter: 11\n      title: 測度と確率\n      stations: [測度空間, 積分, 確率空間]\n      requires: [metric-space]\n',
-    );
+    // 16 の新しい路線(未執筆の章だけ)を足した全体の図
+    const root = await rootWithLines((t) => `${t + PROBABILITY}      requires: [metric-space]\n`);
     const r = await analyzeIn(root);
     assert.deepEqual(r.errors, []);
     const ps = r.ctx.site;
@@ -203,7 +202,7 @@ describe('route-map: 受け入れテスト', () => {
       'lines.yml',
       (t) => `${t}- id: functional\n  code: F\n  name: 関数解析線\n  color: "#AA5500"\n  layout: up\n`,
     );
-    const dir = path.join(root, 'content/chapters/10-functional');
+    const dir = path.join(root, 'content/chapters/14-functional');
     await fs.mkdir(dir);
     await fs.writeFile(
       path.join(dir, 'index.md'),
@@ -233,7 +232,11 @@ describe('route-map: 章の帯と未執筆の章', () => {
     const { overall, cs, physics } = await maps();
     assert.deepEqual(
       overall.bands.map((b) => b.number),
-      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+    );
+    assert.deepEqual(
+      overall.bands.filter((b) => b.planned).map((b) => b.number),
+      [10, 11, 12, 13],
     );
     const band = (/** @type {any} */ layout, /** @type {number} */ n) => layout.bands.find((b) => b.number === n);
     const expect = (
@@ -286,28 +289,38 @@ describe('route-map: 章の帯と未執筆の章', () => {
   });
 
   test('15. 未執筆の章は全体の図にだけ、灰色でリンクなしで描く', async () => {
-    const root = await rootWithLines((t) => replaceOnce(t, '  layout: up\n', `  layout: up\n${PLANNED_10}`));
-    const r = await buildIn(root);
-    assert.deepEqual(r.errors, []);
-    const { ctx } = await analyzeIn(root);
-    const site = ctx.site;
+    const { site, dist, overall } = await maps();
     assert.deepEqual(
       site.stations.filter((s) => s.lineId === 'analysis').map((s) => s.code),
       ['A01', 'A02', 'A03', 'A04', 'A05', 'A06', 'A07', 'A08'],
     );
-    const overall = layoutMap(site, new Set(site.stations.map((s) => s.id)), { planned: true });
-    const plannedSt = overall.stations.filter((s) => s.info.planned);
+    assert.equal(site.stations.filter((s) => s.lineId === 'geometry').at(-1).code, 'G07');
+    const planned = (/** @type {string} */ line) =>
+      overall.stations.filter((s) => s.info.planned && s.info.lineId === line);
     assert.deepEqual(
-      plannedSt.map((s) => s.info.name),
-      ['有界作用素', 'スペクトル'],
+      planned('analysis').map((s) => s.info.name),
+      ['有界作用素', '双対空間', '随伴作用素', 'スペクトル', 'コンパクト作用素', 'スペクトル分解'],
     );
-    const a08 = at(overall, 'hilbert-space');
-    assert.ok(plannedSt.every((s) => s.y === a08.y && s.x > a08.x && s.info.code === ''));
-    const b10 = overall.bands.find((b) => b.number === 10);
-    assert.ok(b10 && b10.planned && b10.text === '第10章 未執筆');
+    assert.deepEqual(
+      planned('geometry').map((s) => s.info.name),
+      ['接空間', 'ベクトル場', 'リー微分', '微分形式', '外微分', 'ストークスの定理'],
+    );
+    for (const [line, lastId] of [
+      ['analysis', 'hilbert-space'],
+      ['geometry', 'manifold'],
+    ]) {
+      const last = at(overall, lastId);
+      assert.ok(
+        planned(line).every((s) => s.y === last.y && s.x > last.x && s.info.code === ''),
+        line,
+      );
+    }
+    for (const n of [10, 11, 12, 13]) {
+      const b = overall.bands.find((x) => x.number === n);
+      assert.ok(b && b.planned && b.text === `第${n}章 未執筆`, `第${n}章`);
+    }
     assert.ok(mapDescription(overall).includes('有界作用素(未執筆)'));
 
-    const dist = path.join(root, 'dist');
     const top = await readDist(dist, 'index.html');
     assert.ok(top.includes('<g class="ch"><rect class="band planned"'));
     assert.ok(top.includes('<g class="st planned">'));
@@ -319,13 +332,11 @@ describe('route-map: 章の帯と未執筆の章', () => {
       const page = await readDist(dist, `fields/${f}/index.html`);
       assert.ok(!page.includes('有界作用素'), f);
     }
-    await assert.rejects(fs.access(path.join(dist, 'chapters/operators')));
     assert.equal((await fs.readdir(path.join(dist, 'chapters'))).length, 10);
   });
 
   test('16. 未執筆の章だけの支線は、planned の requires で分岐駅を決める', async () => {
-    const line =
-      '- id: probability\n  code: P\n  name: 確率線\n  color: "#B5562A"\n  layout: down\n  planned:\n    - chapter: 10\n      title: 測度と確率\n      stations: [測度空間, 確率空間]\n';
+    const line = PROBABILITY;
     const without = await analyzeIn(await rootWithLines((t) => t + line));
     const e12 = without.errors.filter((e) => e.code === 'E12');
     assert.equal(e12.length, 1, without.errors.map((e) => `${e.code} ${e.message}`).join('\n'));
@@ -338,7 +349,7 @@ describe('route-map: 章の帯と未執筆の章', () => {
     const overall = layoutMap(site, new Set(site.stations.map((s) => s.id)), { planned: true });
     const m02 = at(overall, 'metric-space');
     const prob = overall.stations.filter((s) => s.info.lineId === 'probability');
-    assert.equal(prob.length, 2);
+    assert.equal(prob.length, 3);
     assert.ok(prob.every((s) => s.y > 0 && s.x > m02.x));
     const path0 = overall.paths.find((p) => p.lineId === 'probability');
     assert.deepEqual(path0.points[0], [m02.x, 0]);

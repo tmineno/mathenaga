@@ -383,11 +383,11 @@ $$\forall \varepsilon > 0,\ \exists N,\ \forall m, n \ge N: d(x_m, x_n) < \varep
    18. 路線ファイルに `style: dashed` と `color_dark: purple` を書く(E02 と E03)。
    19. 章フォルダの名前から接頭辞の番号を外す(E03)。
    20. 章の front matter に `chapter: 3` を書く(E02)。
-   21. 路線ファイルの planned に、章フォルダと同じ章番号 3 を書く(E04)。
-   22. planned の requires に存在しない ID を書く(E05)。
-   23. planned から stations を消す(E08)。
-   24. 第9章のフォルダを `11-manifolds` に変え、planned の第10章の requires に manifold を書く(E06)。
-   25. planned に `id: operators` を書く(E02)。
+   21. 路線ファイルの planned の第10章の章番号を、章フォルダと同じ 3 にする(E04)。
+   22. planned の第10章の requires に存在しない ID を書く(E05)。
+   23. planned の第10章から stations を消す(E08)。
+   24. 第9章のフォルダを `14-manifolds` に変え、planned の第10章の requires に manifold を書く(E06)。
+   25. planned の第10章に `id: operators` を書く(E02)。
 5. 4 の誤りのうち、別々のファイルにある2つを同時に入れると、1回のビルドで両方が出る。
 6. 本文に `<script>alert(1)</script>` と書いた章をビルドすると、ページにはその文字列が文字として出て、script 要素はできない。
 
