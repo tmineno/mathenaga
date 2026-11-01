@@ -8,6 +8,8 @@
   --rule: #d7dde6;
   --accent: #5b45b8;
   --accent-soft: #ece8fa;
+  /* 路線図で強調する帯と駅の札の地(route-map.md「印と凡例」)。ダークでは地との明るさの差が小さいので強める */
+  --band-hl: #ece8fa;
   --ok: #0f7f73;
   --ok-soft: #e0f2ef;
   --warn: #a3560f;
@@ -29,6 +31,7 @@
     --rule: #2a313e;
     --accent: #aa98f2;
     --accent-soft: #221d38;
+    --band-hl: #40366f;
     --ok: #4dc1b3;
     --ok-soft: #112e2a;
     --warn: #e69c59;
@@ -79,6 +82,41 @@ a {
 img {
   max-width: 100%;
   height: auto;
+}
+/* 図(site.md「図の表示」)。中央に寄せ、並べた画像は狭い画面では縦に積む */
+figure.fig {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.fig-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 12px 24px;
+  max-width: 100%;
+}
+.fig-item {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  max-width: 100%;
+}
+.fig-sub {
+  font-size: 13px;
+  color: var(--muted);
+}
+figure.fig > figcaption {
+  font-size: 14px;
+  color: var(--muted);
+  text-align: center;
+}
+.fig-no {
+  font-weight: 700;
+  color: var(--ink);
+  margin-right: 0.5em;
 }
 :focus-visible {
   outline: 2px solid var(--accent);
@@ -891,7 +929,7 @@ svg.map {
   fill: var(--paper);
 }
 .map .band.current {
-  fill: var(--accent-soft);
+  fill: var(--band-hl);
 }
 .map .band.planned {
   fill: none;
@@ -912,7 +950,7 @@ svg.map {
 .map a.ch:hover .band:not(.current),
 .map a.ch.on .band:not(.current),
 .map a.ch:focus .band:not(.current) {
-  fill: var(--accent-soft);
+  fill: var(--band-hl);
 }
 .map a.ch:hover .band-label,
 .map a.ch.on .band-label,
@@ -954,7 +992,7 @@ svg.map {
 }
 .map a.st:hover .plate,
 .map a.st:focus .plate {
-  fill: var(--accent-soft);
+  fill: var(--band-hl);
 }
 .map a.st:focus-visible {
   outline: none;

@@ -9,6 +9,7 @@ import { ROOT, analyze } from '../../src/build.js';
 import { chapterInField, nextChapter, prerequisiteChapters, transferGuide } from '../../src/core/navigation.js';
 import {
   CH3,
+  addFigures,
   buildIn,
   countMathIn,
   definitionIdsIn,
@@ -268,7 +269,89 @@ describe('build: 受け入れテスト', () => {
     );
     assert.equal(errors.length, 1);
     assert.equal(errors[0].code, 'E05');
-    assert.match(errors[0].message, /路線の ID なので番号を差し込めない\(駅・章・式・定理・定義だけ\)/);
+    assert.match(errors[0].message, /路線の ID なので番号を差し込めない\(駅・章・式・定理・定義・図だけ\)/);
+  });
+
+  test('23. 図番号とキャプション、[[@ID]] による図の参照', async () => {
+    const root = await tempRoot();
+    roots.push(root);
+    await addFigures(root);
+    await edit(root, 'chapters/04-norm-inner-product/index.md', (t) =>
+      replaceOnce(t, '## ノルム空間', '図は [[@fig-two]] です。\n\n## ノルム空間'),
+    );
+    const r = await buildIn(root);
+    assert.deepEqual(r.errors, []);
+    const dist = path.join(root, 'dist');
+    const ch3 = await readDist(dist, 'chapters/completeness-fixed-point/index.html');
+    const figs = [...ch3.matchAll(/<figure class="fig"(?: id="([^"]+)")?[^>]*>([\s\S]*?)<\/figure>/g)];
+    assert.deepEqual(
+      figs.map((m) => m[1]),
+      ['fig-one', 'fig-two'],
+    );
+    assert.match(figs[0][2], /<figcaption><span class="fig-no">図 3\.1<\/span> 一枚の図<\/figcaption>/);
+    assert.match(
+      figs[1][2],
+      /<figcaption><span class="fig-no">図 3\.2<\/span> \(a\) 左の図 \(b\) 右の図<\/figcaption>/,
+    );
+    assert.deepEqual(
+      [...figs[1][2].matchAll(/<span class="fig-sub">([^<]*)<\/span>/g)].map((m) => m[1]),
+      ['(a)', '(b)'],
+    );
+    assert.ok(!figs[0][2].includes('fig-sub'), '画像1つの図に (a) が付いている');
+    assert.ok(!figs.some((m) => m[0].includes('title=')), '図の画像に title が残っている');
+    assert.ok(!figs.some((m) => m[0].includes('{#')), '図の {#ID} が文字として出ている');
+    assert.match(
+      ch3,
+      /<p[^>]*>文の中の画像 <img src="[^"]*\/figures\/b\.svg" alt="文中" title="文中の図"> です。<\/p>/,
+    );
+    const ch4 = await readDist(dist, 'chapters/norm-inner-product/index.html');
+    assert.ok(ch4.includes('<a class="num" href="/chapters/completeness-fixed-point/#fig-two">図 3.2</a>'));
+  });
+
+  test('24. 図の {…} の誤り', async () => {
+    for (const [attrs, code] of [
+      ['{#fig-one width=3}', 'E02'],
+      ['{#Fig_One}', 'E03'],
+    ]) {
+      const errors = await errorsAfter(async (root) => {
+        await addFigures(root);
+        await edit(root, CH3, (t) => replaceOnce(t, '{#fig-one}', attrs));
+      });
+      assert.deepEqual(
+        errors.map((e) => e.code),
+        [code],
+        attrs,
+      );
+    }
+  });
+
+  test('25. 図のキャプションの数式', async () => {
+    const root = await tempRoot();
+    roots.push(root);
+    await addFigures(root);
+    await edit(root, CH3, (t) =>
+      replaceOnce(t, '"一枚の図"', String.raw`"点列 $(x_n)$ と集合 $\{x \mid x > 0\}$、\$5"`),
+    );
+    const r = await buildIn(root);
+    assert.deepEqual(r.errors, []);
+    const ch3 = await readDist(path.join(root, 'dist'), 'chapters/completeness-fixed-point/index.html');
+    const caption = /<figure class="fig" id="fig-one"[\s\S]*?<figcaption>([\s\S]*?)<\/figcaption>/.exec(ch3)?.[1] ?? '';
+    assert.deepEqual(
+      [...caption.matchAll(/<annotation encoding="application\/x-tex">([^<]*)<\/annotation>/g)].map((m) => m[1]),
+      ['(x_n)', String.raw`\{x \mid x &gt; 0\}`],
+    );
+    assert.equal(caption.match(/class="katex"/g)?.length, 2);
+    assert.match(caption, /、\$5$/);
+    assert.ok(!caption.includes('\\$'), 'キャプションに \\$ が残っている');
+
+    for (const title of [String.raw`"点 $x"`, String.raw`"$\frac{1}{$"`, String.raw`"$x \tag{1}$"`]) {
+      const errors = await errorsAfter(async (root) => {
+        await addFigures(root);
+        await edit(root, CH3, (t) => replaceOnce(t, '"一枚の図"', title));
+      });
+      // 行内の \tag は、使えない命令としても、KaTeX が解釈できない数式としても E10 になる
+      assert.deepEqual([...new Set(errors.map((e) => e.code))], ['E10'], title);
+    }
   });
 
   test('13. defs.json の定義の式にも式番号が付く', async () => {

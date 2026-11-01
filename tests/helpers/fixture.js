@@ -130,6 +130,35 @@ export function replaceOnce(text, from, to) {
   return text.slice(0, i) + to + text.slice(i + from.length);
 }
 
+/**
+ * 図のテスト用に、第3章の banach 駅の終わりへ図を書き足す(build.md 23・24、site.md 34)。
+ * 画像1つの図 {#fig-one}、画像2つの図 {#fig-two}、文の中の画像を1つずつ足す。
+ * @param {string} root  tempRoot() の結果
+ */
+export async function addFigures(root) {
+  const dir = path.join(root, 'content', path.dirname(CH3), 'figures');
+  await fs.mkdir(dir, { recursive: true });
+  const svg =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"><rect width="300" height="200" fill="#ccc"/></svg>\n';
+  await fs.writeFile(path.join(dir, 'a.svg'), svg);
+  await fs.writeFile(path.join(dir, 'b.svg'), svg);
+  await edit(root, CH3, (t) =>
+    replaceOnce(
+      t,
+      '## ピカールの定理',
+      [
+        '![一枚目の説明](figures/a.svg "一枚の図"){#fig-one}',
+        '',
+        '![左の説明](figures/a.svg "左の図") ![右の説明](figures/b.svg "右の図"){#fig-two}',
+        '',
+        '文の中の画像 ![文中](figures/b.svg "文中の図") です。',
+        '',
+        '## ピカールの定理',
+      ].join('\n'),
+    ),
+  );
+}
+
 /** テストのビルドに渡す、改善案の起票先(site.md「改善案の起票」) */
 export const TEST_REPO_URL = 'https://github.com/example/mathenaga';
 

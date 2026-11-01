@@ -11,6 +11,7 @@ export const KIND_NAMES = {
   definition: '定義',
   theorem: '定理',
   equation: '式',
+  figure: '図',
 };
 
 /**
@@ -49,7 +50,7 @@ export const KIND_NAMES = {
  * @property {Map<string, StationInfo>} stationById
  * @property {Map<string, DefinitionInfo>} definitions
  * @property {Map<string, { id: string, name: string, station: StationInfo }>} theorems
- * @property {Map<string, string>} kinds   ID → 種類(line、field、chapter、station、definition、theorem、equation)
+ * @property {Map<string, string>} kinds   ID → 種類(line、field、chapter、station、definition、theorem、equation、figure)
  * @property {Set<string>} transfers   乗換駅
  * @property {Map<string, Set<string>>} scope   分野 → 分野の範囲
  * @property {Map<string, import('./chapter.js').ChapterModel[]>} fieldChapters  分野 → 分野内の章の順序
@@ -191,6 +192,7 @@ export function buildSite(input) {
   }
   for (const c of chapters) {
     for (const eq of c.equations) if (eq.id !== null) register(eq.id, 'equation', c.file, eq.line);
+    for (const f of c.figures) if (f.id !== null) register(f.id, 'figure', c.file, f.line);
   }
 
   // requires

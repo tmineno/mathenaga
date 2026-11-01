@@ -3,6 +3,7 @@
 
 import MarkdownIt from 'markdown-it';
 import container from 'markdown-it-container';
+import imageRule from 'markdown-it/lib/rules_inline/image.mjs';
 
 /** ブロックのトークン名。`container_<名前>_open` の形になる。 */
 export const BLOCK = 'mathenaga';
@@ -17,6 +18,14 @@ export const BLOCK_CLOSE = `container_${BLOCK}_close`;
  * @property {(token: any) => string} ref
  * @property {(src: string) => string} imageSrc
  * @property {(token: any) => number | undefined} [paragraphNo]  段落の番号(data-p)。番号がなければ undefined
+ * @property {(token: any) => { label: string, id: string | null, images: any[], captions: TitlePart[][] } | undefined} [figure]
+ *   段落(paragraph_open)が図なら、図番号・ID・画像と、画像ごとのキャプション。図でなければ undefined
+ */
+
+/**
+ * 画像のタイトルを切り分けた一片(図のキャプション、content-format.md「図」)。
+ * text は文字(エスケープを解いたもの)、math_inline は行内の数式(TeX のまま)、math_error は閉じていない $ など。
+ * @typedef {{ type: 'text' | 'math_inline' | 'math_error', content: string, meta?: { kind: string } }} TitlePart
  */
 
 /** 段落の番号(data-p)を付けるトークン。別行立ての数式は env.mathBlock が付ける。 */
@@ -28,7 +37,9 @@ const NUMBERED = ['paragraph_open', 'list_item_open', 'heading_open', 'table_ope
  * Postconditions: html を解釈しない(タグは文字のまま)markdown-it を返す。
  *   次のトークンが加わる:math_inline、math_block、math_error、wikiref、ブロックの開閉。
  *   2段目の見出しの末尾の {…} は取り除いて heading_open.meta.attrsSrc に入れる。
+ *   タイトルのある画像は、タイトルを文字と行内の数式に切り分けて image.meta.titleParts に入れる。
  *   env.paragraphNo が番号を返すブロックには data-p 属性を付ける。
+ *   env.figure が図を返す段落は <figure> にし、画像を並べ、図番号とキャプションを付ける。
  * Failure modes: なし。
  * Side effects: なし。
  */
@@ -40,6 +51,7 @@ export function createMarkdown() {
   });
   md.inline.ruler.before('escape', 'math_inline', mathInlineRule);
   md.inline.ruler.before('link', 'wikiref', wikiRefRule);
+  keepImageTitleParts(md);
   md.core.ruler.after('block', 'station_heading_attrs', stationHeadingAttrs);
 
   md.renderer.rules.math_inline = (tokens, idx, _o, env) => env.mathInline(tokens[idx]);
@@ -47,11 +59,46 @@ export function createMarkdown() {
   md.renderer.rules.math_error = () => '';
   md.renderer.rules.wikiref = (tokens, idx, _o, env) => env.ref(tokens[idx]);
   const defaultImage = md.renderer.rules.image;
+  const esc = md.utils.escapeHtml;
+  /** 並べた画像の札:(a)、(b)、… @param {number} i */
+  const sub = (i) => `(${String.fromCharCode(97 + i)})`;
   md.renderer.rules.image = (tokens, idx, options, env, self) => {
+    // 描画の間だけ属性を変える(トークンは共有なので、ほかの描画に残さない)
     const token = tokens[idx];
-    const src = token.attrGet('src');
-    if (src !== null && env.imageSrc) token.attrSet('src', env.imageSrc(src));
-    return defaultImage ? defaultImage(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options);
+    const saved = token.attrs;
+    const fig = env?.figureNow;
+    try {
+      const src = token.attrGet('src');
+      token.attrs = (saved ?? []).filter(([k]) => !(fig && k === 'title'));
+      if (src !== null && env.imageSrc) token.attrSet('src', env.imageSrc(src));
+      const img = defaultImage ? defaultImage(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options);
+      if (!fig) return img;
+      const label = fig.images.length > 1 ? `<span class="fig-sub">${sub(fig.images.indexOf(token))}</span>` : '';
+      return `<span class="fig-item">${img}${label}</span>`;
+    } finally {
+      token.attrs = saved;
+    }
+  };
+  // 図(画像だけの段落、content-format.md「図」):<figure> にし、画像の行の下に図番号とキャプションを付ける
+  md.renderer.rules.paragraph_open = (tokens, idx, options, env, self) => {
+    const fig = tokens[idx].hidden ? undefined : env?.figure?.(tokens[idx]);
+    if (!fig) return self.renderToken(tokens, idx, options);
+    env.figureNow = fig;
+    return `<figure class="fig"${fig.id ? ` id="${esc(fig.id)}"` : ''}${self.renderAttrs(tokens[idx])}><span class="fig-row">`;
+  };
+  md.renderer.rules.paragraph_close = (tokens, idx, options, env, self) => {
+    const fig = env?.figureNow;
+    if (!fig) return self.renderToken(tokens, idx, options);
+    env.figureNow = null;
+    const many = fig.images.length > 1;
+    /** @param {TitlePart} p */
+    const part = (p) => (p.type === 'math_inline' ? env.mathInline(p) : p.type === 'text' ? esc(p.content) : '');
+    const caption = fig.images
+      .map((_im, i) => ({ parts: fig.captions[i] ?? [], mark: many ? `${sub(i)} ` : '' }))
+      .filter((c) => c.parts.length > 0)
+      .map((c) => `${c.mark}${c.parts.map(part).join('')}`)
+      .join(' ');
+    return `</span><figcaption><span class="fig-no">図 ${esc(fig.label)}</span>${caption ? ` ${caption}` : ''}</figcaption></figure>\n`;
   };
   for (const type of NUMBERED) {
     const base = md.renderer.rules[type];
@@ -175,6 +222,93 @@ function mathInlineRule(state, silent) {
   }
   state.pos = end + 1;
   return true;
+}
+
+/**
+ * 画像の規則を包み、タイトルを文字と行内の数式に切り分けて image.meta.titleParts に入れる。
+ * markdown-it はタイトルのエスケープを解いてしまう(`\{` が `{` になる)ので、解く前のタイトルを
+ * parseLinkTitle から受け取って切り分ける。参照形式の画像(`![alt][ref]`)は解いた後のタイトルを使う。
+ * @param {MarkdownIt} md
+ */
+function keepImageTitleParts(md) {
+  /** @type {{ raw: string | null } | null} */
+  let slot = null;
+  const parseLinkTitle = md.helpers.parseLinkTitle;
+  md.helpers.parseLinkTitle = (str, start, max, prev) => {
+    const res = parseLinkTitle(str, start, max, prev);
+    if (slot && slot.raw === null && !prev && res.ok) slot.raw = str.slice(start + 1, res.pos - 1);
+    return res;
+  };
+  md.inline.ruler.at('image', (state, silent) => {
+    const outer = slot;
+    const mine = { raw: /** @type {string | null} */ (null) };
+    slot = mine;
+    const count = state.tokens.length;
+    let ok;
+    try {
+      ok = imageRule(state, silent);
+    } finally {
+      slot = outer;
+    }
+    const token = state.tokens[state.tokens.length - 1];
+    if (!ok || silent || state.tokens.length === count || token.type !== 'image') return ok;
+    const title = token.attrGet('title');
+    if (title === null) return ok;
+    // 中の alt を読むときに別のタイトルを拾っていないか、解いた形で照らし合わせる
+    const raw = mine.raw !== null && md.utils.unescapeAll(mine.raw) === title ? mine.raw : null;
+    token.meta = {
+      ...token.meta,
+      titleParts: raw === null ? lexTitle(title, (s) => s) : lexTitle(raw, md.utils.unescapeAll),
+    };
+    return ok;
+  });
+}
+
+/**
+ * タイトルを、文字と行内の数式 `$…$` に切り分ける。本文の行内の数式と同じく、`\$` は $ そのもの。
+ * @param {string} raw  エスケープを解く前のタイトル
+ * @param {(s: string) => string} unescape  文字の部分のエスケープを解く関数
+ * @returns {TitlePart[]}
+ */
+export function lexTitle(raw, unescape) {
+  /** @type {TitlePart[]} */
+  const parts = [];
+  let text = '';
+  const flush = () => {
+    if (text !== '') parts.push({ type: 'text', content: unescape(text) });
+    text = '';
+  };
+  let i = 0;
+  while (i < raw.length) {
+    const ch = raw[i];
+    if (ch === '\\') {
+      text += raw.slice(i, i + 2);
+      i += 2;
+      continue;
+    }
+    if (ch !== '$') {
+      text += ch;
+      i++;
+      continue;
+    }
+    flush();
+    if (raw[i + 1] === '$') {
+      parts.push({ type: 'math_error', content: '$$', meta: { kind: 'inline-display' } });
+      i += 2;
+      continue;
+    }
+    let end = i + 1;
+    while (end < raw.length && raw[end] !== '$') end += raw[end] === '\\' ? 2 : 1;
+    if (end >= raw.length) {
+      parts.push({ type: 'math_error', content: raw.slice(i, i + 20), meta: { kind: 'unclosed-inline' } });
+      i++;
+      continue;
+    }
+    parts.push({ type: 'math_inline', content: raw.slice(i + 1, end) });
+    i = end + 1;
+  }
+  flush();
+  return parts;
 }
 
 /** 参照 `[[キー]]`、`[[キー|文字]]`、`[[@ID]]`。表の中では `\|` も区切りとして読む。 */
