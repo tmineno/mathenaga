@@ -117,8 +117,8 @@ describe('build: 受け入れテスト', () => {
     for (const r of c3.refs) assert.ok(ctx.resolved.has(r.token), `[[${r.token.content}]] が解決していない`);
     assert.equal(c3.maths.length, 178);
     const all = ctx.site.chapters.reduce((n, c) => n + c.maths.length, 0);
-    assert.equal(all, 541);
-    assert.equal(ctx.mathHtml.size, 541);
+    assert.equal(all, 507);
+    assert.equal(ctx.mathHtml.size, 507);
   });
 
   test('9. defs.json の項目と並び', async () => {
@@ -148,7 +148,7 @@ describe('build: 受け入れテスト', () => {
     assert.ok(html.includes('<a class="num" href="#banach">A04</a>'));
   });
 
-  test('11. 式番号は第3章が (3.1)〜(3.14)、第0章が (0.1)〜(0.5)、第1章が (1.1)〜(1.7)', async () => {
+  test('11. 式番号は第3章が (3.1)〜(3.14)、第0章が (0.1)〜(0.2)、第1章が (1.1)〜(1.7)', async () => {
     const { ctx, ch } = await ref();
     const labels = ctx.equations.labels;
     const c3 = ch(3);
@@ -174,7 +174,7 @@ describe('build: 受け入れテスト', () => {
     assert.equal(labelOf('definition', 'contraction'), '3.4');
     assert.equal(labelOf('application', 'picard-lindelof', 'physics'), '3.14');
     const expected = new Map([
-      [0, 5],
+      [0, 2],
       [1, 7],
     ]);
     for (const c of ctx.site.chapters) {
