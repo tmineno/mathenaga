@@ -62,6 +62,7 @@ describe('content-format: 受け入れテスト', () => {
     assert.match(physics.message, /cauchy-sequence/);
     assert.match(physics.message, /contraction/);
     assert.match(cs.message, /1駅\(cauchy-sequence\)/);
+    for (const n of [physics, cs]) assert.ok(!/reading-/.test(n.message), '第0章の駅が N01 に出ている');
     const n02 = result.notices.filter((n) => n.code === 'N02').map((n) => n.file);
     assert.equal(n02.length, 7);
     for (const done of [CH3, 'chapters/00-reading-basics/index.md', 'chapters/01-convergence-metric/index.md']) {

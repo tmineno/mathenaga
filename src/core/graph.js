@@ -324,7 +324,10 @@ export function buildSite(input) {
       f.id,
       chapters.filter((c) => c.stations.some((s) => s.id !== null && scope.has(s.id))),
     );
-    const missing = stations.filter((s) => scope.has(s.id) && !s.model.applications.some((a) => a.field === f.id));
+    // 第0章は分野に共通の章なので、N01 の対象にしない(content-format.md「分野版」)
+    const missing = stations.filter(
+      (s) => s.chapter.number !== 0 && scope.has(s.id) && !s.model.applications.some((a) => a.field === f.id),
+    );
     if (missing.length > 0) {
       notices.push(
         issue(
