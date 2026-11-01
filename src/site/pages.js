@@ -1,5 +1,6 @@
 // ページの組み立て(docs/spec/site.md)と、定義索引 defs.json(docs/spec/build.md)。
 
+import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -51,13 +52,13 @@ export async function generateSite(ctx) {
   const r = new Renderer(ctx, { logo, bird });
   /** @type {Map<string, import('../io/output.js').OutputFile>} */
   const files = new Map();
-  files.set('index.html', r.topPage());
-  for (const f of ctx.site.fields) files.set(`fields/${f.id}/index.html`, r.fieldPage(f));
+  // ページが読むファイルは、URL に中身の版の印を付けるので、ページより先に作る(build.md「出力」)
   for (const c of ctx.site.chapters) {
-    files.set(`chapters/${c.id}/index.html`, r.chapterPage(c));
     const src = ctx.chapterFiles.get(c.id);
     for (const fig of src?.figures ?? []) {
-      files.set(`chapters/${c.id}/${fig}`, { copyFrom: path.join(src.dirPath, ...fig.split('/')) });
+      const from = path.join(src.dirPath, ...fig.split('/'));
+      files.set(`chapters/${c.id}/${fig}`, { copyFrom: from });
+      r.versions.set(`chapters/${c.id}/${fig}`, versionOf(await fs.readFile(from)));
     }
   }
   files.set('defs.json', r.definitionIndex());
@@ -77,7 +78,21 @@ export async function generateSite(ctx) {
   for (const font of (await fs.readdir(path.join(KATEX_DIR, 'fonts'))).filter((f) => f.endsWith('.woff2')).sort()) {
     files.set(`assets/katex/fonts/${font}`, { copyFrom: path.join(KATEX_DIR, 'fonts', font) });
   }
+  for (const [p, content] of files)
+    if (typeof content === 'string' || content instanceof Uint8Array) r.versions.set(p, versionOf(content));
+
+  files.set('index.html', r.topPage());
+  for (const f of ctx.site.fields) files.set(`fields/${f.id}/index.html`, r.fieldPage(f));
+  for (const c of ctx.site.chapters) files.set(`chapters/${c.id}/index.html`, r.chapterPage(c));
   return files;
+}
+
+/**
+ * ファイルの版の印。中身の SHA-256 の16進の先頭 10 文字(build.md「出力」)。
+ * @param {string | Uint8Array} content
+ */
+export function versionOf(content) {
+  return createHash('sha256').update(content).digest('hex').slice(0, 10);
 }
 
 /**
@@ -145,6 +160,17 @@ class Renderer {
     for (const c of this.site.chapters) for (const f of c.figures) this.figs.set(f.token, f);
     /** @type {Map<any, Map<any, number>>} 章 → (トークン → 段落の番号) */
     this.paragraphs = new Map();
+    /** @type {Map<string, string>} 出力の相対パス → 版の印(generateSite が入れる) */
+    this.versions = new Map();
+  }
+
+  /**
+   * ページが読むファイルの URL。版の印があれば ?v= に付ける(build.md「出力」)。
+   * @param {string} rel  出力の相対パス
+   */
+  asset(rel) {
+    const v = this.versions.get(rel);
+    return `${this.base}${rel}${v ? `?v=${v}` : ''}`;
   }
 
   /**
@@ -213,7 +239,7 @@ class Renderer {
       },
       ref: (/** @type {any} */ t) => this.refHtml(t, chapter, plain),
       imageSrc: (/** @type {string} */ src) =>
-        /^[a-z][a-z0-9+.-]*:/i.test(src) ? src : `${this.base}chapters/${chapter.id}/${path.posix.normalize(src)}`,
+        /^[a-z][a-z0-9+.-]*:/i.test(src) ? src : this.asset(`chapters/${chapter.id}/${path.posix.normalize(src)}`),
     };
   }
 
@@ -358,20 +384,20 @@ class Renderer {
   page(p) {
     const fields = JSON.stringify(this.site.fields.map((f) => ({ id: f.id, title: f.title }))).replace(/</g, '\\u003c');
     return `<!doctype html>
-<html lang="ja" data-base="${h(this.base)}">
+<html lang="ja" data-base="${h(this.base)}" data-defs="${h(this.asset('defs.json'))}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>${LOOK_SCRIPT}</script>
 <title>${h(p.title)}</title>
-<link rel="icon" href="${this.base}assets/favicon.png" type="image/png" sizes="${FAVICON_SIZE}x${FAVICON_SIZE}">
-<link rel="icon" href="${this.base}assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="${this.asset('assets/favicon.png')}" type="image/png" sizes="${FAVICON_SIZE}x${FAVICON_SIZE}">
+<link rel="icon" href="${this.asset('assets/favicon.svg')}" type="image/svg+xml">
 ${FONTS}
-<link rel="stylesheet" href="${this.base}assets/katex/katex.min.css">
-<link rel="stylesheet" href="${this.base}assets/style.css">
-<link rel="stylesheet" href="${this.base}assets/lines.css">
+<link rel="stylesheet" href="${this.asset('assets/katex/katex.min.css')}">
+<link rel="stylesheet" href="${this.asset('assets/style.css')}">
+<link rel="stylesheet" href="${this.asset('assets/lines.css')}">
 <script type="application/json" id="_fields">${fields}</script>
-<script src="${this.base}assets/app.js" defer></script>
+<script src="${this.asset('assets/app.js')}" defer></script>
 </head>
 <body class="${p.bodyClass}">
 <header class="bar"><div class="bar-in">${p.bar}</div></header>

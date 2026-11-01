@@ -7,6 +7,7 @@ import path from 'node:path';
 import { after, describe, test } from 'node:test';
 import { ROOT, analyze } from '../../src/build.js';
 import { chapterInField, nextChapter, prerequisiteChapters, transferGuide } from '../../src/core/navigation.js';
+import { versionOf } from '../../src/site/pages.js';
 import {
   CH3,
   addFigures,
@@ -302,7 +303,7 @@ describe('build: 受け入れテスト', () => {
     assert.ok(!figs.some((m) => m[0].includes('{#')), '図の {#ID} が文字として出ている');
     assert.match(
       ch3,
-      /<p[^>]*>文の中の画像 <img src="[^"]*\/figures\/b\.svg" alt="文中" title="文中の図"> です。<\/p>/,
+      /<p[^>]*>文の中の画像 <img src="[^"]*\/figures\/b\.svg\?v=[0-9a-f]{10}" alt="文中" title="文中の図"> です。<\/p>/,
     );
     const ch4 = await readDist(dist, 'chapters/norm-inner-product/index.html');
     assert.ok(ch4.includes('<a class="num" href="/chapters/completeness-fixed-point/#fig-two">図 3.2</a>'));
@@ -352,6 +353,52 @@ describe('build: 受け入れテスト', () => {
       // 行内の \tag は、使えない命令としても、KaTeX が解釈できない数式としても E10 になる
       assert.deepEqual([...new Set(errors.map((e) => e.code))], ['E10'], title);
     }
+  });
+
+  test('26. ページが読むファイルの URL に、中身の版の印が付く', async () => {
+    const root = await tempRoot();
+    roots.push(root);
+    await addFigures(root);
+    const marks = async () => {
+      const r = await buildIn(root);
+      assert.deepEqual(r.errors, []);
+      const dist = path.join(root, 'dist');
+      /** @type {Map<string, string>} */
+      const found = new Map();
+      for (const f of (await listFiles(dist)).filter((x) => x.endsWith('.html'))) {
+        const html = await readDist(dist, f);
+        const urls = [...html.matchAll(/\s(?:href|src|data-defs)="([^"]+)"/g)].map((m) => m[1]);
+        for (const url of urls) {
+          if (url.startsWith('#') || /^https?:/.test(url) || url.endsWith('/') || /\/(#|\?field=)/.test(url)) continue;
+          const m = /^\/([^?#]+)\?v=([0-9a-f]{10})$/.exec(url);
+          assert.ok(m, `${f} の ${url} に版の印がない`);
+          const expected = versionOf(await fs.readFile(path.join(dist, m[1])));
+          assert.equal(m[2], expected, `${f} の ${url}`);
+          found.set(m[1], m[2]);
+        }
+      }
+      return found;
+    };
+    const before = await marks();
+    for (const p of [
+      'assets/style.css',
+      'assets/app.js',
+      'assets/lines.css',
+      'assets/favicon.svg',
+      'assets/favicon.png',
+      'assets/katex/katex.min.css',
+      'defs.json',
+      'chapters/completeness-fixed-point/figures/a.svg',
+    ]) {
+      assert.ok(before.has(p), `${p} の URL がない`);
+    }
+    await fs.writeFile(
+      path.join(root, 'content', path.dirname(CH3), 'figures', 'a.svg'),
+      '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200"><rect width="300" height="200" fill="#999"/></svg>\n',
+    );
+    const after = await marks();
+    const changed = [...after.keys()].filter((k) => after.get(k) !== before.get(k));
+    assert.deepEqual(changed, ['chapters/completeness-fixed-point/figures/a.svg']);
   });
 
   test('13. defs.json の定義の式にも式番号が付く', async () => {

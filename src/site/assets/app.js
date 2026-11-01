@@ -203,7 +203,8 @@
 
   function loadDefs() {
     if (!defsPromise) {
-      defsPromise = fetch(base + 'defs.json')
+      // 版の印の付いた URL(build.md「出力」)。古いページでは印のない URL
+      defsPromise = fetch(root.getAttribute('data-defs') || base + 'defs.json')
         .then(function (r) {
           if (!r.ok) throw new Error(String(r.status));
           return r.json();

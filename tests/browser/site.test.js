@@ -148,7 +148,7 @@ describe('site: 受け入れテスト', () => {
     const { context, page } = await open();
     let defsRequests = 0;
     page.on('request', (r) => {
-      if (r.url().endsWith('/defs.json')) defsRequests++;
+      if (new URL(r.url()).pathname.endsWith('/defs.json')) defsRequests++;
     });
     await page.goto(`${server.url}${CH3}`);
     await page.locator('#completeness .def .term').first().focus();
