@@ -148,7 +148,7 @@ describe('site: 受け入れテスト', () => {
     const { context, page } = await open();
     let defsRequests = 0;
     page.on('request', (r) => {
-      if (r.url().endsWith('/defs.json')) defsRequests++;
+      if (new URL(r.url()).pathname.endsWith('/defs.json')) defsRequests++;
     });
     await page.goto(`${server.url}${CH3}`);
     await page.locator('#completeness .def .term').first().focus();
@@ -496,6 +496,10 @@ describe('site: 改善案の起票(P-07)', () => {
     assert.equal(await opacity(), 1);
     const ibox = await icon.boundingBox();
     assert.ok(ibox && ibox.x >= sbox.x + sbox.width, 'アイコンが駅の右端より右にない');
+    const bbox = await section.locator('button.bm').boundingBox();
+    assert.ok(bbox && bbox.x >= sbox.x + sbox.width, 'しおりのアイコンが駅の右端より右にない');
+    assert.ok(bbox.x + bbox.width <= ibox.x && bbox.y === ibox.y, 'しおりのアイコンが起票のアイコンの左に並んでいない');
+    assert.equal(await section.locator('button.bm').evaluate((el) => Number(getComputedStyle(el).opacity)), 1);
     await icon.hover();
     const tip = await icon.evaluate((el) => getComputedStyle(el, '::after').content);
     assert.equal(tip, '"この駅についてGitHub Issueに起票する"');
@@ -520,9 +524,13 @@ describe('site: 改善案の起票(P-07)', () => {
       const s = await page.locator(`section.station#${id}`).boundingBox();
       const h2 = await page.locator(`section.station#${id} > h2`).boundingBox();
       const i = await page.locator(`section.station#${id} a.issue`).boundingBox();
-      assert.ok(s && h2 && i);
+      const b = await page.locator(`section.station#${id} button.bm`).boundingBox();
+      const name = await page.locator(`section.station#${id} .st-name`).boundingBox();
+      assert.ok(s && h2 && i && b && name);
       assert.ok(Math.abs(i.x + i.width - (s.x + s.width)) <= 1, `${id}: 右端にない`);
       assert.ok(i.y < h2.y + h2.height && i.y + i.height > h2.y, `${id}: 見出しの行にない`);
+      assert.ok(b.x + b.width <= i.x && b.y === i.y, `${id}: しおりのアイコンが起票の左に並んでいない`);
+      assert.ok(name.x + name.width <= b.x, `${id}: 駅名がアイコンにかかる`);
     }
     const [sw, cw] = await page.evaluate(() => [
       document.documentElement.scrollWidth,
@@ -539,6 +547,9 @@ describe('site: 改善案の起票(P-07)', () => {
       assert.deepEqual(r.errors, []);
       const html = await fs.readFile(path.join(root, 'dist/chapters/completeness-fixed-point/index.html'), 'utf8');
       assert.ok(!html.includes('class="issue'));
+      const stations = (html.match(/<section class="station/g) ?? []).length;
+      assert.ok(stations > 0);
+      assert.equal((html.match(/<button type="button" class="bm" data-bm=/g) ?? []).length, stations);
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
@@ -1297,49 +1308,70 @@ describe('site: 表示の設定(P-09)', () => {
 });
 
 describe('site: しおり(P-10)', () => {
-  test('41. 前回の続きから読む', async () => {
-    const { context, page } = await open({ reducedMotion: 'reduce' });
+  test('41. 駅をしおりに入れ、上端のバーの一覧から戻る', async () => {
+    const { context, page, errors } = await open();
     await page.goto(`${server.url}${CH3}`);
-    await page
-      .locator('#banach')
-      .evaluate((el) => window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY + el.clientHeight / 2));
-    await page.waitForFunction(
-      () => JSON.parse(localStorage.getItem('mathenaga-bookmarks') || '{}')['completeness-fixed-point'],
-    );
-    const mark = await page.evaluate(
-      () => JSON.parse(localStorage.getItem('mathenaga-bookmarks') || '{}')['completeness-fixed-point'],
-    );
-    assert.equal(mark.st, 'banach');
-    assert.ok(mark.p > 0);
+    const bm = page.locator('#banach button.bm');
+    assert.equal(await bm.getAttribute('aria-pressed'), 'false');
+    assert.equal(await bm.getAttribute('aria-label'), 'この駅をしおりに入れる');
+    await bm.click();
+    assert.equal(await bm.getAttribute('aria-pressed'), 'true');
+    assert.equal(await bm.getAttribute('aria-label'), 'しおりから外す');
+    await page.mouse.move(2, 400);
+    await page.waitForTimeout(250);
+    assert.equal(await bm.evaluate((el) => Number(getComputedStyle(el).opacity)), 1, '入れた駅のアイコンが見えない');
 
-    await page.goto(`${server.url}${CH3}`);
-    const resume = page.locator('.resume');
-    assert.equal(await resume.locator('.resume-text').innerText(), '前回の続き:A04 バナッハの不動点定理');
-    const banner = await resume.boundingBox();
-    const head = await page.locator('.ch-head').boundingBox();
-    assert.ok(banner && head && banner.y < head.y, '案内が章の見出しの上にない');
-    await resume.getByRole('button', { name: '続きから読む' }).click();
-    assert.equal(await resume.count(), 0);
-    const gap = await page.evaluate(
-      (p) =>
-        /** @type {Element} */ (document.querySelector(`#banach [data-p="${p}"]`)).getBoundingClientRect().top -
-        /** @type {Element} */ (document.querySelector('.bar')).getBoundingClientRect().bottom,
-      mark.p,
-    );
-    assert.ok(gap >= 0 && gap <= 16, `しおりの段落とバーの間 ${gap}px`);
+    const opener = page.locator('.bar .bm-open');
+    const list = page.locator('#_bookmarks');
+    await opener.click();
+    assert.deepEqual(await list.locator('.bm-list a').allInnerTexts(), ['第3章 A04 バナッハの不動点定理']);
+    assert.ok(await page.evaluate(() => document.activeElement?.matches('#_bookmarks .bm-list a')));
+    await page.keyboard.press('Escape');
+    assert.ok(await list.isHidden());
+    assert.ok(await page.evaluate(() => document.activeElement?.classList.contains('bm-open')));
 
-    await page.goto(`${server.url}${CH3}#banach`);
-    assert.equal(await page.locator('.resume').count(), 0);
+    await page.goto(`${server.url}chapters/convergence-metric/`);
+    const first = page.locator('section.station button.bm').first();
+    const firstName = await page.locator('section.station').first().locator('.st-name').innerText();
+    const firstCode = await page.locator('section.station').first().getAttribute('data-loc');
+    await first.click();
+    await page.goto(server.url);
+    await page.locator('.bar .bm-open').click();
+    assert.deepEqual(await list.locator('.bm-list a').allInnerTexts(), [
+      `第1章 ${firstCode} ${firstName}`,
+      '第3章 A04 バナッハの不動点定理',
+    ]);
+    await list.locator('.bm-list a', { hasText: 'バナッハ' }).click();
+    await page.waitForURL(/\/chapters\/completeness-fixed-point\/#banach$/);
+
+    await page.locator('.bar .bm-open').click();
+    await list.locator('.bm-list li', { hasText: 'バナッハ' }).locator('.bm-del').click();
+    assert.deepEqual(await list.locator('.bm-list a').allInnerTexts(), [`第1章 ${firstCode} ${firstName}`]);
+    assert.equal(await bm.getAttribute('aria-pressed'), 'false');
+    await bm.click();
+    await bm.click();
+    assert.equal(await bm.getAttribute('aria-pressed'), 'false', 'もう一度押しても外れない');
+
     await choose(page, 'theme', 'auto');
     await page.locator('#_settings button', { hasText: 'しおりを消す' }).click();
-    await page.goto(`${server.url}${CH3}`);
-    assert.equal(await page.locator('.resume').count(), 0);
+    await page.keyboard.press('Escape');
+    await page.locator('.bar .bm-open').click();
+    assert.equal(await list.locator('.bm-list a').count(), 0);
+    assert.match(await list.locator('.bm-empty').innerText(), /しおりはまだありません/);
 
-    await page.goto(`${server.url}chapters/norm-inner-product/`);
-    await page.waitForTimeout(400);
-    await page.goto(`${server.url}chapters/norm-inner-product/`);
-    assert.equal(await page.locator('.resume').count(), 0);
+    await page.evaluate(() =>
+      localStorage.setItem('mathenaga-bookmarks', '{"completeness-fixed-point":{"loc":"A04","p":5}}'),
+    );
+    await page.reload();
+    await page.locator('.bar .bm-open').click();
+    assert.equal(await list.locator('.bm-list a').count(), 0);
+    assert.deepEqual(errors, []);
     await context.close();
+
+    const off = await open({ javaScriptEnabled: false });
+    await off.page.goto(`${server.url}${CH3}`);
+    assert.equal(await off.page.locator('button.bm:visible, .bm-open:visible').count(), 0);
+    await off.context.close();
   });
 });
 
