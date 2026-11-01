@@ -1,6 +1,6 @@
 // 閲覧時のスクリプト(docs/spec/site.md「閲覧時の機能」)。
-// 分野の切り替え(P-05)、用語ポップアップ(P-01)、現在地バー(P-02)、路線図の章の帯の強調(P-03)。スクリプトが動かなくても、
-// ページは未選択の表示のまま読める。
+// 分野の切り替え(P-05)、用語ポップアップ(P-01)、現在地バー(P-02)、路線図の章の帯の強調(P-03)、
+// 位置情報つきのコピー(P-08)。スクリプトが動かなくても、ページは未選択の表示のまま読める。
 (function () {
   'use strict';
   var KEY = 'mathenaga-field';
@@ -516,6 +516,313 @@
     }
     init();
   });
+
+  // ---------- 位置情報つきのコピー(P-08) ----------
+  // 区画(data-loc)と段落の番号(data-p)はビルドが振る。ここでは選んだ範囲から文と位置を作ってコピーする。
+
+  var chapterEl = document.querySelector('article.chapter[data-chapter]');
+  if (chapterEl) setupCopy(chapterEl);
+
+  /** @param {Element} article */
+  function setupCopy(article) {
+    var chapterNo = article.getAttribute('data-chapter');
+    var BLOCK =
+      /^(block|flex|grid|flow-root|list-item|table|table-row|table-row-group|table-header-group|table-footer-group|table-caption)$/;
+    var coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+
+    var menu = document.createElement('div');
+    menu.className = 'copy-menu';
+    menu.setAttribute('role', 'group');
+    menu.setAttribute('aria-label', '選んだ文章のコピー');
+    menu.hidden = true;
+    var buttons = [
+      { mode: 'plain', label: 'そのままコピー' },
+      { mode: 'loc', label: 'この文章の位置情報を含んでコピー' },
+    ].map(function (b) {
+      var el = document.createElement('button');
+      el.type = 'button';
+      el.setAttribute('data-copy', b.mode);
+      el.textContent = b.label;
+      menu.appendChild(el);
+      return el;
+    });
+    var status = document.createElement('span');
+    status.className = 'copy-status';
+    status.setAttribute('role', 'status');
+    menu.appendChild(status);
+    document.body.appendChild(menu);
+
+    /** @type {Range | null} ボタンを出したときの選択範囲 */
+    var saved = null;
+    var timer = 0;
+    var closeTimer = 0;
+    var pointerDown = false;
+
+    /** @param {Node | null} node */
+    function elementOf(node) {
+      if (!node) return null;
+      return node.nodeType === 1 ? /** @type {Element} */ (node) : node.parentElement;
+    }
+    /** @param {Node} node */
+    function katexOf(node) {
+      var el = elementOf(node);
+      return el ? el.closest('.katex') : null;
+    }
+    /** 数式を TeX に戻す。 @param {Element} k */
+    function texOf(k) {
+      var a = k.querySelector('annotation[encoding="application/x-tex"]');
+      var tex = (a ? a.textContent : k.textContent).trim();
+      var display = k.parentElement && k.parentElement.classList.contains('katex-display');
+      return display ? '$$' + tex + '$$' : '$' + tex + '$';
+    }
+    /** 数式の途中で始まる・終わる範囲を、数式全体に広げる。 @param {Range} range */
+    function snapped(range) {
+      var r = range.cloneRange();
+      var ks = katexOf(r.startContainer);
+      if (ks) r.setStartBefore(ks);
+      var ke = katexOf(r.endContainer);
+      if (ke) r.setEndAfter(ke);
+      return r;
+    }
+    /** コピーに含めない要素。 @param {HTMLElement} el */
+    function skipped(el) {
+      if (el.hidden || el.classList.contains('eq-num') || el.classList.contains('issue-rail')) return true;
+      var p = el.parentElement;
+      if (p && p.tagName === 'DETAILS' && !(/** @type {HTMLDetailsElement} */ (p).open) && el.tagName !== 'SUMMARY') {
+        return true;
+      }
+      return getComputedStyle(el).display === 'none';
+    }
+
+    /**
+     * 範囲の文を site.md「位置情報つきのコピー」の形にする。keepEnd なら末尾の空白を残す(文字の数え方に使う)。
+     * @param {Range} range @param {boolean} keepEnd
+     */
+    function textOf(range, keepEnd) {
+      var out = '';
+      /** @param {Node} node */
+      function walk(node) {
+        if (!range.intersectsNode(node)) return;
+        if (node.nodeType === 3) {
+          var s = /** @type {Text} */ (node).data;
+          var to = node === range.endContainer ? range.endOffset : s.length;
+          s = s.slice(node === range.startContainer ? range.startOffset : 0, to);
+          var pre = /^pre/.test(getComputedStyle(node.parentElement).whiteSpace);
+          out += pre ? s : s.replace(/[ \t\n\r\f]+/g, ' ');
+          return;
+        }
+        if (node.nodeType !== 1) return;
+        var el = /** @type {HTMLElement} */ (node);
+        if (skipped(el)) return;
+        if (el.classList.contains('katex')) {
+          out += texOf(el);
+          return;
+        }
+        if (el.tagName === 'BR') {
+          out += '\n';
+          return;
+        }
+        var display = getComputedStyle(el).display;
+        var block = BLOCK.test(display);
+        // 区切りは、要素の始まり・終わりが範囲の中にあるときだけ書く(範囲が要素の途中で終わるなら閉じない)
+        var opens = range.comparePoint(el, 0) >= 0;
+        if (display === 'table-cell' && opens && el.previousElementSibling) out += '\t';
+        if (block && opens) out += '\n';
+        for (var c = el.firstChild; c; c = c.nextSibling) walk(c);
+        if (block && range.comparePoint(el, el.childNodes.length) <= 0) out += '\n';
+      }
+      walk(range.commonAncestorContainer);
+      out = out.replace(/ *\n[ \n]*/g, '\n').replace(/^\s+/, '');
+      return keepEnd ? out : out.replace(/\s+$/, '');
+    }
+
+    /**
+     * 範囲の位置 [章番号, 駅番号, 段落, 文字]。区画の段落に1つもかからなければ null。
+     * @param {Range} range 数式に合わせて広げた範囲
+     */
+    function locate(range) {
+      var el = elementOf(range.startContainer);
+      var p = el ? el.closest('[data-p]') : null;
+      var sec = p ? p.closest('[data-loc]') : null;
+      if (p && sec && article.contains(sec)) {
+        var head = document.createRange();
+        head.setStart(p, 0);
+        head.setEnd(range.startContainer, range.startOffset);
+        return [
+          chapterNo,
+          sec.getAttribute('data-loc'),
+          p.getAttribute('data-p'),
+          Array.from(textOf(head, true)).length + 1,
+        ];
+      }
+      // 段落の外(札など)から選び始めたときは、範囲にかかる最初の段落の 1 文字目
+      var list = all('[data-loc] [data-p], [data-loc][data-p]', article);
+      for (var i = 0; i < list.length; i++) {
+        var q = list[i];
+        if (!range.intersectsNode(q) || !q.getClientRects().length) continue;
+        return [chapterNo, q.closest('[data-loc]').getAttribute('data-loc'), q.getAttribute('data-p'), 1];
+      }
+      return null;
+    }
+
+    function place() {
+      if (!saved || menu.hidden) return;
+      var rects = saved.getClientRects();
+      var last = rects.length ? rects[rects.length - 1] : saved.getBoundingClientRect();
+      var first = rects.length ? rects[0] : last;
+      // 選んだ範囲が画面の外へ出たら、ボタンも見せない
+      menu.style.visibility = last.bottom < 0 || first.top > window.innerHeight ? 'hidden' : '';
+      var w = menu.offsetWidth;
+      var hgt = menu.offsetHeight;
+      var top = last.bottom + (coarse ? 28 : 8);
+      if (top + hgt > window.innerHeight - 8) top = first.top - hgt - 8;
+      var left = Math.min(Math.max(8, last.right - w), window.innerWidth - w - 8);
+      menu.style.left = Math.max(8, left) + 'px';
+      menu.style.top = Math.max(8, top) + 'px';
+    }
+    /** @param {Range} range */
+    function show(range) {
+      window.clearTimeout(closeTimer);
+      saved = range;
+      status.textContent = '';
+      menu.hidden = false;
+      place();
+    }
+    function hide() {
+      window.clearTimeout(closeTimer);
+      if (menu.contains(document.activeElement)) /** @type {HTMLElement} */ (document.activeElement).blur();
+      saved = null;
+      status.textContent = '';
+      menu.hidden = true;
+    }
+    /** 今の選択がボタンを出したときの範囲と同じか。 */
+    function selectionIsSaved() {
+      var sel = window.getSelection();
+      if (!saved || !sel || !sel.rangeCount || sel.isCollapsed) return false;
+      var range = sel.getRangeAt(0);
+      return (
+        range.compareBoundaryPoints(Range.START_TO_START, saved) === 0 &&
+        range.compareBoundaryPoints(Range.END_TO_END, saved) === 0
+      );
+    }
+    function update() {
+      if (menu.contains(document.activeElement)) return; // キーボードでボタンを操作している
+      if (selectionIsSaved()) {
+        place();
+        return;
+      }
+      var sel = window.getSelection();
+      if (!sel || !sel.rangeCount || sel.isCollapsed) {
+        hide();
+        return;
+      }
+      var range = sel.getRangeAt(0);
+      if (!locate(snapped(range))) hide();
+      else show(range.cloneRange());
+    }
+
+    /** @param {string} text */
+    function writeText(text) {
+      function legacy() {
+        var keep = saved ? saved.cloneRange() : null;
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.top = '0';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        var ok;
+        try {
+          ok = document.execCommand('copy');
+        } catch {
+          ok = false;
+        }
+        ta.remove();
+        var sel = window.getSelection();
+        if (keep && sel) {
+          sel.removeAllRanges();
+          sel.addRange(keep);
+        }
+        return ok;
+      }
+      var clip = navigator.clipboard;
+      var first = clip && clip.writeText ? clip.writeText(text) : Promise.reject(new Error('no clipboard'));
+      return first.catch(function () {
+        if (!legacy()) throw new Error('copy failed');
+      });
+    }
+    /** @param {string} msg @param {boolean} ok */
+    function done(msg, ok) {
+      status.textContent = msg;
+      place();
+      window.clearTimeout(closeTimer);
+      if (ok) closeTimer = window.setTimeout(hide, 1200);
+    }
+
+    buttons.forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (!saved) return;
+        status.textContent = '';
+        var r = snapped(saved);
+        var text = textOf(r, false);
+        if (b.getAttribute('data-copy') === 'loc') {
+          var loc = locate(r);
+          if (loc) text = '[' + loc.join(':') + ']\n' + text;
+        }
+        writeText(text).then(
+          function () {
+            done('コピーしました', true);
+          },
+          function () {
+            done('コピーできませんでした', false);
+          },
+        );
+      });
+    });
+    // ボタンを押しても選択が外れないようにする
+    menu.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+    });
+    menu.addEventListener('focusout', function (e) {
+      var to = /** @type {Node | null} */ (e.relatedTarget);
+      if (to && menu.contains(to)) return;
+      if (to) hide();
+    });
+
+    document.addEventListener('selectionchange', function () {
+      window.clearTimeout(timer);
+      // 選び直している間は、前の範囲のボタンを残さない
+      if (saved && !menu.contains(document.activeElement) && !selectionIsSaved()) hide();
+      if (!pointerDown) timer = window.setTimeout(update, 120);
+    });
+    document.addEventListener('pointerdown', function (e) {
+      if (e.target instanceof Node && menu.contains(e.target)) return;
+      pointerDown = true;
+    });
+    function release() {
+      if (!pointerDown) return;
+      pointerDown = false;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(update, 0);
+    }
+    document.addEventListener('pointerup', release);
+    document.addEventListener('pointercancel', release);
+    document.addEventListener('keydown', function (e) {
+      if (menu.hidden) return;
+      if (e.key === 'Escape') {
+        hide();
+        return;
+      }
+      if (e.key === 'Tab' && !e.altKey && !e.ctrlKey && !e.metaKey && !menu.contains(document.activeElement)) {
+        e.preventDefault();
+        buttons[0].focus();
+      }
+    });
+    window.addEventListener('scroll', place, { passive: true });
+    window.addEventListener('resize', place);
+  }
 
   if (reduceMotion) root.classList.add('reduce-motion');
 })();

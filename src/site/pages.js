@@ -86,6 +86,23 @@ export function lineCss(lines) {
   return `${light}\n@media (prefers-color-scheme: dark){\n${dark}\n}\n`;
 }
 
+/**
+ * トークン i が段落として数えるもの(site.md「位置情報つきのコピー」)なら、data-p を付けるトークンを返す。
+ * 項目の詰まった箇条書きでは段落の <p> を書き出さないので、その項目(list_item_open)に付ける。
+ * @param {any[]} tokens @param {number} i
+ */
+function numberedToken(tokens, i) {
+  const t = tokens[i];
+  if (t.type === 'paragraph_open') {
+    if (!t.hidden) return t;
+    for (let j = i - 1; j >= 0; j--) {
+      if (tokens[j].type === 'list_item_open' && tokens[j].level === t.level - 1) return tokens[j];
+    }
+    return null;
+  }
+  return ['heading_open', 'table_open', 'math_block', 'fence', 'code_block'].includes(t.type) ? t : null;
+}
+
 class Renderer {
   /** @param {any} ctx */
   constructor(ctx) {
@@ -99,6 +116,39 @@ class Renderer {
     /** @type {Map<any, string>} */
     this.eqIds = new Map();
     for (const c of this.site.chapters) for (const e of c.equations) if (e.id) this.eqIds.set(e.token, e.id);
+    /** @type {Map<any, Map<any, number>>} 章 → (トークン → 段落の番号) */
+    this.paragraphs = new Map();
+  }
+
+  /**
+   * 区画(駅と、ゴール・出発点・ふりかえり・確認問題の節)ごとに、段落の番号を原稿の順に 1 から振る
+   * (site.md「位置情報つきのコピー」)。折りたたむ中身とほかの分野の版も数える。
+   * @param {any} c
+   * @returns {Map<any, number>} 番号を付けるトークン → 番号
+   */
+  paragraphMap(c) {
+    const cached = this.paragraphs.get(c);
+    if (cached) return cached;
+    const tokens = c.tokens;
+    /** @type {Map<any, number>} */
+    const map = new Map();
+    /** @param {Array<{ start: number, end: number }>} ranges */
+    const number = (ranges) => {
+      const idx = new Set();
+      for (const r of ranges) for (let i = r.start; i <= r.end; i++) idx.add(i);
+      let n = 0;
+      for (const i of [...idx].sort((a, b) => a - b)) {
+        const target = numberedToken(tokens, i);
+        if (target && !map.has(target)) map.set(target, ++n);
+      }
+    };
+    number(c.head.goals);
+    number([...c.head.motivations, ...c.head.prose]);
+    for (const st of c.stations) number(st.items.map((/** @type {any} */ it) => (it.kind === 'block' ? it.block : it)));
+    number(c.end.reviews);
+    number(c.end.questions.flatMap((/** @type {any} */ q) => (q.answer ? [q.question, q.answer] : [q.question])));
+    this.paragraphs.set(c, map);
+    return map;
   }
 
   // ---------- URL ----------
@@ -118,13 +168,16 @@ class Renderer {
 
   /** @param {any} chapter @param {boolean} plain */
   env(chapter, plain) {
+    const paragraphs = plain ? null : this.paragraphMap(chapter);
     return {
       mathInline: (/** @type {any} */ t) => this.ctx.mathHtml.get(t) ?? '',
       mathBlock: (/** @type {any} */ t) => {
         const id = this.eqIds.get(t);
         const label = this.ctx.equations.labels.get(t);
-        return `<div class="eq"${id ? ` id="${h(id)}"` : ''}><div class="eq-body">${this.ctx.mathHtml.get(t) ?? ''}</div><span class="eq-num">(${label})</span></div>\n`;
+        const no = paragraphs?.get(t);
+        return `<div class="eq"${id ? ` id="${h(id)}"` : ''}${no === undefined ? '' : ` data-p="${no}"`}><div class="eq-body">${this.ctx.mathHtml.get(t) ?? ''}</div><span class="eq-num">(${label})</span></div>\n`;
       },
+      paragraphNo: paragraphs ? (/** @type {any} */ t) => paragraphs.get(t) : undefined,
       ref: (/** @type {any} */ t) => this.refHtml(t, chapter, plain),
       imageSrc: (/** @type {string} */ src) =>
         /^[a-z][a-z0-9+.-]*:/i.test(src) ? src : `${this.base}chapters/${chapter.id}/${path.posix.normalize(src)}`,
@@ -184,9 +237,10 @@ class Renderer {
    * 共通版と分野版の組。共通版は開いたまま、分野版は折りたたむ(初期状態は未選択)。
    * 出発点は節の見出し「出発点」の下に置くので、共通版に札を付けず、分野版の札を「〈分野名〉では」にする(site.md)。
    * @param {any} chapter @param {import('../core/chapter.js').Block[]} blocks @param {string} kind @param {string} label
+   * @param {string} [loc] 位置情報つきのコピーで使う区画の名前(data-loc)。区画でなければ空
    */
-  versionGroup(chapter, blocks, kind, label) {
-    const out = [`<div class="vgroup" data-kind="${kind}">`];
+  versionGroup(chapter, blocks, kind, label, loc = '') {
+    const out = [`<div class="vgroup" data-kind="${kind}"${loc ? ` data-loc="${h(loc)}"` : ''}>`];
     for (const b of byFieldOrder(blocks, this.site.fieldOrder)) {
       if (!b.field) {
         const tag = kind === 'motivation' ? '' : `<p class="tag tag-${kind}">${label}</p>`;
@@ -443,17 +497,17 @@ ${c.subtitle ? `<p class="ch-sub">${h(c.subtitle)}</p>` : ''}
 
     // 出発点
     const prose = c.head.prose.map((r) => this.range(c, r.start, r.end)).join('');
-    const motivation = `<section class="start flow" id="_start"><h2 class="sec-h">出発点</h2>${this.versionGroup(c, c.head.motivations, 'motivation', '出発点')}${prose}</section>`;
+    const motivation = `<section class="start flow" id="_start" data-loc="出発点"><h2 class="sec-h" data-p="0">出発点</h2>${this.versionGroup(c, c.head.motivations, 'motivation', '出発点')}${prose}</section>`;
 
     // 駅
     const stationHtml = stations.map((st) => this.stationSection(c, st)).join('\n');
 
     // 章末
     const review = c.end.reviews[0]
-      ? `<section class="review" id="_review"><h2 class="sec-h">ふりかえり</h2><div class="box review"><div class="flow">${this.inner(c, c.end.reviews[0])}</div></div></section>`
+      ? `<section class="review" id="_review" data-loc="ふりかえり"><h2 class="sec-h" data-p="0">ふりかえり</h2><div class="box review"><div class="flow">${this.inner(c, c.end.reviews[0])}</div></div></section>`
       : '';
     const questions = c.end.questions.length
-      ? `<section class="quiz" id="_quiz"><h2 class="sec-h">確認問題</h2><ol class="qs">${c.end.questions
+      ? `<section class="quiz" id="_quiz" data-loc="確認問題"><h2 class="sec-h" data-p="0">確認問題</h2><ol class="qs">${c.end.questions
           .map(
             (q) =>
               `<li><div class="q flow">${this.inner(c, q.question)}</div>${
@@ -470,10 +524,10 @@ ${c.subtitle ? `<p class="ch-sub">${h(c.subtitle)}</p>` : ''}
     ].join('');
     const aheadSec = `<section class="ahead" id="_ahead"><h2 class="sec-h">この先</h2>${ahead}</section>`;
 
-    const main = `<article class="chapter">
+    const main = `<article class="chapter" data-chapter="${c.number}">
 ${head}
 ${chooser}
-${this.versionGroup(c, c.head.goals, 'goal', 'この章のゴール')}
+${this.versionGroup(c, c.head.goals, 'goal', 'この章のゴール', 'この章のゴール')}
 ${mapSec}
 ${motivation}
 ${stationHtml}
@@ -512,8 +566,8 @@ ${aheadSec}
       else items.push(this.blockHtml(c, item.block));
     }
     const appHtml = apps.length ? this.versionGroup(c, apps, 'application', '分野での応用') : '';
-    return `<section class="station flow" id="${h(st.id)}" data-station="${h(st.id)}" data-out="${out.join(' ')}">
-<h2>${this.badge(st)}<span class="st-name">${heading}</span>${shared ? `<span class="en">${h(shared.en)}</span>` : ''}<span class="out-label" hidden>${OUT_OF_SCOPE}</span></h2>
+    return `<section class="station flow" id="${h(st.id)}" data-station="${h(st.id)}" data-loc="${h(st.code)}" data-out="${out.join(' ')}">
+<h2 data-p="0">${this.badge(st)}<span class="st-name">${heading}</span>${shared ? `<span class="en">${h(shared.en)}</span>` : ''}<span class="out-label" hidden>${OUT_OF_SCOPE}</span></h2>
 ${notes}${items.join('')}${appHtml}${this.issueLink(c, st)}
 </section>`;
   }

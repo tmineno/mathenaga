@@ -198,7 +198,8 @@ describe('build: 受け入れテスト', () => {
       ch4.includes('<a class="eqref" href="/chapters/completeness-fixed-point/#value-iteration-error">(3.10)</a>'),
     );
     const ch3 = await readDist(path.join(root, 'dist'), 'chapters/completeness-fixed-point/index.html');
-    assert.ok(ch3.includes('<div class="eq" id="value-iteration-error">'));
+    // 式の要素にはほかの属性(段落の番号 data-p)も付く
+    assert.match(ch3, /<div class="eq" id="value-iteration-error"[ >]/);
   });
 
   test('13. defs.json の定義の式にも式番号が付く', async () => {

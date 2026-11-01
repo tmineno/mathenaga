@@ -448,6 +448,200 @@ describe('site: 改善案の起票(P-07)', () => {
   });
 });
 
+describe('site: 位置情報つきのコピー(P-08)', () => {
+  const BANACH_PROSE = '#banach > p';
+  const BANACH_THM = '#banach .box.thm .flow > p';
+  const PLAIN = 'button[data-copy=plain]';
+  const LOC = 'button[data-copy=loc]';
+
+  /** クリップボードを使えるページ。 @param {import('playwright').BrowserContextOptions} [options] */
+  async function openCopy(options = {}) {
+    return open({ permissions: ['clipboard-read', 'clipboard-write'], ...options });
+  }
+
+  /**
+   * sel に合い from を含む最初の要素を画面に出し、その中で文字列 from の始まりから to の終わりまでを選ぶ
+   * (数式の中の文字は探さない)。
+   * @param {import('playwright').Page} page @param {string} sel @param {string} from @param {string} to
+   */
+  async function selectText(page, sel, from, to) {
+    await page.evaluate(
+      ([sel, from, to]) => {
+        const root = [...document.querySelectorAll(sel)].find((el) => el.textContent?.includes(from));
+        if (!root) throw new Error(`${sel} に ${from} がない`);
+        root.scrollIntoView({ block: 'center' });
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+          acceptNode: (n) => (n.parentElement?.closest('.katex') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+        });
+        /** @type {[Node, number] | null} */
+        let start = null;
+        /** @type {[Node, number] | null} */
+        let end = null;
+        for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+          const data = /** @type {Text} */ (n).data;
+          if (!start) {
+            const i = data.indexOf(from);
+            if (i < 0) continue;
+            start = [n, i];
+          }
+          const j = data.indexOf(to, n === start[0] ? start[1] : 0);
+          if (j >= 0) {
+            end = [n, j + to.length];
+            break;
+          }
+        }
+        if (!start || !end) throw new Error(`${sel} に ${from}…${to} がない`);
+        const r = document.createRange();
+        r.setStart(start[0], start[1]);
+        r.setEnd(end[0], end[1]);
+        const s = /** @type {Selection} */ (window.getSelection());
+        s.removeAllRanges();
+        s.addRange(r);
+      },
+      [sel, from, to],
+    );
+  }
+
+  /** sel に合う最初の要素を画面に出し、その中身を全部選ぶ。 @param {import('playwright').Page} page @param {string} sel */
+  async function selectAll(page, sel) {
+    await page
+      .locator(sel)
+      .first()
+      .evaluate((el) => {
+        el.scrollIntoView({ block: 'center' });
+        const r = document.createRange();
+        r.selectNodeContents(el);
+        const s = /** @type {Selection} */ (window.getSelection());
+        s.removeAllRanges();
+        s.addRange(r);
+      });
+  }
+
+  /** @param {import('playwright').Page} page */
+  const menu = (page) => page.locator('.copy-menu');
+  /** @param {import('playwright').Page} page */
+  const clip = (page) => page.evaluate(() => navigator.clipboard.readText());
+  /** @param {import('playwright').Page} page @param {string} button */
+  async function copyWith(page, button) {
+    await menu(page).waitFor({ state: 'visible' });
+    await menu(page).locator(button).click();
+    await page.locator('.copy-menu .copy-status', { hasText: /コピー/ }).waitFor();
+    return clip(page);
+  }
+
+  test('23. 地の文を選ぶと2つのボタンが出て、位置つき・そのままでコピーできる', async () => {
+    const { context, page, errors } = await openCopy();
+    await page.goto(`${server.url}${CH3}`);
+    await selectText(page, BANACH_PROSE, '何回反復すれば', '何回反復すれば');
+    await menu(page).waitFor({ state: 'visible' });
+    assert.deepEqual(await menu(page).locator('button').allInnerTexts(), [
+      'そのままコピー',
+      'この文章の位置情報を含んでコピー',
+    ]);
+    assert.equal(await copyWith(page, LOC), '[3:A04:17:13]\n何回反復すれば');
+    assert.equal(await page.locator('.copy-menu .copy-status').innerText(), 'コピーしました');
+    await selectText(page, BANACH_PROSE, '何回反復すれば', '何回反復すれば');
+    assert.equal(await copyWith(page, PLAIN), '何回反復すれば');
+    assert.deepEqual(errors, []);
+    await context.close();
+  });
+
+  test('24. 行内の数式は TeX に戻し、数式の途中から選んでも数式全体を含める', async () => {
+    const { context, page } = await openCopy();
+    await page.goto(`${server.url}${CH3}`);
+    await selectText(page, BANACH_THM, '縮小率', '縮小写像');
+    assert.equal(await copyWith(page, LOC), '[3:A04:2:36]\n縮小率 $k$ の縮小写像');
+    // $k$ の描画の中から、その後ろの「の」まで
+    await page
+      .locator(BANACH_THM)
+      .first()
+      .evaluate((p) => {
+        p.scrollIntoView({ block: 'center' });
+        const k = /** @type {Element} */ (
+          [...p.querySelectorAll('.katex')].find((el) => el.querySelector('annotation')?.textContent === 'k')
+        );
+        const inner = /** @type {Text} */ (
+          document
+            .createTreeWalker(/** @type {Node} */ (k.querySelector('.katex-html')), NodeFilter.SHOW_TEXT)
+            .nextNode()
+        );
+        const after = /** @type {Text} */ (k.nextSibling);
+        const r = document.createRange();
+        r.setStart(inner, 0);
+        r.setEnd(after, after.data.indexOf('の') + 1);
+        const s = /** @type {Selection} */ (window.getSelection());
+        s.removeAllRanges();
+        s.addRange(r);
+      });
+    assert.equal(await copyWith(page, LOC), '[3:A04:2:40]\n$k$ の');
+    await context.close();
+  });
+
+  test('25. 別行立ての式は $$…$$ にし、式番号を含めない', async () => {
+    const { context, page } = await openCopy();
+    await page.goto(`${server.url}${CH3}`);
+    await selectAll(page, '#banach .box.drop-assumption .eq');
+    assert.equal(
+      await copyWith(page, LOC),
+      '[3:A04:20:1]\n$$|T(x) - T(y)| = |x - y|\\left(1 - \\frac{1}{xy}\\right) < |x - y|$$',
+    );
+    await context.close();
+  });
+
+  test('26. 駅の外の節は節の名前。分野を選んでも段落の番号は変わらない。見出しは 0', async () => {
+    for (const q of ['', '?field=physics']) {
+      const { context, page } = await openCopy();
+      await page.goto(`${server.url}${CH3}${q}`);
+      await selectText(page, '#_start', 'この章では', '導入します');
+      assert.match(await copyWith(page, LOC), /^\[3:出発点:7:1\]\nこの章では、1 を防ぐ条件として完備性を/);
+      await context.close();
+    }
+    const { context, page } = await openCopy();
+    await page.goto(`${server.url}${CH3}`);
+    await selectAll(page, '#banach > h2 .st-name');
+    assert.match(await copyWith(page, LOC), /^\[3:A04:0:\d+\]\nバナッハの不動点定理/);
+    await context.close();
+  });
+
+  test('27. 本文の外ではボタンを出さない。Tab でボタンへ、Esc で閉じる', async () => {
+    const { context, page } = await openCopy();
+    await page.goto(`${server.url}${CH3}`);
+    for (const sel of ['.map-v[data-for=""] svg text', 'header.bar', '#banach .box.thm > .tag']) {
+      await selectAll(page, sel);
+      await page.waitForTimeout(400);
+      assert.ok(!(await menu(page).isVisible()), `${sel} でボタンが出た`);
+    }
+    await selectText(page, BANACH_PROSE, '何回反復すれば', '何回反復すれば');
+    await menu(page).waitFor({ state: 'visible' });
+    await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(() => document.activeElement?.textContent), 'そのままコピー');
+    await page.keyboard.press('Enter');
+    await page.locator('.copy-menu .copy-status', { hasText: 'コピーしました' }).waitFor();
+    assert.equal(await clip(page), '何回反復すれば');
+    await selectText(page, BANACH_PROSE, '何回反復すれば', '何回反復すれば');
+    await menu(page).waitFor({ state: 'visible' });
+    await page.keyboard.press('Escape');
+    await menu(page).waitFor({ state: 'hidden' });
+    await context.close();
+  });
+
+  test('28. クリップボードに書けなければ「コピーできませんでした」', async () => {
+    const { context, page } = await open();
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText: () => Promise.reject(new Error('denied')) },
+      });
+      document.execCommand = () => false;
+    });
+    await page.goto(`${server.url}${CH3}`);
+    await selectText(page, BANACH_PROSE, '何回反復すれば', '何回反復すれば');
+    await menu(page).waitFor({ state: 'visible' });
+    await menu(page).locator(LOC).click();
+    await page.locator('.copy-menu .copy-status', { hasText: 'コピーできませんでした' }).waitFor();
+    await context.close();
+  });
+});
+
 describe('route-map: 14. 章の帯を押すと章のページの先頭へ移る(ブラウザ)', () => {
   test('全体の図の第3章の帯の、駅のない部分を押す', async () => {
     const { context, page } = await open();

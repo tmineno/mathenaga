@@ -668,6 +668,48 @@ details.fold[open] > summary {
   overflow-x: auto;
 }
 
+/* 位置情報つきのコピー(P-08) */
+.copy-menu {
+  position: fixed;
+  z-index: 21;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100vw - 16px);
+  padding: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(10, 14, 22, 0.18);
+  font-size: 13px;
+  line-height: 1.4;
+  user-select: none;
+}
+.copy-menu button {
+  font: inherit;
+  color: inherit;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.copy-menu button:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.copy-status {
+  padding: 0 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.copy-status:empty {
+  display: none;
+}
+
 /* 路線図 */
 .mapsec,
 .map-v {
