@@ -1,0 +1,23 @@
+# 路線ファイル(docs/spec/content-format.md「路線ファイル」)
+# layout は幹線から分岐する向き(up / down / right)。書かない路線は幹線になる。
+- id: reading
+  code: Z
+  name: 0番線
+  color: "#8790A1"
+  style: dotted
+- id: main
+  code: M
+  name: 本線
+  color: "#8790A1"
+- id: analysis
+  code: A
+  name: 解析線
+  color: "#5B45B8"
+  color_dark: "#AA98F2"
+  layout: up
+- id: geometry
+  code: G
+  name: 幾何線
+  color: "#0F7F73"
+  color_dark: "#4DC1B3"
+  layout: down
