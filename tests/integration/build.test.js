@@ -282,6 +282,13 @@ describe('build: 受け入れテスト', () => {
     assert.equal(r.errors[0].code, 'E13');
   });
 
+  test('20. MATHENAGA_REPO_URL=github.com/example/mathenaga は E13', async () => {
+    const r = await analyze({ contentDir: '/nonexistent', basePath: '/', repoUrl: 'github.com/example/mathenaga' });
+    assert.equal(r.errors.length, 1);
+    assert.equal(r.errors[0].code, 'E13');
+    assert.match(r.errors[0].message, /MATHENAGA_REPO_URL/);
+  });
+
   test('17・18. npm run build はエラーのとき終了コード 1 でエラーを標準エラー出力に出す', async () => {
     const r = spawnSync(process.execPath, ['src/build.js'], {
       cwd: ROOT,

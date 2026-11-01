@@ -859,6 +859,83 @@ svg.map {
   stroke-width: 4;
 }
 
+/* 改善案の起票(site.md「改善案の起票」)。駅の中にポインターかフォーカスがある間だけ見せる。 */
+.chapter > section.station {
+  position: relative;
+}
+/* アイコンは駅の最後の子に置く(見出しの前に置くと .flow の余白で見出しがずれる) */
+.chapter > section.station > .issue-rail {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  margin: 0;
+}
+.issue {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.station:hover .issue,
+.station:focus-within .issue {
+  opacity: 1;
+}
+.issue:hover,
+.issue:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.issue::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--surface);
+  background: var(--ink);
+  pointer-events: none;
+  opacity: 0;
+}
+.issue:hover::after,
+.issue:focus-visible::after {
+  opacity: 1;
+}
+@media (hover: none) {
+  .issue {
+    opacity: 0.6;
+  }
+}
+/* 狭い幅:見出しの行の右端。見出しの文字がアイコンにかからないよう右をあける */
+.chapter > section.station > h2 {
+  padding-right: 44px;
+}
+/* 本文の段の右に余白がある幅:駅の右の余白に置き、駅の中では上端のバーの下にとどまる */
+@media (min-width: 1240px) {
+  .chapter > section.station > .issue-rail {
+    bottom: 0;
+    right: -52px;
+  }
+  .issue {
+    position: sticky;
+    top: 120px;
+  }
+  .chapter > section.station > h2 {
+    padding-right: 0;
+  }
+}
+
 /* トップと分野の入口 */
 .intro {
   display: grid;

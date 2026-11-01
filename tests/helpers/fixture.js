@@ -41,14 +41,17 @@ export function replaceOnce(text, from, to) {
   return text.slice(0, i) + to + text.slice(i + from.length);
 }
 
-/** @param {string} root @param {string} [basePath] */
-export function analyzeIn(root, basePath = '/') {
-  return analyze({ contentDir: path.join(root, 'content'), basePath });
+/** テストのビルドに渡す、改善案の起票先(site.md「改善案の起票」) */
+export const TEST_REPO_URL = 'https://github.com/example/mathenaga';
+
+/** @param {string} root @param {string} [basePath] @param {string} [repoUrl] */
+export function analyzeIn(root, basePath = '/', repoUrl = TEST_REPO_URL) {
+  return analyze({ contentDir: path.join(root, 'content'), basePath, repoUrl });
 }
 
-/** @param {string} root @param {string} [basePath] */
-export function buildIn(root, basePath = '/') {
-  return build({ contentDir: path.join(root, 'content'), outDir: path.join(root, 'dist'), basePath });
+/** @param {string} root @param {string} [basePath] @param {string} [repoUrl] */
+export function buildIn(root, basePath = '/', repoUrl = TEST_REPO_URL) {
+  return build({ contentDir: path.join(root, 'content'), outDir: path.join(root, 'dist'), basePath, repoUrl });
 }
 
 /**
