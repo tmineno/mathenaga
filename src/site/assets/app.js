@@ -1,6 +1,7 @@
 // 閲覧時のスクリプト(docs/spec/site.md「閲覧時の機能」)。
 // 分野の切り替え(P-05)、用語ポップアップ(P-01)、現在地バー(P-02)、路線図の章の帯の強調(P-03)、
-// 位置情報つきのコピー(P-08)。スクリプトが動かなくても、ページは未選択の表示のまま読める。
+// 位置情報つきのコピー(P-08)、表示の設定(P-09)、しおり(P-10)。
+// スクリプトが動かなくても、ページは未選択の表示のまま読める。
 (function () {
   'use strict';
   var KEY = 'mathenaga-field';
@@ -20,6 +21,75 @@
   function all(sel, el) {
     return Array.prototype.slice.call((el || document).querySelectorAll(sel));
   }
+
+  // ---------- 表示の設定(P-09)とブラウザに保存するもの ----------
+  // テーマ・文字の大きさ・本文の幅は、head の中のスクリプト(pages.js の LOOK_SCRIPT)が描く前に html の属性へ移す。
+  // ここでは設定の読み書きと、残りの項目(折りたたみ・ポップアップ)の反映、メニューを受け持つ。
+
+  var SETTINGS_KEY = 'mathenaga-settings';
+  var ZOOM_KEY = 'mathenaga-map-zoom';
+  var BOOKMARKS_KEY = 'mathenaga-bookmarks';
+  /** 項目ごとの選択肢。先頭が初期値 */
+  var CHOICES = {
+    theme: ['auto', 'light', 'dark'],
+    text: ['medium', 'small', 'large'],
+    width: ['standard', 'narrow', 'wide'],
+    openProof: [false, true],
+    openAnswer: [false, true],
+    openOther: [false, true],
+    popup: ['hover', 'click'],
+  };
+  /** html の data-<項目> 属性で切り替える項目(CSS と LOOK_SCRIPT が読む) */
+  var LOOK = ['theme', 'text', 'width'];
+
+  function getItem(k) {
+    try {
+      return window.localStorage.getItem(k);
+    } catch {
+      return null;
+    }
+  }
+  function setItem(k, v) {
+    try {
+      if (v === null) window.localStorage.removeItem(k);
+      else window.localStorage.setItem(k, v);
+    } catch {
+      /* 保存できなくても、そのページの中では効く */
+    }
+  }
+  function readObject(k) {
+    try {
+      var v = JSON.parse(getItem(k) || 'null');
+      return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+    } catch {
+      return {};
+    }
+  }
+  function defaultSettings() {
+    var d = {};
+    Object.keys(CHOICES).forEach(function (k) {
+      d[k] = CHOICES[k][0];
+    });
+    return d;
+  }
+  /** 選択肢にない値の項目は初期値にする(ほかの項目は使う) */
+  function loadSettings() {
+    var raw = readObject(SETTINGS_KEY);
+    var d = defaultSettings();
+    Object.keys(CHOICES).forEach(function (k) {
+      if (CHOICES[k].indexOf(raw[k]) >= 0) d[k] = raw[k];
+    });
+    return d;
+  }
+  var settings = loadSettings();
+
+  function applyLook() {
+    LOOK.forEach(function (k) {
+      if (settings[k] === CHOICES[k][0]) root.removeAttribute('data-' + k);
+      else root.setAttribute('data-' + k, settings[k]);
+    });
+  }
+  applyLook();
 
   // ---------- 分野の切り替え ----------
 
@@ -51,7 +121,10 @@
     return s === null ? '' : s;
   }
 
+  var field = '';
+
   function apply(f) {
+    field = f;
     all('[data-for]').forEach(function (el) {
       el.hidden = el.getAttribute('data-for') !== f;
     });
@@ -61,7 +134,7 @@
     all('details.v[data-field]').forEach(function (d) {
       var primary = f !== '' && d.getAttribute('data-field') === f;
       d.classList.toggle('primary', primary);
-      d.open = primary;
+      d.open = primary || settings.openOther;
     });
     all('[data-out]').forEach(function (el) {
       var outs = (el.getAttribute('data-out') || '').split(' ');
@@ -92,8 +165,21 @@
     }
   }
 
+  /** 証明の詳細と確認問題の答えを、表示の設定の「最初から開く」の状態にする */
+  function applyFolds() {
+    all('details.fold.proof').forEach(function (d) {
+      d.open = settings.openProof;
+    });
+    all('details.fold.answer').forEach(function (d) {
+      d.open = settings.openAnswer;
+    });
+  }
+
   var isChapter = document.body.classList.contains('page-chapter');
-  if (isChapter) apply(initialField());
+  if (isChapter) {
+    apply(initialField());
+    applyFolds();
+  }
 
   document.addEventListener('click', function (e) {
     var target = e.target instanceof Element ? e.target : null;
@@ -219,7 +305,13 @@
     if (returnFocus && el) el.focus();
   }
 
+  /** 表示の設定で「押したときだけ出す」なら、重ねる・フォーカスする・離れるでは開け閉めしない */
+  function clickOnly() {
+    return settings.popup === 'click';
+  }
+
   function hideSoon() {
+    if (clickOnly()) return;
     window.clearTimeout(timer);
     timer = window.setTimeout(function () {
       if (pop && pop.contains(document.activeElement)) return;
@@ -229,11 +321,11 @@
 
   all('.term').forEach(function (el) {
     el.addEventListener('mouseenter', function () {
-      show(el, false);
+      if (!clickOnly()) show(el, false);
     });
     el.addEventListener('mouseleave', hideSoon);
     el.addEventListener('focus', function () {
-      show(el, false);
+      if (!clickOnly()) show(el, false);
     });
     el.addEventListener('click', function () {
       if (current === el && Date.now() - shownAt > 400) hide(false);
@@ -333,6 +425,13 @@
   // ---------- 路線図の操作(docs/spec/route-map.md「図の操作」) ----------
   // スクリプトが動くときだけ、枠のスクロールをやめてドラッグとボタンで動かす。
 
+  /** 開き直したときに使い直す初期化(表示の設定の「元に戻す」で呼ぶ) */
+  var mapResets = [];
+  function savedZoom() {
+    var v = Number(getItem(ZOOM_KEY));
+    return isFinite(v) && v > 0 ? v : null;
+  }
+
   var ZOOM_STEP = 1.25;
   var ZOOM_MAX = 3;
   var ZOOM_MIN = 0.3;
@@ -375,25 +474,31 @@
       view.y = f.h / 2 - ((f.h / 2 - view.y) * s2) / view.s;
       view.s = s2;
       draw();
+      setItem(ZOOM_KEY, String(view.s));
     }
     function fitAll() {
       view.s = fitScale();
       draw();
+      setItem(ZOOM_KEY, String(view.s));
     }
-    // 開いたとき:章ページの今の章の帯を横の中央に、ほかは左端から
+    // 開いたとき:保存した倍率(なければ 1 倍)で、章ページの今の章の帯を横の中央に、ほかは左端から
     function init() {
       var f = box();
       if (f.w === 0) return;
       ready = true;
-      view.s = 1;
+      view.s = clampZoom(savedZoom() || 1);
       view.y = 0;
       var cur = svg.querySelector('rect.band.current');
       if (cur) {
         var cx = Number(cur.getAttribute('x')) + Number(cur.getAttribute('width')) / 2 - vb[0];
-        view.x = f.w / 2 - cx;
+        view.x = f.w / 2 - cx * view.s;
       } else view.x = 0;
       draw();
     }
+    mapResets.push(function () {
+      ready = false;
+      init();
+    });
 
     // ボタン
     var tools = document.createElement('div');
@@ -823,6 +928,365 @@
     window.addEventListener('scroll', place, { passive: true });
     window.addEventListener('resize', place);
   }
+
+  // ---------- しおり(P-10) ----------
+  // 上端のバーのすぐ下にある区画の段落(data-p)を、章の ID ごとに覚える。駅は駅の ID で、駅の外の節は節の名前で覚える。
+
+  /**
+   * @param {Element} article
+   * @returns {{ clear: () => void }}
+   */
+  function setupBookmark(article) {
+    var chapterId = article.getAttribute('data-id') || '';
+    var bar = document.querySelector('.bar');
+    function barBottom() {
+      return bar ? bar.getBoundingClientRect().bottom : 0;
+    }
+    /** 一番外側の区画 */
+    function sectionOf(el) {
+      var sec = el.closest('[data-loc]');
+      while (sec && sec.parentElement) {
+        var outer = sec.parentElement.closest('[data-loc]');
+        if (!outer) break;
+        sec = outer;
+      }
+      return sec;
+    }
+    function shown(el) {
+      return el.getClientRects().length > 0;
+    }
+
+    // 保存:スクロールが止まりかけたら、上端のバーのすぐ下の段落を覚える
+    var last = '';
+    var saveTimer = null;
+    function save() {
+      var top = barBottom();
+      var paras = all('[data-loc] [data-p], [data-loc][data-p]', article);
+      var el = null;
+      for (var i = 0; i < paras.length; i++) {
+        if (!shown(paras[i])) continue;
+        if (paras[i].getBoundingClientRect().bottom > top + 1) {
+          el = paras[i];
+          break;
+        }
+      }
+      if (!el) return;
+      var sec = sectionOf(el);
+      // 区画より上(章の見出しや現在地など)にいるときは覚えない
+      if (!sec || sec.getBoundingClientRect().top > top + 1) return;
+      var mark = { loc: sec.getAttribute('data-loc'), p: Number(el.getAttribute('data-p')) };
+      var st = sec.getAttribute('data-station');
+      if (st) mark.st = st;
+      var json = JSON.stringify(mark);
+      if (json === last) return;
+      last = json;
+      var marks = readObject(BOOKMARKS_KEY);
+      marks[chapterId] = mark;
+      setItem(BOOKMARKS_KEY, JSON.stringify(marks));
+    }
+    window.addEventListener(
+      'scroll',
+      function () {
+        window.clearTimeout(saveTimer);
+        saveTimer = window.setTimeout(save, 250);
+      },
+      { passive: true },
+    );
+
+    // 案内:アンカーなしで開き、しおりの区画がページにあるときだけ出す
+    var banner = null;
+    function removeBanner() {
+      if (banner && banner.parentNode) banner.parentNode.removeChild(banner);
+      banner = null;
+    }
+    var mark = readObject(BOOKMARKS_KEY)[chapterId];
+    if (!window.location.hash && mark && typeof mark === 'object') {
+      var sec = null;
+      if (typeof mark.st === 'string') {
+        sec = article.querySelector('section.station[data-station="' + cssEscape(mark.st) + '"]');
+      } else if (typeof mark.loc === 'string') {
+        sec = article.querySelector('[data-loc="' + cssEscape(mark.loc) + '"]');
+      }
+      if (sec) showBanner(sec, mark);
+    }
+
+    function showBanner(sec, m) {
+      var name = sec.querySelector('.st-name');
+      var where = sec.getAttribute('data-loc') + (name ? ' ' + name.textContent : '');
+      banner = document.createElement('div');
+      banner.className = 'resume';
+      banner.setAttribute('role', 'region');
+      banner.setAttribute('aria-label', 'しおり');
+      var text = document.createElement('span');
+      text.className = 'resume-text';
+      text.textContent = '前回の続き:' + where;
+      var go = document.createElement('button');
+      go.type = 'button';
+      go.className = 'resume-go';
+      go.textContent = '続きから読む';
+      var x = document.createElement('button');
+      x.type = 'button';
+      x.className = 'resume-x';
+      x.textContent = '×';
+      x.setAttribute('aria-label', '案内を閉じる');
+      x.title = '案内を閉じる';
+      banner.appendChild(text);
+      banner.appendChild(go);
+      banner.appendChild(x);
+      article.insertBefore(banner, article.firstChild);
+      x.addEventListener('click', removeBanner);
+      go.addEventListener('click', function () {
+        removeBanner();
+        var target = typeof m.p === 'number' ? sec.querySelector('[data-p="' + m.p + '"]') : null;
+        if (target) {
+          // 閉じた折りたたみの中なら開く
+          for (var d = target.closest('details'); d; d = d.parentElement && d.parentElement.closest('details')) {
+            d.open = true;
+          }
+        }
+        if (!target || !shown(target)) target = sec.querySelector('[data-p="0"]') || sec;
+        window.scrollTo({ top: target.getBoundingClientRect().top + window.scrollY - barBottom() - 8 });
+      });
+    }
+
+    return {
+      clear: function () {
+        setItem(BOOKMARKS_KEY, null);
+        last = '';
+        removeBanner();
+      },
+    };
+  }
+
+  function cssEscape(v) {
+    return window.CSS && CSS.escape ? CSS.escape(v) : String(v).replace(/["\\]/g, '\\$&');
+  }
+
+  // ---------- 表示の設定のメニュー(P-09) ----------
+  // 右下の歯車のボタンと、その上に開くメニュー。スクリプトが動くときだけ作る。
+
+  var GROUPS = [
+    {
+      key: 'theme',
+      title: 'テーマ',
+      options: [
+        ['light', 'ライト'],
+        ['dark', 'ダーク'],
+        ['auto', 'OS に合わせる'],
+      ],
+    },
+    {
+      key: 'text',
+      title: '文字の大きさ',
+      options: [
+        ['small', '小'],
+        ['medium', '中'],
+        ['large', '大'],
+      ],
+    },
+    {
+      key: 'width',
+      title: '本文の幅',
+      options: [
+        ['narrow', '狭い'],
+        ['standard', '標準'],
+        ['wide', '広い'],
+      ],
+    },
+    {
+      title: '最初から開く',
+      checks: [
+        ['openProof', '証明の詳細'],
+        ['openAnswer', '確認問題の答え'],
+        ['openOther', 'ほかの分野の版'],
+      ],
+    },
+    {
+      key: 'popup',
+      title: '用語ポップアップ',
+      options: [
+        ['hover', '重ねたら出す'],
+        ['click', '押したときだけ出す'],
+      ],
+    },
+  ];
+
+  function gearSvg() {
+    // 歯が 8 つの歯車。外の半径 10、歯の根元 7.4、中の穴 3.2(24×24 の中央)
+    var n = 8;
+    var step = (Math.PI * 2) / n;
+    var pts = [];
+    function at(r, a) {
+      return (12 + r * Math.cos(a)).toFixed(2) + ' ' + (12 + r * Math.sin(a)).toFixed(2);
+    }
+    for (var i = 0; i < n; i++) {
+      var c = i * step - Math.PI / 2;
+      pts.push(at(7.4, c - 0.32 * step), at(10, c - 0.17 * step), at(10, c + 0.17 * step), at(7.4, c + 0.32 * step));
+    }
+    var d = 'M' + pts.join(' L') + ' Z M15.2 12 A3.2 3.2 0 1 0 8.8 12 A3.2 3.2 0 1 0 15.2 12 Z';
+    return (
+      '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" fill-rule="evenodd" d="' +
+      d +
+      '"/></svg>'
+    );
+  }
+
+  function setupSettings() {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'settings-btn';
+    btn.setAttribute('aria-label', '表示の設定');
+    btn.title = '表示の設定';
+    btn.setAttribute('aria-expanded', 'false');
+    btn.setAttribute('aria-controls', '_settings');
+    btn.innerHTML = gearSvg();
+
+    var panel = document.createElement('div');
+    panel.id = '_settings';
+    panel.className = 'settings';
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-label', '表示の設定');
+    panel.hidden = true;
+
+    /** @type {Record<string, HTMLInputElement[]>} */
+    var inputs = {};
+    GROUPS.forEach(function (g) {
+      var fs = document.createElement('fieldset');
+      var lg = document.createElement('legend');
+      lg.textContent = g.title;
+      fs.appendChild(lg);
+      if (g.options) {
+        var seg = document.createElement('div');
+        seg.className = 'seg';
+        inputs[g.key] = [];
+        g.options.forEach(function (o) {
+          var label = document.createElement('label');
+          var input = document.createElement('input');
+          input.type = 'radio';
+          input.name = '_set-' + g.key;
+          input.value = o[0];
+          var span = document.createElement('span');
+          span.textContent = o[1];
+          label.appendChild(input);
+          label.appendChild(span);
+          seg.appendChild(label);
+          inputs[g.key].push(input);
+          input.addEventListener('change', function () {
+            if (input.checked) change(g.key, o[0]);
+          });
+        });
+        fs.appendChild(seg);
+      } else {
+        g.checks.forEach(function (c) {
+          var label = document.createElement('label');
+          label.className = 'check';
+          var input = document.createElement('input');
+          input.type = 'checkbox';
+          input.name = '_set-' + c[0];
+          label.appendChild(input);
+          label.appendChild(document.createTextNode(c[1]));
+          fs.appendChild(label);
+          inputs[c[0]] = [input];
+          input.addEventListener('change', function () {
+            change(c[0], input.checked);
+          });
+        });
+      }
+      panel.appendChild(fs);
+    });
+
+    var actions = document.createElement('div');
+    actions.className = 'settings-actions';
+    var reset = document.createElement('button');
+    reset.type = 'button';
+    reset.textContent = '元に戻す';
+    var clearMarks = document.createElement('button');
+    clearMarks.type = 'button';
+    clearMarks.textContent = 'しおりを消す';
+    var status = document.createElement('span');
+    status.className = 'settings-status';
+    status.setAttribute('aria-live', 'polite');
+    actions.appendChild(reset);
+    actions.appendChild(clearMarks);
+    actions.appendChild(status);
+    panel.appendChild(actions);
+
+    document.body.appendChild(panel);
+    document.body.appendChild(btn);
+
+    function sync() {
+      Object.keys(inputs).forEach(function (k) {
+        inputs[k].forEach(function (input) {
+          input.checked = input.type === 'checkbox' ? settings[k] === true : input.value === settings[k];
+        });
+      });
+    }
+    function say(msg) {
+      status.textContent = msg;
+    }
+    function change(k, v) {
+      settings[k] = v;
+      setItem(SETTINGS_KEY, JSON.stringify(settings));
+      say('');
+      if (LOOK.indexOf(k) >= 0) applyLook();
+      else if (isChapter && (k === 'openProof' || k === 'openAnswer')) applyFolds();
+      else if (isChapter && k === 'openOther') apply(field);
+    }
+    reset.addEventListener('click', function () {
+      settings = defaultSettings();
+      setItem(SETTINGS_KEY, null);
+      setItem(ZOOM_KEY, null);
+      sync();
+      applyLook();
+      if (isChapter) {
+        apply(field);
+        applyFolds();
+      }
+      mapResets.forEach(function (fn) {
+        fn();
+      });
+      say('元に戻しました');
+    });
+    clearMarks.addEventListener('click', function () {
+      if (bookmark) bookmark.clear();
+      else setItem(BOOKMARKS_KEY, null);
+      say('しおりを消しました');
+    });
+
+    function open() {
+      sync();
+      say('');
+      panel.hidden = false;
+      btn.setAttribute('aria-expanded', 'true');
+      var first = inputs[GROUPS[0].key].filter(function (i) {
+        return i.checked;
+      })[0];
+      (first || inputs[GROUPS[0].key][0]).focus();
+    }
+    function close(returnFocus) {
+      if (panel.hidden) return;
+      panel.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+      if (returnFocus) btn.focus();
+    }
+    btn.addEventListener('click', function () {
+      if (panel.hidden) open();
+      else close(false);
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !panel.hidden) close(true);
+    });
+    document.addEventListener('pointerdown', function (e) {
+      if (panel.hidden) return;
+      var t = e.target instanceof Node ? e.target : null;
+      if (t && (panel.contains(t) || btn.contains(t))) return;
+      close(false);
+    });
+  }
+
+  // GROUPS などの変数を使うので、それらを定めた後で作る
+  var bookmark = chapterEl ? setupBookmark(chapterEl) : null;
+  setupSettings();
 
   if (reduceMotion) root.classList.add('reduce-motion');
 })();
