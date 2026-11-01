@@ -162,7 +162,7 @@ dist/
 8. 第3章のすべての `[[…]]` と `[[@…]]` が解決する。各章で、原稿の数式(行内の `$…$` と別行立ての `$$…$$`)の数、ビルドが読み取った数式の数、章のページで KaTeX が描画した数式の数が一致する。
 9. `defs.json` には、原稿のすべての定義(definition)が1項目ずつあり、ID の文字コード順に並ぶ(期待する ID は、テストが原稿から集める)。cauchy-sequence の項目は code が A01、chapter が 3、url が `/chapters/completeness-fixed-point/#def-cauchy-sequence` で、number は第3章の原稿で定義と定理を書いた順に数えたときの cauchy-sequence の位置(3.N)である。html の中の「距離空間」はボタンでもリンクでもない文字である。
 10. `[[@hilbert-spaces]]` は「第5章」、`[[@banach]]` は「A04」と表示され、それぞれ第5章のページと banach 駅へのリンクになる。
-11. 各章の別行立ての式に、(N.1) から、その章の原稿にある別行立ての式の数だけ、重複なく式番号が振られる(N は章番号)。別行立ての式のない章には振られない。第3章では、(3.1) は cauchy-sequence の定義の式、(3.4) は contraction の定義の式、最後の番号は picard-lindelof 駅の理論物理の応用の式(ノートンのドームの解)である。
+11. 各章の別行立ての式に、(N.1) から、その章の原稿にある別行立ての式の数だけ、重複なく式番号が振られる(N は章番号)。別行立ての式のない章には振られない。第3章では、(3.1) は cauchy-sequence の定義の式、(3.4) は contraction の定義の式、最後の番号は picard-lindelof 駅の理論物理の応用の最後の式(ノートンのドームの解)である。
 12. 第3章の banach 駅の情報科学の応用にある誤差評価の式に `{#value-iteration-error}` を付け、第4章に `[[@value-iteration-error]]` と書くと、「(3.10)」と表示され、`/chapters/completeness-fixed-point/#value-iteration-error` へのリンクになる。
 13. `defs.json` の cauchy-sequence の html にある別行立ての式には、式番号 (3.1) が付く。
 14. `MATHENAGA_BASE_PATH=/mathenaga/` でビルドすると、全ページの内部リンク・CSS・スクリプト・図・KaTeX のフォントの参照と、`defs.json` の読み込み先が `/mathenaga/` で始まり、`dist/` の中の実在するファイルを指す。

@@ -210,17 +210,19 @@ describe('build: 受け入れテスト', () => {
       /** @type {string} */ blockName,
       /** @type {string} */ stationId,
       /** @type {string | null} */ field = null,
+      /** @type {'first' | 'last'} */ pick = 'first',
     ) => {
       const st = c3.stations.find((s) => s.id === stationId);
       const block = st.items.find(
         (i) => i.kind === 'block' && i.block.name === blockName && i.block.field === field,
       ).block;
-      const tok = c3.tokens.slice(block.start, block.end + 1).find((t) => t.type === 'math_block');
-      return labels.get(tok);
+      const toks = c3.tokens.slice(block.start, block.end + 1).filter((t) => t.type === 'math_block');
+      return labels.get(pick === 'first' ? toks[0] : toks[toks.length - 1]);
     };
     assert.equal(labelOf('definition', 'cauchy-sequence'), '3.1');
     assert.equal(labelOf('definition', 'contraction'), '3.4');
-    assert.equal(labelOf('application', 'picard-lindelof', 'physics'), `3.${last}`);
+    // ノートンのドームの解は、理論物理の応用の最後の別行立ての式
+    assert.equal(labelOf('application', 'picard-lindelof', 'physics', 'last'), `3.${last}`);
   });
 
   test('12. 式の ID と [[@ID]] による参照', async () => {
