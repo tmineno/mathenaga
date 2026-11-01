@@ -5,7 +5,17 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { describe, test } from 'node:test';
 import { ROOT } from '../../src/build.js';
-import { blocks, faviconSvg, interior, parseBitmap, svgPath, trim } from '../../src/site/logo.js';
+import {
+  BANNER_GAP,
+  BANNERS,
+  bannerSvg,
+  blocks,
+  faviconSvg,
+  interior,
+  parseBitmap,
+  svgPath,
+  trim,
+} from '../../src/site/logo.js';
 
 const LOGO = path.join(ROOT, 'src/site/assets/logo.txt');
 
@@ -72,6 +82,30 @@ describe('logo: リポジトリのロゴ', () => {
         [86, 16],
       ],
     );
+  });
+
+  test('README のバナーは、鳥とサイト名を横に並べた SVG で、logo.txt から作ったものと一致する', async () => {
+    const logo = trim(parseBitmap(await fs.readFile(LOGO, 'utf8')));
+    const [bird, word] = blocks(logo);
+    const width = bird.width + BANNER_GAP + word.width;
+    assert.deepEqual(
+      BANNERS.map((b) => b.ink),
+      ['#18202e', '#e4e8ef'],
+    );
+    for (const { file, ink } of BANNERS) {
+      const svg = await fs.readFile(path.join(ROOT, file), 'utf8');
+      assert.equal(svg, bannerSvg(logo, ink), `${file} が古い。npm run banner で作り直す`);
+      assert.match(svg, new RegExp(`viewBox="0 0 ${width} ${bird.height}"`));
+    }
+    const readme = await fs.readFile(path.join(ROOT, 'README.md'), 'utf8');
+    assert.match(readme, /^<h1>\s*<picture>/);
+    assert.match(readme, /<source media="\(prefers-color-scheme: dark\)" srcset="docs\/assets\/banner-dark\.svg">/);
+    assert.match(readme, /<img src="docs\/assets\/banner-light\.svg" alt="MathEnaga"/);
+  });
+
+  test('バナーは、塊が2つない、または文字が鳥より高いロゴでは止まる', () => {
+    assert.throws(() => bannerSvg(parseBitmap('##\n'), '#000000'), /2つの塊がない/);
+    assert.throws(() => bannerSvg(parseBitmap('#\n.\n#\n#\n'), '#000000'), /鳥\(高さ 1\)より高い/);
   });
 
   test('favicon の SVG はダークで線の色を変え、体の内側を塗らない', async () => {

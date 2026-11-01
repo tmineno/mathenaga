@@ -167,6 +167,37 @@ export function inlineSvg(bm, { className, label = '', crisp = false }) {
   return `<svg class="${className}" viewBox="0 0 ${bm.width} ${bm.height}" ${a11y}${render}><path fill="currentColor" d="${svgPath(bm)}"/></svg>`;
 }
 
+/** README のバナーで、鳥とサイト名の文字のあいだに空けるドット数 */
+export const BANNER_GAP = 14;
+
+/**
+ * README のバナーのファイル(リポジトリのルートからのパス)と線の色。
+ * GitHub のテーマに合わせて README の <picture> で切り替える。色はサイトの本文の文字色(--ink)。
+ */
+export const BANNERS = [
+  { file: 'docs/assets/banner-light.svg', ink: FAVICON_INK },
+  { file: 'docs/assets/banner-dark.svg', ink: FAVICON_INK_DARK },
+];
+
+/**
+ * README の見出しに出すバナーの SVG。ロゴの鳥(最初の塊)とサイト名の文字(2つ目の塊)を、
+ * 同じドットの大きさで横に並べる。文字は鳥の高さの中央に置く。背景は透明。
+ * Preconditions: logo は blocks() で2つ以上の塊に分かれ、2つ目の塊の高さが最初の塊以下。
+ * Postconditions: 単独のファイルとして読める SVG 文書。1 ドットが viewBox の 1。
+ * Failure modes: 塊が2つ未満か、文字の塊が鳥より高ければ例外。
+ * Side effects: なし。
+ * @param {Bitmap} logo  ロゴ全体
+ * @param {string} ink  線の色
+ */
+export function bannerSvg(logo, ink) {
+  const [bird, word] = blocks(logo);
+  if (!word) throw new Error('ロゴに鳥とサイト名の2つの塊がない');
+  if (word.height > bird.height) throw new Error(`サイト名(高さ ${word.height})が鳥(高さ ${bird.height})より高い`);
+  const w = bird.width + BANNER_GAP + word.width;
+  const d = svgPath(bird) + svgPath(word, bird.width + BANNER_GAP, Math.floor((bird.height - word.height) / 2));
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${bird.height}" shape-rendering="crispEdges"><path fill="${ink}" d="${d}"/></svg>\n`;
+}
+
 /**
  * favicon の配置:鳥を FAVICON_SIZE 四方の中央に置いたときの、左上のずれ。
  * @param {Bitmap} bird
