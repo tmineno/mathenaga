@@ -10,6 +10,7 @@ import { chapterInField, nextChapter, prerequisiteChapters, transferGuide } from
 import { versionOf } from '../../src/site/pages.js';
 import {
   CH3,
+  CONTENT,
   addFigures,
   buildIn,
   countMathIn,
@@ -28,6 +29,13 @@ const roots = [];
 after(async () => {
   for (const r of roots) await fs.rm(r, { recursive: true, force: true });
 });
+
+/** 正規表現の最初の括弧の中身。合わなければ例外。 @param {RegExp} re @param {string} text */
+function capture(re, text) {
+  const m = re.exec(text);
+  if (!m) throw new Error(`${re} が合わない`);
+  return m[1];
+}
 
 async function ref() {
   const r = await referenceBuild();
@@ -270,7 +278,7 @@ describe('build: 受け入れテスト', () => {
     );
     assert.equal(errors.length, 1);
     assert.equal(errors[0].code, 'E05');
-    assert.match(errors[0].message, /路線の ID なので番号を差し込めない\(駅・章・式・定理・定義・図だけ\)/);
+    assert.match(errors[0].message, /路線の ID なので番号を差し込めない\(駅・章・式・定理・定義・図・応用だけ\)/);
   });
 
   test('23. 図番号とキャプション、[[@ID]] による図の参照', async () => {
@@ -399,6 +407,80 @@ describe('build: 受け入れテスト', () => {
     const after = await marks();
     const changed = [...after.keys()].filter((k) => after.get(k) !== before.get(k));
     assert.deepEqual(changed, ['chapters/completeness-fixed-point/figures/a.svg']);
+  });
+
+  test('27. 応用の番号と、[[@ID]] による応用の参照', async () => {
+    // 期待する札の並びは原稿から集める:駅の順 → 分野の並び(分野ファイルの名前の順)→ 書いた順
+    const fieldFiles = (await fs.readdir(path.join(CONTENT, 'fields'))).filter((f) => f.endsWith('.yml')).sort();
+    /** @type {Map<string, string>} */
+    const fieldTitle = new Map();
+    for (const f of fieldFiles) {
+      const yml = await fs.readFile(path.join(CONTENT, 'fields', f), 'utf8');
+      fieldTitle.set(f.replace(/\.yml$/, ''), capture(/^title:\s*(.+)$/m, yml).trim());
+    }
+    const order = [...fieldTitle.keys()];
+    const { dist } = await ref();
+    let total = 0;
+    for (const dir of (await fs.readdir(path.join(CONTENT, 'chapters'))).sort()) {
+      const m = /^(\d+)-(.+)$/.exec(dir);
+      if (!m) continue;
+      const src = await fs.readFile(path.join(CONTENT, 'chapters', dir, 'index.md'), 'utf8');
+      const expected = [];
+      let k = 0;
+      for (const station of src.split(/^## /m).slice(1)) {
+        const apps = [...station.matchAll(/^::: application \{([^}]*)\}$/gm)].map((a, i) => ({
+          field: capture(/field=(\S+)/, a[1]),
+          title: capture(/title="([^"]*)"/, a[1]),
+          i,
+        }));
+        apps.sort((a, b) => order.indexOf(a.field) - order.indexOf(b.field) || a.i - b.i);
+        for (const a of apps) expected.push(`応用 ${Number(m[1])}.${++k}(${fieldTitle.get(a.field)}) · ${a.title}`);
+      }
+      const html = await readDist(dist, `chapters/${m[2]}/index.html`);
+      const actual = [...html.matchAll(/<summary>(応用 [^<]*)<\/summary>/g)].map((x) => x[1]);
+      assert.deepEqual(actual, expected, dir);
+      total += expected.length;
+    }
+    assert.ok(total > 0);
+
+    const root = await tempRoot();
+    roots.push(root);
+    await edit(root, CH3, (t) =>
+      replaceOnce(
+        t,
+        '::: application {field=physics title="関数の空間"}',
+        '::: application {#app-function-space field=physics title="関数の空間"}',
+      ),
+    );
+    await edit(root, 'chapters/04-norm-inner-product/index.md', (t) =>
+      replaceOnce(t, '## ノルム空間', '応用は [[@app-function-space]] です。\n\n## ノルム空間'),
+    );
+    const r = await buildIn(root);
+    assert.deepEqual(r.errors, []);
+    const ch3 = await readDist(path.join(root, 'dist'), 'chapters/completeness-fixed-point/index.html');
+    const label = capture(/<summary>応用 (3\.\d+)\(理論物理\) · 関数の空間<\/summary>/, ch3);
+    assert.match(ch3, /<details class="v" id="app-function-space" data-field="physics">/);
+    const ch4 = await readDist(path.join(root, 'dist'), 'chapters/norm-inner-product/index.html');
+    assert.ok(
+      ch4.includes(`<a class="num" href="/chapters/completeness-fixed-point/#app-function-space">応用 ${label}</a>`),
+      '第4章の [[@app-function-space]] が応用の番号のリンクになっていない',
+    );
+
+    const errors = await errorsAfter(async (root2) => {
+      await edit(root2, CH3, (t) =>
+        replaceOnce(
+          t,
+          '::: application {field=physics title="関数の空間"}',
+          '::: application {#app-function-space field=physics title="関数の空間"}',
+        ),
+      );
+      await edit(root2, CH3, (t) => replaceOnce(t, '## コーシー列', '[[app-function-space]] です。\n\n## コーシー列'));
+    });
+    assert.deepEqual(
+      errors.map((e) => e.code),
+      ['E05'],
+    );
+    assert.match(errors[0].message, /\[\[@app-function-space\]\] で指す/);
   });
 
   test('13. defs.json の定義の式にも式番号が付く', async () => {

@@ -331,12 +331,12 @@ class Renderer {
         const field = h(this.fieldTitle(b.field));
         const title =
           kind === 'application'
-            ? `${label}(${field}) · ${h(b.attrs.title ?? '')}`
+            ? `応用 ${h(this.ctx.applications.labels.get(b) ?? '')}(${field}) · ${h(b.attrs.title ?? '')}`
             : kind === 'motivation'
               ? `${field}では`
               : `${label}(${field})`;
         out.push(
-          `<details class="v" data-field="${h(b.field)}"><summary>${title}</summary><div class="v-body flow">${this.inner(chapter, b)}</div></details>`,
+          `<details class="v"${b.id ? ` id="${h(b.id)}"` : ''} data-field="${h(b.field)}"><summary>${title}</summary><div class="v-body flow">${this.inner(chapter, b)}</div></details>`,
         );
       }
     }

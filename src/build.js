@@ -7,7 +7,7 @@ import { buildSite } from './core/graph.js';
 import { idProblem } from './core/ids.js';
 import { formatIssue, issue, sortIssues } from './core/issues.js';
 import { checkMaps } from './core/navigation.js';
-import { numberEquations, numberFigures, numberStatements } from './core/order.js';
+import { numberApplications, numberEquations, numberFigures, numberStatements } from './core/order.js';
 import { resolveRefs } from './core/resolve.js';
 import { checkField, checkFrontMatter, checkLines } from './core/schema.js';
 import { parseChapterDir, splitFrontMatter } from './core/source.js';
@@ -135,7 +135,8 @@ export async function analyze({ contentDir, basePath, repoUrl = '' }) {
   const equations = numberEquations(site.chapters, site.fieldOrder);
   const statements = numberStatements(site.chapters);
   const figures = numberFigures(site.chapters, site.fieldOrder);
-  const refs = resolveRefs(site, equations.byId, statements.byId, figures.byId);
+  const applications = numberApplications(site.chapters, site.fieldOrder);
+  const refs = resolveRefs(site, equations.byId, statements.byId, figures.byId, applications.byId);
   errors.push(...refs.errors);
 
   /** @type {Map<any, string>} */
@@ -176,6 +177,7 @@ export async function analyze({ contentDir, basePath, repoUrl = '' }) {
     equations,
     statements,
     figures,
+    applications,
     resolved: refs.resolved,
     mathHtml,
     basePath,

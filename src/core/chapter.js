@@ -30,7 +30,7 @@ const ALLOWED_ATTRS = {
   motivation: ['field'],
   definition: ['#', 'name', 'en', 'aliases'],
   theorem: ['#', 'name'],
-  application: ['field', 'title'],
+  application: ['#', 'field', 'title'],
 };
 
 const FORBIDDEN_TEX = /\\(tag\*?|label|ref|eqref|notag|nonumber)(?![A-Za-z])/;
@@ -380,13 +380,11 @@ function checkStation(st, tokens, fail) {
     if (t.id === null) fail('E08', open, 'theorem に #ID がない(定理の ID は省略できない)');
     if (!t.attrs.name) fail('E08', open, 'theorem に name がない');
   }
-  const fields = new Set();
+  // 同じ分野の application は何個でも書ける(content-format.md「ブロック」)
   for (const a of st.applications) {
     const open = tokens[a.start];
     if (!a.field) fail('E08', open, 'application に field がない');
     if (!a.attrs.title) fail('E08', open, 'application に title がない');
-    if (a.field && fields.has(a.field)) fail('E09', open, `駅「${st.name}」に ${a.field} の application が2つ以上ある`);
-    if (a.field) fields.add(a.field);
   }
 }
 

@@ -131,10 +131,15 @@
     all('[data-goal-for]').forEach(function (el) {
       el.hidden = !(f === '' || el.getAttribute('data-goal-for') === f);
     });
-    all('details.v[data-field]').forEach(function (d) {
-      var primary = f !== '' && d.getAttribute('data-field') === f;
-      d.classList.toggle('primary', primary);
-      d.open = primary || settings.openOther;
+    // 版の組ごとに、選んだ分野の最初の版だけを開く(同じ分野の応用が2つ以上あれば、2つ目以降はほかの分野の版と同じに扱う)
+    all('.vgroup').forEach(function (g) {
+      var found = false;
+      all(':scope > details.v[data-field]', g).forEach(function (d) {
+        var primary = !found && f !== '' && d.getAttribute('data-field') === f;
+        if (primary) found = true;
+        d.classList.toggle('primary', primary);
+        d.open = primary || settings.openOther;
+      });
     });
     all('[data-out]').forEach(function (el) {
       var outs = (el.getAttribute('data-out') || '').split(' ');
@@ -175,10 +180,20 @@
     });
   }
 
+  /** アンカーの指す先が折りたたみ(ID を付けた応用など)なら開く */
+  function openTarget() {
+    var id = window.location.hash.slice(1);
+    if (!id) return;
+    var el = document.getElementById(decodeURIComponent(id));
+    if (el && el.tagName === 'DETAILS') /** @type {HTMLDetailsElement} */ (el).open = true;
+  }
+
   var isChapter = document.body.classList.contains('page-chapter');
   if (isChapter) {
     apply(initialField());
     applyFolds();
+    openTarget();
+    window.addEventListener('hashchange', openTarget);
   }
 
   document.addEventListener('click', function (e) {
