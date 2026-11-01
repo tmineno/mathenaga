@@ -65,4 +65,4 @@ MathEnaga は、大学数学を他分野の学生に届ける静的ウェブサ�
 | front matter | 章の md の冒頭にある YAML | — |
 | 見出し属性 | 見出しの末尾に付ける {…} | — |
 | 定義索引 | 全定義をまとめた1つの JSON | defs.json |
-| 基準原稿 | 受け入れテストに使う原稿。`content/` にある10章で、第0章(reading-basics)・第1章(convergence-metric)・第2章(open-sets-continuity)・第3章(completeness-fixed-point)は完成稿、ほかの章は路線図と検証のための仮原稿。受け入れテストの数値(数式の個数、式番号、通知の件数など)は、第0〜3章を完成稿にした 2026-11-01 の原稿で数えた。路線ファイルは [content-format.md](content-format.md) の例のとおり(0番線の `style: dotted`、解析線と幾何線の `color_dark`)である。路線ファイルには、未執筆の章として第10〜13章(解析線に2章、幾何線に2章、各3駅)を planned で書いてある。原稿を書き進めたら、数値を数え直す | `content/` |
+| 基準原稿 | 受け入れテストに使う原稿。`content/` にある10章で、第0章(reading-basics)・第1章(convergence-metric)・第2章(open-sets-continuity)・第3章(completeness-fixed-point)・第4章(norm-inner-product)は完成稿、ほかの章は路線図と検証のための仮原稿。受け入れテストの数値(数式の個数、式番号、通知の件数など)は、第0〜4章を完成稿にした 2026-11-01 の原稿で数えた。路線ファイルは [content-format.md](content-format.md) の例のとおり(0番線の `style: dotted`、解析線と幾何線の `color_dark`)である。路線ファイルには、未執筆の章として第10〜13章(解析線に2章、幾何線に2章、各3駅)を planned で書いてある。原稿を書き進めたら、数値を数え直す | `content/` |

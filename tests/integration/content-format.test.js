@@ -58,18 +58,19 @@ describe('content-format: 受け入れテスト', () => {
     const n01 = result.notices.filter((n) => n.code === 'N01');
     const physics = n01.find((n) => n.file === 'fields/physics.yml');
     const cs = n01.find((n) => n.file === 'fields/cs.yml');
-    assert.match(physics.message, /11駅/);
+    assert.match(physics.message, /9駅/);
     assert.match(physics.message, /cauchy-sequence/);
     assert.match(physics.message, /contraction/);
     assert.match(cs.message, /1駅\(cauchy-sequence\)/);
     for (const n of [physics, cs]) assert.ok(!/reading-/.test(n.message), '第0章の駅が N01 に出ている');
     const n02 = result.notices.filter((n) => n.code === 'N02').map((n) => n.file);
-    assert.equal(n02.length, 6);
+    assert.equal(n02.length, 5);
     for (const done of [
       CH3,
       'chapters/00-reading-basics/index.md',
       'chapters/01-convergence-metric/index.md',
       'chapters/02-open-sets-continuity/index.md',
+      'chapters/04-norm-inner-product/index.md',
     ]) {
       assert.ok(!n02.includes(done), done);
     }
