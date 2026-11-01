@@ -4,10 +4,8 @@
 
 数学の概念を「駅」、分野の流れを「路線」に見立て、路線図で今いる場所と目標までの道のりを示す。読者は自分の分野(理論物理・情報科学)を選んで、その分野に必要な範囲と応用を読める。
 
-- 公開先:GitHub Pages のプロジェクトサイト `https://<owner>.github.io/mathenaga/`
-- 最初の題材:集合位相(距離空間から、ヒルベルト空間と多様体まで)、全10章
-
-コンセプトと用語は [docs/spec/README.md](docs/spec/README.md) にある。
+[公開先](https://tmineno.github.io/mathenaga/)
+[コンセプト](docs/spec/README.md)
 
 ## 必要なもの
 
