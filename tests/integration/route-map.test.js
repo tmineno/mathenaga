@@ -526,6 +526,15 @@ describe('route-map: 支線からの分岐と合流', () => {
       '幾何線より幹線から遠い下の段',
     );
   });
+
+  test('合流する支線の最初の駅名が長くても、入ってくる線は駅名に重ならない', async () => {
+    await assertClearWith('長い駅名の合流', (root) =>
+      addLine(root, MERGE_LINE, '14-riemannian-geometry', [
+        { name: '概念の名前と長い定理', id: 'geodesic', requires: 'hilbert-space,manifold' },
+        { name: '曲率', id: 'curvature', requires: 'geodesic' },
+      ]),
+    );
+  });
 });
 
 describe('route-map: 2段目より遠い段へ分かれる支線', () => {

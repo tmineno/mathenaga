@@ -664,7 +664,20 @@ export function layoutMap(site, drawn, opts = {}) {
         const p = measure(info, r.dir);
         p.y = y;
         if (before) p.x = before.x + Math.max(GEOM.minDx, before.half + p.half + GEOM.gap);
-        else p.x = Math.max(...conns.map((c) => c.a)) + Math.max(p.plateW / 2 + 12, p.half - 10);
+        else {
+          p.x = Math.max(...conns.map((c) => c.a)) + Math.max(p.plateW / 2 + 12, p.half - 10);
+          // 入ってくる斜めの線が、最初の駅の駅名や印を横切らないところまで右へずらす
+          // (shiftToClear は駅に入る線をよけないので、ここで調べる)
+          let shift = 0;
+          for (const b of stationBoxes(p).filter((x) => x.kind !== 'plate')) {
+            for (const c of conns) {
+              const seg = { x1: c.xd, y1: c.P.y, x2: c.a, y2: y, lineId: r.line.id, from: null, to: null };
+              const hit = clipX(seg, b.x - CLEAR, b.y - CLEAR, b.x + b.w + CLEAR, b.y + b.h + CLEAR);
+              if (hit) shift = Math.max(shift, Math.max(hit[0], hit[1]) + CLEAR - b.x);
+            }
+          }
+          p.x += shift;
+        }
         settle(p);
         placed.set(info.id, p);
         before = p;
