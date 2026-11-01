@@ -220,6 +220,8 @@
   var current = null;
   var timer = null;
   var shownAt = 0;
+  /** 閉じたポップアップの用語へフォーカスを戻している間(その focus では開き直さない) */
+  var refocusing = false;
 
   function loadDefs() {
     if (!defsPromise) {
@@ -323,7 +325,14 @@
     if (el) el.setAttribute('aria-expanded', 'false');
     current = null;
     if (pop) pop.hidden = true;
-    if (returnFocus && el) el.focus();
+    if (returnFocus && el) {
+      refocusing = true;
+      try {
+        el.focus();
+      } finally {
+        refocusing = false;
+      }
+    }
   }
 
   /** 表示の設定で「押したときだけ出す」なら、重ねる・フォーカスする・離れるでは開け閉めしない */
@@ -346,7 +355,7 @@
     });
     el.addEventListener('mouseleave', hideSoon);
     el.addEventListener('focus', function () {
-      if (!clickOnly()) show(el, false);
+      if (!clickOnly() && !refocusing) show(el, false);
     });
     el.addEventListener('click', function () {
       if (current === el && Date.now() - shownAt > 400) hide(false);

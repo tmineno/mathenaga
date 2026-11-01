@@ -172,6 +172,22 @@ describe('site: 受け入れテスト', () => {
     await context.close();
   });
 
+  test('押して開いた用語ポップアップは、Esc で閉じたままになり、用語にフォーカスが戻る', async () => {
+    const { context, page } = await open();
+    await page.goto(`${server.url}${CH3}`);
+    const term = page.locator('#completeness .def .term').first();
+    const pop = page.locator('#_pop');
+    await term.click();
+    await pop.locator('.pop-h').waitFor();
+    await page.waitForFunction(() => document.activeElement?.id === '_pop');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    assert.ok(await pop.isHidden(), 'フォーカスを戻したときに開き直した');
+    assert.equal(await term.getAttribute('aria-expanded'), 'false');
+    assert.ok(await term.evaluate((el) => el === document.activeElement), '用語にフォーカスが戻らない');
+    await context.close();
+  });
+
   test('壊れたアンカー(#% など)で開いても、スクリプトは止まらない', async () => {
     for (const hash of ['#%', '#%E0%A4']) {
       const { context, page, errors } = await open();
