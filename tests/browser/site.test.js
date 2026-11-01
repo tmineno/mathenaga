@@ -5,7 +5,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { after, before, describe, test } from 'node:test';
 import { chromium } from 'playwright';
-import { buildIn, referenceBuild, serve, tempRoot } from '../helpers/fixture.js';
+import { CH3 as CH3_SOURCE, buildIn, countMathIn, referenceBuild, serve, tempRoot } from '../helpers/fixture.js';
 
 /** @type {import('playwright').Browser} */
 let browser;
@@ -261,7 +261,9 @@ describe('site: 受け入れテスト', () => {
 
   test('15. 式番号', async () => {
     const { context, page } = await open({ viewport: { width: 400, height: 800 } });
-    const expected = Array.from({ length: 14 }, (_, i) => `(3.${i + 1})`);
+    const { display } = await countMathIn(CH3_SOURCE);
+    assert.ok(display > 0, '第3章に別行立ての式がない(テストの前提が崩れている)');
+    const expected = Array.from({ length: display }, (_, i) => `(3.${i + 1})`);
     /** @type {Record<string, string[]>} */
     const byField = {};
     for (const q of ['', '?field=physics', '?field=cs']) {

@@ -145,7 +145,7 @@ dist/
 
 ## Acceptance tests
 
-基準原稿を入力にした結合テストで確かめる。
+基準原稿を入力にした結合テストで確かめる。数式と式番号の個数、定義の ID の一覧は期待値を手で書かず、テストがビルドとは別の数え方で基準原稿から数える。
 
 1. 表示番号:reading-symbols = Z01、metric-space = M02、continuous-map = M04、cauchy-sequence = A01、banach = A04、picard-lindelof = A05、hilbert-space = A08、torus = G06、manifold = G07。
 2. 乗換駅は reading-proofs、metric-space、continuous-map の3つだけ。
@@ -154,10 +154,10 @@ dist/
 5. 理論物理の範囲に compact-connected は入らず、章の順序は 0, 1, 2, 3, 4, 5, 6, 8, 9。第3章の次の章は第4章。第7章は範囲外の章で、次の章は第8章。
 6. 分野を選んでいないとき、第3章の次の章は第4章、第9章の次の章はなし。
 7. 乗換案内:理論物理の第3章は幾何線の1項目(分岐駅 continuous-map は第2章、最初の駅 topological-space は第6章)。理論物理の第1章は2項目(解析線:分岐駅 metric-space はこの章、最初の駅は第3章。幾何線:分岐駅は第2章、最初の駅は第6章)。情報科学の第3章は0項目。
-8. 第3章のすべての `[[…]]` と `[[@…]]` が解決し、第3章の 178 個の数式(全章では 195 個)がすべて KaTeX で描画される。
-9. `defs.json` には7項目があり、ID の文字コード順(cauchy-sequence、completeness、contraction、convergence、lipschitz、metric-space、uniform-convergence)に並ぶ。cauchy-sequence の項目は code が A01、chapter が 3、url が `/chapters/completeness-fixed-point/#def-cauchy-sequence` で、html の中の「距離空間」はボタンでもリンクでもない文字である。
+8. 第3章のすべての `[[…]]` と `[[@…]]` が解決する。各章で、原稿の数式(行内の `$…$` と別行立ての `$$…$$`)の数、ビルドが読み取った数式の数、章のページで KaTeX が描画した数式の数が一致する。
+9. `defs.json` には、原稿のすべての定義(definition)が1項目ずつあり、ID の文字コード順に並ぶ(期待する ID は、テストが原稿から集める)。cauchy-sequence の項目は code が A01、chapter が 3、url が `/chapters/completeness-fixed-point/#def-cauchy-sequence` で、html の中の「距離空間」はボタンでもリンクでもない文字である。
 10. `[[@hilbert-spaces]]` は「第5章」、`[[@banach]]` は「A04」と表示され、それぞれ第5章のページと banach 駅へのリンクになる。
-11. 第3章の14個の別行立ての式に (3.1)〜(3.14) が重複なく振られる。(3.1) は cauchy-sequence の定義の式、(3.4) は contraction の定義の式、(3.14) は picard-lindelof 駅の理論物理の応用の式(ノートンのドームの解)である。ほかの章には別行立ての式がないので、式番号は振られない。
+11. 各章の別行立ての式に、(N.1) から、その章の原稿にある別行立ての式の数だけ、重複なく式番号が振られる(N は章番号)。別行立ての式のない章には振られない。第3章では、(3.1) は cauchy-sequence の定義の式、(3.4) は contraction の定義の式、最後の番号は picard-lindelof 駅の理論物理の応用の式(ノートンのドームの解)である。
 12. 第3章の banach 駅の情報科学の応用にある誤差評価の式に `{#value-iteration-error}` を付け、第4章に `[[@value-iteration-error]]` と書くと、「(3.10)」と表示され、`/chapters/completeness-fixed-point/#value-iteration-error` へのリンクになる。
 13. `defs.json` の cauchy-sequence の html にある別行立ての式には、式番号 (3.1) が付く。
 14. `MATHENAGA_BASE_PATH=/mathenaga/` でビルドすると、全ページの内部リンク・CSS・スクリプト・図・KaTeX のフォントの参照と、`defs.json` の読み込み先が `/mathenaga/` で始まり、`dist/` の中の実在するファイルを指す。

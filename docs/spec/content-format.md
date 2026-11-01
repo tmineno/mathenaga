@@ -261,6 +261,7 @@ goals:
 - field 属性のない goal・motivation が共通版、field 属性のあるものが分野版である。
 - 共通版のゴールと出発点は必須である。分野版はどの要素でも共通版への追加として表示する(表示の規則は [site.md](site.md))。
 - application には分野版しかなく、共通版はない。
+- 第0章は分野に共通の章とし、分野版の goal・motivation と application を書かない。書いてもエラーにはしないが、第0章の駅は N01 の対象にしない。
 
 ### 例
 
@@ -342,7 +343,7 @@ $$\forall \varepsilon > 0,\ \exists N,\ \forall m, n \ge N: d(x_m, x_n) < \varep
 
 | コード | 内容 |
 |---|---|
-| N01 | 分野の範囲に入るのに、その分野の応用がない駅(分野ごとに一覧) |
+| N01 | 分野の範囲に入るのに、その分野の応用がない駅(分野ごとに一覧)。第0章の駅は対象にしない |
 | N02 | 確認問題がない章 |
 | N03 | `right` の支線を `down` と同じに描いた図([route-map.md](route-map.md)) |
 
@@ -360,7 +361,7 @@ $$\forall \varepsilon > 0,\ \exists N,\ \forall m, n \ge N: d(x_m, x_n) < \varep
 ## Acceptance tests
 
 1. 基準原稿の第3章の banach 駅から proof-sketch を消すと、エラーは E08 の1件だけ(`chapters/03-completeness-fixed-point/index.md` の banach 駅に proof-sketch がない)で、終了コードは 1、`dist/` は変わらない。
-2. 基準原稿をビルドすると、エラーはなく終了コードは 0 である。通知は N01 が理論物理で17駅(cauchy-sequence と contraction を含む)、情報科学で5駅(reading-symbols、reading-proofs、convergence、metric-space、cauchy-sequence)、N02 が第3章以外の9章である。
+2. 基準原稿をビルドすると、エラーはなく終了コードは 0 である。通知は N01 が理論物理で13駅(cauchy-sequence と contraction を含む)、情報科学で1駅(cauchy-sequence)で、どちらにも第0章の駅は入らない。N02 が第0・1・3章以外の7章である。
 3. 基準原稿の第3章で、completeness 駅の定義の中の `[[コーシー列]]` は定義 cauchy-sequence に、章頭の `[[banach|バナッハの不動点定理]]` は駅 banach へのリンクに、banach 駅の定理の中の `[[completeness|完備]]` は定義 completeness に、picard-lindelof 駅の定理の中の `[[一様収束]]` は第1章の定義 uniform-convergence に解決する。
 4. 基準原稿を次のように壊すと、括弧の中のコードのエラーが、壊したファイルと行で出る。
    1. ある駅の requires に存在しない ID を書く(E05)。
