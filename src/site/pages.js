@@ -14,6 +14,7 @@ import {
 } from '../core/navigation.js';
 import { byFieldOrder, stationItems } from '../core/order.js';
 import { escapeHtml as h } from '../core/text.js';
+import { blocks, faviconPng, faviconSvg, inlineSvg, parseBitmap, trim } from './logo.js';
 
 const ASSETS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'assets');
 const KATEX_DIR = path.dirname(createRequire(import.meta.url).resolve('katex'));
@@ -40,13 +41,15 @@ const FONTS =
  * サイト全体のファイルを作る。
  * Preconditions: ctx は analyze() がエラーなしで返した材料。
  * Postconditions: 出力の相対パス → 内容(文字列、またはコピー元)を返す。
- * Failure modes: KaTeX や assets のファイルが読めなければ例外。
+ * Failure modes: KaTeX や assets のファイルが読めなければ例外。ロゴのドットマップの形式が違えば例外。
  * Side effects: assets と KaTeX のファイルを読む。
  * @param {any} ctx
  * @returns {Promise<Map<string, import('../io/output.js').OutputFile>>}
  */
 export async function generateSite(ctx) {
-  const r = new Renderer(ctx);
+  const logo = trim(parseBitmap(await fs.readFile(path.join(ASSETS, 'logo.txt'), 'utf8'), 'src/site/assets/logo.txt'));
+  const bird = blocks(logo)[0];
+  const r = new Renderer(ctx, { logo, bird });
   /** @type {Map<string, import('../io/output.js').OutputFile>} */
   const files = new Map();
   files.set('index.html', r.topPage());
@@ -62,6 +65,8 @@ export async function generateSite(ctx) {
   files.set('assets/style.css', await fs.readFile(path.join(ASSETS, 'style.css'), 'utf8'));
   files.set('assets/app.js', await fs.readFile(path.join(ASSETS, 'app.js'), 'utf8'));
   files.set('assets/lines.css', lineCss(ctx.site.lines));
+  files.set('assets/favicon.svg', faviconSvg(bird));
+  files.set('assets/favicon.png', faviconPng(bird));
   const katexCss = await fs.readFile(path.join(KATEX_DIR, 'katex.min.css'), 'utf8');
   files.set(
     'assets/katex/katex.min.css',
@@ -104,9 +109,17 @@ function numberedToken(tokens, i) {
 }
 
 class Renderer {
-  /** @param {any} ctx */
-  constructor(ctx) {
+  /**
+   * @param {any} ctx
+   * @param {{ logo: import('./logo.js').Bitmap, bird: import('./logo.js').Bitmap }} art
+   *   logo はロゴ全体、bird はその最初の塊(鳥)
+   */
+  constructor(ctx, art) {
     this.ctx = ctx;
+    /** トップページの見出しのロゴ */
+    this.logoSvg = inlineSvg(art.logo, { className: 'logo', label: SITE_NAME, crisp: true });
+    /** 上端のバーのアイコン */
+    this.birdSvg = inlineSvg(art.bird, { className: 'mark-icon' });
     /** @type {import('../core/graph.js').Site} */
     this.site = ctx.site;
     this.base = ctx.basePath;
@@ -313,6 +326,8 @@ class Renderer {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${h(p.title)}</title>
+<link rel="icon" href="${this.base}assets/favicon.png" type="image/png" sizes="64x64">
+<link rel="icon" href="${this.base}assets/favicon.svg" type="image/svg+xml">
 ${FONTS}
 <link rel="stylesheet" href="${this.base}assets/katex/katex.min.css">
 <link rel="stylesheet" href="${this.base}assets/style.css">
@@ -333,7 +348,7 @@ ${p.main}
 
   /** @param {string} crumb */
   barStart(crumb) {
-    return `<a class="mark" href="${this.base}">${SITE_NAME}</a><span class="crumb">${h(crumb)}</span>`;
+    return `<a class="mark" href="${this.base}">${this.birdSvg}${SITE_NAME}</a><span class="crumb">${h(crumb)}</span>`;
   }
 
   // ---------- トップページ ----------
@@ -353,7 +368,7 @@ ${p.main}
           `<li><a class="field-name" href="${this.base}fields/${f.id}/">${h(f.title)}</a><p>${h(f.description)}</p></li>`,
       )
       .join('');
-    const main = `<section class="intro"><h1>${SITE_NAME}</h1></section>
+    const main = `<section class="intro"><h1 class="logo-h">${this.logoSvg}</h1></section>
 <section class="sec"><h2 class="sec-h">路線図</h2><div class="map-v">${map.html}</div></section>
 <section class="sec"><h2 class="sec-h">分野</h2><ul class="field-list">${fields}</ul></section>`;
     return this.page({ title: SITE_NAME, bodyClass: 'page-top', bar: this.barStart(''), main });

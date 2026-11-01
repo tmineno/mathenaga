@@ -446,6 +446,79 @@ describe('site: 改善案の起票(P-07)', () => {
       await fs.rm(root, { recursive: true, force: true });
     }
   });
+
+  test('29. トップページの見出しはロゴの SVG で、線の色は本文の文字色', async () => {
+    for (const scheme of /** @type {const} */ (['light', 'dark'])) {
+      const { context, page } = await open({ colorScheme: scheme });
+      await page.goto(server.url);
+      const h1 = page.getByRole('heading', { level: 1, name: 'MathEnaga' });
+      assert.equal(await h1.count(), 1);
+      const logo = h1.getByRole('img', { name: 'MathEnaga' });
+      const box = await logo.boundingBox();
+      assert.deepEqual([box?.width, box?.height], [258, 234]);
+      const [fill, ink] = await page.evaluate(() => [
+        getComputedStyle(/** @type {Element} */ (document.querySelector('h1 svg path'))).fill,
+        getComputedStyle(document.body).color,
+      ]);
+      assert.equal(fill, ink, scheme);
+      assert.equal(ink, scheme === 'dark' ? 'rgb(228, 232, 239)' : 'rgb(24, 32, 46)');
+      await context.close();
+    }
+  });
+
+  test('30. 全ページのバーに鳥のアイコンがあり、favicon の SVG と PNG を指定する', async () => {
+    const { context, page } = await open();
+    const urls = ['', 'fields/physics/', 'fields/cs/'];
+    const { ctx } = await referenceBuild();
+    for (const c of ctx.site.chapters) urls.push(`chapters/${c.id}/`);
+    /** @type {string[][]} */
+    let icons = [];
+    for (const u of urls) {
+      await page.goto(server.url + u);
+      const mark = page.locator('.bar a.mark');
+      assert.equal(await mark.locator('> svg.mark-icon:first-child').getAttribute('aria-hidden'), 'true', u);
+      assert.equal(await mark.innerText(), 'MathEnaga', u);
+      icons = await page
+        .locator('link[rel=icon]')
+        .evaluateAll((ls) => ls.map((l) => [l.getAttribute('type') ?? '', /** @type {HTMLLinkElement} */ (l).href]));
+      assert.deepEqual(
+        icons.map((i) => i[0]),
+        ['image/png', 'image/svg+xml'],
+        u,
+      );
+    }
+    for (const [type, href] of icons) {
+      const res = await page.request.get(href);
+      assert.equal(res.status(), 200, href);
+      assert.equal(res.headers()['content-type'], type, href);
+    }
+    const png = await page.evaluate(async (href) => {
+      const img = new Image();
+      img.src = href;
+      await img.decode();
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
+      const g = /** @type {CanvasRenderingContext2D} */ (c.getContext('2d'));
+      g.drawImage(img, 0, 0);
+      const data = g.getImageData(0, 0, c.width, c.height).data;
+      const at = (/** @type {number} */ x, /** @type {number} */ y) =>
+        [...data.slice((y * c.width + x) * 4, (y * c.width + x) * 4 + 4)].join(',');
+      const colors = new Set();
+      for (let i = 0; i < data.length; i += 4) colors.add([...data.slice(i, i + 4)].join(','));
+      return {
+        size: [c.width, c.height],
+        corners: [at(0, 0), at(c.width - 1, 0), at(0, c.height - 1), at(c.width - 1, c.height - 1)],
+        center: at(c.width / 2, c.height / 2),
+        colors: [...colors].sort(),
+      };
+    }, icons[0][1]);
+    assert.deepEqual(png.size, [64, 64]);
+    assert.deepEqual(png.corners, Array(4).fill('0,0,0,0'));
+    assert.equal(png.center, '255,255,255,255');
+    assert.deepEqual(png.colors, ['0,0,0,0', '24,32,46,255', '255,255,255,255']);
+    await context.close();
+  });
 });
 
 describe('site: 位置情報つきのコピー(P-08)', () => {
