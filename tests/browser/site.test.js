@@ -5,7 +5,15 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { after, before, describe, test } from 'node:test';
 import { chromium } from 'playwright';
-import { CH3 as CH3_SOURCE, buildIn, countMathIn, referenceBuild, serve, tempRoot } from '../helpers/fixture.js';
+import {
+  CH3 as CH3_SOURCE,
+  CONTENT,
+  buildIn,
+  countMathIn,
+  referenceBuild,
+  serve,
+  tempRoot,
+} from '../helpers/fixture.js';
 
 /** @type {import('playwright').Browser} */
 let browser;
@@ -377,6 +385,37 @@ describe('site: 31. 一言でいうとは地の文', () => {
     assert.equal(await page.locator('.box .summary, .box.summary').count(), 0);
     assert.equal(await page.locator('section#banach .summary .tag').count(), 0);
     assert.ok(!(await page.locator('body').innerText()).includes('一言でいうと'));
+    await context.close();
+  });
+});
+
+describe('site: 33. 証明は定理の枠の中', () => {
+  test('証明の骨格と証明の詳細は、直前の定理の枠の中にある', async () => {
+    const source = await fs.readFile(path.join(CONTENT, CH3_SOURCE), 'utf8');
+    // 要素名のあとに英数字やハイフンが続くもの(proof に対する proof-sketch)は数えない
+    const count = (/** @type {string} */ name) =>
+      (source.match(new RegExp(`^::: ${name}(?![\\w-])`, 'gm')) ?? []).length;
+    const { context, page } = await open();
+    await page.goto(`${server.url}${CH3}`);
+    assert.equal(await page.locator('section.station .box.thm').count(), count('theorem'));
+    assert.equal(await page.locator('.box.thm > .thm-part.proof-sketch').count(), count('proof-sketch'));
+    assert.equal(await page.locator('.box.thm > details.fold').count(), count('proof'));
+    assert.equal(await page.locator('section.station .box.proof-sketch').count(), 0);
+    assert.equal(await page.locator('section.station > details.fold').count(), 0);
+    const parts = await page
+      .locator('section#banach .box.thm')
+      .evaluate((box) => [...box.children].map((e) => `${e.tagName.toLowerCase()}.${e.className}`));
+    assert.deepEqual(parts, ['p.tag', 'div.flow', 'div.thm-part proof-sketch', 'details.fold proof']);
+    const labels = page.locator('section#banach .box.thm');
+    assert.equal(await labels.locator('> .thm-part > .tag').innerText(), '証明の骨格');
+    assert.equal(await labels.locator('> details.fold > summary').innerText(), '証明の詳細');
+    // 証明の詳細の札は、定理の札と同じ大きさ
+    const size = (/** @type {string} */ sel) =>
+      labels.locator(sel).evaluate((e) => {
+        const s = getComputedStyle(e);
+        return [s.fontSize, s.fontWeight, s.lineHeight, s.paddingTop, s.paddingLeft];
+      });
+    assert.deepEqual(await size('> details.fold > summary > .tag'), await size('> p.tag'));
     await context.close();
   });
 });
