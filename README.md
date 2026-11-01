@@ -23,7 +23,7 @@ npx playwright install chromium   # npm test の閲覧テストに使う
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | `npm run build`                   | `content/` を検査し、通れば `dist/` にサイトを書き出す。エラーがあれば `dist/` には触れない                             |
 | `npm run dev`                     | ビルドして `http://127.0.0.1:8000/` で配信する。`content/` と `src/` を保存するたびに作り直し、ブラウザを再読み込みする |
-| `npm test`                        | 結合テストと、Playwright でブラウザを動かす閲覧テストを実行する                                                         |
+| `npm test`                        | 単体テスト・結合テストと、Playwright でブラウザを動かす閲覧テストを実行する                                             |
 | `npm run format` / `format:check` | Prettier で整形する / 整形済みか確かめる                                                                                |
 | `npm run lint`                    | ESLint                                                                                                                  |
 | `npm run typecheck`               | JSDoc の型を TypeScript で検査する                                                                                      |
@@ -69,7 +69,7 @@ content/
 | `src/site/`    | ページの組み立てと、閲覧時の CSS・スクリプト                                                 |
 | `src/dev/`     | `npm run dev` のサーバー                                                                     |
 | `src/build.js` | ビルドの入口                                                                                 |
-| `tests/`       | 結合テスト(`integration/`)と閲覧テスト(`browser/`)                                           |
+| `tests/`       | 単体テスト(`unit/`)、結合テスト(`integration/`)、閲覧テスト(`browser/`)                      |
 | `scripts/`     | 開発用のスクリプト(README のバナーの生成)                                                    |
 | `docs/spec/`   | 仕様書。仕様とコードが食い違ったら仕様が正しい                                               |
 | `docs/adr/`    | 設計の決定記録                                                                               |
