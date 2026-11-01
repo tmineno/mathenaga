@@ -11,7 +11,11 @@ import { versionOf } from '../../src/site/pages.js';
 import {
   CH3,
   CONTENT,
+  MERGE_LINE,
   addFigures,
+  addFinalGoal,
+  addMergeLine,
+  analyzeIn,
   buildIn,
   countMathIn,
   definitionIdsIn,
@@ -35,6 +39,19 @@ function capture(re, text) {
   const m = re.exec(text);
   if (!m) throw new Error(`${re} が合わない`);
   return m[1];
+}
+
+/** 乗換案内を比べやすい形にする。 @param {any[]} items */
+function summarizeTransfers(items) {
+  return items.map((t) => ({
+    line: t.line.id,
+    branches: t.branches.map((/** @type {any} */ b) => ({
+      id: b.station.id,
+      ch: b.station.chapter.number,
+      here: b.here,
+    })),
+    firstCh: t.first.chapter.number,
+  }));
 }
 
 async function ref() {
@@ -115,21 +132,13 @@ describe('build: 受け入れテスト', () => {
 
   test('7. 乗換案内', async () => {
     const { site, ch } = await ref();
-    const summary = (/** @type {any[]} */ items) =>
-      items.map((t) => ({
-        line: t.line.id,
-        branch: t.branch.id,
-        branchCh: t.branch.chapter.number,
-        firstCh: t.first.chapter.number,
-        here: t.here,
-      }));
-    assert.deepEqual(summary(transferGuide(site, ch(3), 'physics')), [
-      { line: 'geometry', branch: 'continuous-map', branchCh: 2, firstCh: 6, here: false },
+    assert.deepEqual(summarizeTransfers(transferGuide(site, ch(3), 'physics')), [
+      { line: 'geometry', branches: [{ id: 'continuous-map', ch: 2, here: false }], firstCh: 6 },
     ]);
     assert.equal(transferGuide(site, ch(3), 'physics')[0].first.id, 'topological-space');
-    assert.deepEqual(summary(transferGuide(site, ch(1), 'physics')), [
-      { line: 'analysis', branch: 'metric-space', branchCh: 1, firstCh: 3, here: true },
-      { line: 'geometry', branch: 'continuous-map', branchCh: 2, firstCh: 6, here: false },
+    assert.deepEqual(summarizeTransfers(transferGuide(site, ch(1), 'physics')), [
+      { line: 'analysis', branches: [{ id: 'metric-space', ch: 1, here: true }], firstCh: 3 },
+      { line: 'geometry', branches: [{ id: 'continuous-map', ch: 2, here: false }], firstCh: 6 },
     ]);
     assert.deepEqual(transferGuide(site, ch(3), 'cs'), []);
   });
@@ -481,6 +490,33 @@ describe('build: 受け入れテスト', () => {
       ['E05'],
     );
     assert.match(errors[0].message, /\[\[@app-function-space\]\] で指す/);
+  });
+
+  test('28. 合流する支線の乗換案内は、分岐駅を読む順にすべて持つ', async () => {
+    const root = await tempRoot();
+    roots.push(root);
+    await addMergeLine(root);
+    await addFinalGoal(root, 'physics', 'curvature');
+    const result = await buildIn(root);
+    assert.deepEqual(result.errors, []);
+    const r = await analyzeIn(root);
+    const site = r.ctx.site;
+    const ch5 = /** @type {any} */ (site.chapters.find((c) => c.number === 5));
+    const item = summarizeTransfers(transferGuide(site, ch5, 'physics')).find((t) => t.line === MERGE_LINE.id);
+    assert.deepEqual(item, {
+      line: MERGE_LINE.id,
+      branches: [
+        { id: 'hilbert-space', ch: 5, here: true },
+        { id: 'manifold', ch: 9, here: false },
+      ],
+      firstCh: 14,
+    });
+    // 章ページでは、この章の分岐駅とほかの章の分岐駅を「・」でつなぐ(site.md「この先」)
+    const page = await readDist(path.join(root, 'dist'), 'chapters/hilbert-spaces/index.html');
+    assert.match(
+      page,
+      /リーマン幾何線に乗り換える<\/b>この章の .*?ヒルベルト空間・.*?多様体\(<a href="\/chapters\/manifolds\/\?field=physics#manifold">第9章<\/a>\)から、/,
+    );
   });
 
   test('13. defs.json の定義の式にも式番号が付く', async () => {

@@ -159,6 +159,53 @@ export async function addFigures(root) {
   );
 }
 
+/**
+ * 路線図のテスト用に、路線と、その路線に載る章を足す(route-map.md 10・25〜28、build.md 28)。
+ * 章の駅には要約(summary)だけを書く。
+ * @param {string} root  tempRoot() の結果
+ * @param {{ id: string, code: string, name: string, layout: string, before?: string }} line
+ *   before に路線の ID を書けば、路線ファイルでその路線の前に置く(書かなければ最後)
+ * @param {string} folder  章フォルダ名(例:14-variations)
+ * @param {Array<{ name: string, id: string, requires?: string }>} stations
+ */
+export async function addLine(root, line, folder, stations) {
+  const block = `- id: ${line.id}\n  code: ${line.code}\n  name: ${line.name}\n  color: "#AA5500"\n  layout: ${line.layout}\n`;
+  await edit(root, 'lines.yml', (t) =>
+    line.before ? replaceOnce(t, `- id: ${line.before}\n`, `${block}- id: ${line.before}\n`) : t + block,
+  );
+  const dir = path.join(root, 'content/chapters', folder);
+  await fs.mkdir(dir);
+  const body = stations
+    .map((s) => `## ${s.name} {#${s.id}${s.requires ? ` requires=${s.requires}` : ''}}\n\n::: summary\nx\n:::\n`)
+    .join('\n');
+  await fs.writeFile(
+    path.join(dir, 'index.md'),
+    `---\ntitle: ${line.name}\nline: ${line.id}\n---\n\n::: goal\nx\n:::\n\n::: motivation\nx\n:::\n\n${body}\n::: review\n- x\n:::\n`,
+  );
+}
+
+/**
+ * 分野の目標に終着駅を足す。
+ * @param {string} root @param {string} field @param {string} station
+ */
+export async function addFinalGoal(root, field, station) {
+  await edit(root, `fields/${field}.yml`, (t) => `${t}  - station: ${station}\n    kind: final\n    label: テスト\n`);
+}
+
+/** 上下の両方の路線(解析線の A08 と幾何線の G07)から合流する支線(route-map.md 27) */
+export const MERGE_LINE = { id: 'riemann', code: 'R', name: 'リーマン幾何線', layout: 'up' };
+
+/**
+ * route-map.md 27 の路線(第14章)を足す。
+ * @param {string} root
+ */
+export async function addMergeLine(root) {
+  await addLine(root, MERGE_LINE, '14-riemannian-geometry', [
+    { name: '測地線', id: 'geodesic', requires: 'hilbert-space,manifold' },
+    { name: '曲率', id: 'curvature', requires: 'geodesic' },
+  ]);
+}
+
 /** テストのビルドに渡す、改善案の起票先(site.md「改善案の起票」) */
 export const TEST_REPO_URL = 'https://github.com/example/mathenaga';
 

@@ -5,7 +5,18 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { after, describe, test } from 'node:test';
 import { layoutBoxes, layoutMap, mapDescription, wrapLabel } from '../../src/core/map.js';
-import { analyzeIn, edit, readDist, referenceBuild, replaceOnce, tempRoot } from '../helpers/fixture.js';
+import {
+  MERGE_LINE,
+  addFinalGoal,
+  addLine,
+  addMergeLine,
+  analyzeIn,
+  edit,
+  readDist,
+  referenceBuild,
+  replaceOnce,
+  tempRoot,
+} from '../helpers/fixture.js';
 
 const roots = [];
 after(async () => {
@@ -45,6 +56,59 @@ async function rootWithLines(fn) {
   await edit(root, 'lines.yml', fn);
   return root;
 }
+
+/** 解析線のノルム空間などから分かれる新しい路線(10・25・26) */
+const VARIATIONS = { id: 'variations', code: 'V', name: '変分線', layout: 'up' };
+
+/**
+ * 第14章に変分線を足した一時ディレクトリ。
+ * @param {string} requires  最初の駅の requires
+ * @param {string} [before]  路線ファイルでこの路線の前に置く(書かなければ最後)
+ */
+async function variationsRoot(requires, before) {
+  const root = await tempRoot();
+  roots.push(root);
+  await addLine(root, { ...VARIATIONS, before }, '14-calculus-of-variations', [
+    { name: '汎関数', id: 'functional', requires },
+    { name: 'オイラー=ラグランジュ方程式', id: 'euler-lagrange', requires: 'functional' },
+  ]);
+  return root;
+}
+
+/** 26:25 の変分線の後ろに、変分線の最初の駅とノルム空間を前提にする路線(第15章)を足す。 */
+async function geodesicRoot() {
+  const root = await variationsRoot('normed-space,continuous-map');
+  await addLine(root, { id: 'geodesic-line', code: 'Y', name: '測地線線', layout: 'up' }, '15-geodesics', [
+    { name: '測地線', id: 'geodesic', requires: 'functional,normed-space' },
+  ]);
+  return root;
+}
+
+/**
+ * 27・28:上下の両方から合流する路線(第14章)を足す。
+ * @param {{ goal?: boolean, right?: boolean }} [opts]
+ *   goal なら合流する路線の最後の駅を理論物理の終着駅にする。right なら、その前に right の路線(第15章)を置く
+ */
+async function mergeRoot(opts = {}) {
+  const root = await tempRoot();
+  roots.push(root);
+  if (opts.right) {
+    await addLine(root, { id: 'extension', code: 'E', name: '延長線', layout: 'right' }, '15-continuation', [
+      { name: '延長', id: 'prolong', requires: 'continuous-map' },
+    ]);
+  }
+  await addMergeLine(root);
+  if (opts.goal) await addFinalGoal(root, 'physics', 'curvature');
+  return root;
+}
+
+/** @param {any} site */
+const overallOf = (site) =>
+  layoutMap(site, new Set(site.stations.map((/** @type {any} */ s) => s.id)), { planned: true });
+
+/** 路線の線(paths の項目)のうち、始まりの点。 @param {any} layout @param {string} lineId */
+const starts = (layout, lineId) =>
+  layout.paths.filter((/** @type {any} */ p) => p.lineId === lineId).map((/** @type {any} */ p) => p.points[0]);
 
 /** @param {any} band @param {any} station */
 const covers = (band, station) =>
@@ -140,6 +204,20 @@ describe('route-map: 受け入れテスト', () => {
     for (const c of ps.chapters) {
       layouts.push([`未執筆あり/第${c.number}章/全体`, layoutMap(ps, pall, { planned: true, highlight: c.id })]);
     }
+    // 10・25・26・27・28 の新しい路線を足した図(分野の図も)
+    for (const [name, root] of [
+      ['10', await variationsRoot('hilbert-space')],
+      ['25', await variationsRoot('normed-space,continuous-map')],
+      ['26', await geodesicRoot()],
+      ['27', await mergeRoot({ goal: true })],
+      ['28', await mergeRoot({ right: true })],
+    ]) {
+      const x = await analyzeIn(root);
+      assert.deepEqual(x.errors, [], name);
+      const s = x.ctx.site;
+      layouts.push([`${name}/全体`, overallOf(s)]);
+      for (const f of s.fields) layouts.push([`${name}/${f.id}`, layoutMap(s, s.scope.get(f.id), { goals: f.goals })]);
+    }
     for (const [name, layout] of layouts) assertNoOverlap(/** @type {string} */ (name), layout);
   });
 
@@ -194,24 +272,25 @@ describe('route-map: 受け入れテスト', () => {
     assert.ok(cs.stations.filter((s) => s.info.lineId === 'analysis').every((s) => s.y === 0 && s.x > m02.x));
   });
 
-  test('10. 幹線を前提にしない支線は E12', async () => {
-    const root = await tempRoot();
-    roots.push(root);
-    await edit(
-      root,
-      'lines.yml',
-      (t) => `${t}- id: functional\n  code: F\n  name: 関数解析線\n  color: "#AA5500"\n  layout: up\n`,
+  test('10. 解析線の駅だけを前提にする支線は解析線から分かれ、路線ファイルで解析線より前に置くと E12', async () => {
+    const r = await analyzeIn(await variationsRoot('hilbert-space'));
+    assert.deepEqual(r.errors, []);
+    const overall = overallOf(r.ctx.site);
+    const a08 = at(overall, 'hilbert-space');
+    const v = overall.stations.filter((s) => s.info.lineId === 'variations');
+    assert.equal(v.length, 2);
+    const analysisY = Math.min(...overall.stations.filter((s) => s.info.lineId === 'analysis').map((s) => s.y));
+    assert.ok(
+      v.every((s) => s.y < analysisY),
+      '解析線より幹線から遠い上の段',
     );
-    const dir = path.join(root, 'content/chapters/14-functional');
-    await fs.mkdir(dir);
-    await fs.writeFile(
-      path.join(dir, 'index.md'),
-      '---\ntitle: 関数解析\nline: functional\n---\n\n::: goal\nx\n:::\n\n::: motivation\nx\n:::\n\n## 有界作用素 {#bounded-operator requires=hilbert-space}\n\n::: summary\nx\n:::\n\n::: review\n- x\n:::\n',
-    );
-    const r = await analyzeIn(root);
-    const e12 = r.errors.filter((e) => e.code === 'E12');
-    assert.ok(e12.length > 0, r.errors.map((e) => `${e.code} ${e.message}`).join('\n'));
-    assert.match(e12[0].message, /関数解析線/);
+    assert.deepEqual(starts(overall, 'variations'), [[a08.x, a08.y]]);
+    assert.ok(a08.transfer, 'A08 に乗換駅の印');
+
+    const before = await analyzeIn(await variationsRoot('hilbert-space', 'analysis'));
+    const e12 = before.errors.filter((e) => e.code === 'E12');
+    assert.ok(e12.length > 0, before.errors.map((e) => `${e.code} ${e.message}`).join('\n'));
+    assert.match(e12[0].message, /変分線/);
   });
 
   test('12. 0番線は点線、ダークテーマでは color_dark を使う', async () => {
@@ -353,6 +432,80 @@ describe('route-map: 章の帯と未執筆の章', () => {
     assert.ok(prob.every((s) => s.y > 0 && s.x > m02.x));
     const path0 = overall.paths.find((p) => p.lineId === 'probability');
     assert.deepEqual(path0.points[0], [m02.x, 0]);
+  });
+});
+
+describe('route-map: 支線からの分岐と合流', () => {
+  test('25. 幹線の候補は、ほかの路線の候補があれば分岐駅にしない', async () => {
+    const r = await analyzeIn(await variationsRoot('normed-space,continuous-map'));
+    assert.deepEqual(r.errors, []);
+    const overall = overallOf(r.ctx.site);
+    const a06 = at(overall, 'normed-space');
+    assert.deepEqual(starts(overall, 'variations'), [[a06.x, a06.y]], 'A06 からの線1本だけ');
+    const analysisY = Math.min(...overall.stations.filter((s) => s.info.lineId === 'analysis').map((s) => s.y));
+    assert.ok(overall.stations.filter((s) => s.info.lineId === 'variations').every((s) => s.y < analysisY));
+  });
+
+  test('26. ほかの候補から requires をさかのぼって届く候補は、分岐駅にしない', async () => {
+    const r = await analyzeIn(await geodesicRoot());
+    assert.deepEqual(r.errors, []);
+    const overall = overallOf(r.ctx.site);
+    const f = at(overall, 'functional');
+    assert.deepEqual(starts(overall, 'geodesic-line'), [[f.x, f.y]], '変分線の最初の駅からの線1本だけ');
+    const vY = Math.min(...overall.stations.filter((s) => s.info.lineId === 'variations').map((s) => s.y));
+    assert.ok(at(overall, 'geodesic').y < vY, '変分線より幹線から遠い上の段');
+  });
+
+  test('27. 上下の両方から合流する支線は、幹線の高さで右に置き、両方の分岐駅から線を引く', async () => {
+    const r = await analyzeIn(await mergeRoot());
+    assert.deepEqual(r.errors, []);
+    assert.deepEqual(
+      r.notices.filter((n) => n.code === 'N03'),
+      [],
+    );
+    /** @param {any} layout */
+    const check = (layout) => {
+      const [m04, a08, g07] = ['continuous-map', 'hilbert-space', 'manifold'].map((id) => at(layout, id));
+      const merged = layout.stations.filter((/** @type {any} */ s) => s.info.lineId === MERGE_LINE.id);
+      assert.equal(merged.length, 2);
+      assert.ok(merged.every((/** @type {any} */ s) => s.y === 0 && s.x > Math.max(m04.x, a08.x, g07.x)));
+      // 主な分岐駅は G07(読む順で後ろ)で、その線に支線の駅が続く
+      assert.deepEqual(starts(layout, MERGE_LINE.id), [
+        [g07.x, g07.y],
+        [a08.x, a08.y],
+      ]);
+      const first = at(layout, 'geodesic');
+      for (const p of layout.paths.filter((/** @type {any} */ x) => x.lineId === MERGE_LINE.id)) {
+        assert.ok(
+          p.points.some(([x, y]) => x === first.x && y === first.y),
+          '線は支線の最初の駅に入る',
+        );
+      }
+    };
+    check(overallOf(r.ctx.site));
+
+    const withGoal = await analyzeIn(await mergeRoot({ goal: true }));
+    assert.deepEqual(withGoal.errors, []);
+    const s = withGoal.ctx.site;
+    const physics = s.fields.find((f) => f.id === 'physics');
+    check(layoutMap(s, s.scope.get('physics'), { goals: physics.goals }));
+  });
+
+  test('28. 幹線より右の場所を right の路線が使うと、合流する支線は主な分岐駅の側に描き N03', async () => {
+    const r = await analyzeIn(await mergeRoot({ right: true }));
+    assert.deepEqual(r.errors, []);
+    const n03 = r.notices.filter((n) => n.code === 'N03');
+    assert.equal(n03.length, 1, n03.map((n) => n.message).join('\n'));
+    assert.ok(n03[0].message.startsWith('全体の図'));
+    assert.match(n03[0].message, /リーマン幾何線/);
+    const overall = overallOf(r.ctx.site);
+    const m04 = at(overall, 'continuous-map');
+    assert.ok(at(overall, 'prolong').y === 0 && at(overall, 'prolong').x > m04.x, 'right の路線は幹線の高さ');
+    const geometryY = Math.max(...overall.stations.filter((s) => s.info.lineId === 'geometry').map((s) => s.y));
+    assert.ok(
+      overall.stations.filter((s) => s.info.lineId === MERGE_LINE.id).every((s) => s.y > geometryY),
+      '幾何線より幹線から遠い下の段',
+    );
   });
 });
 
