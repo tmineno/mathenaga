@@ -739,6 +739,47 @@ svg.map {
   margin: 0 auto;
   max-width: none;
 }
+/* 図の操作(route-map.md「図の操作」)。スクリプトが付ける .pan のときだけ、スクロールをやめてドラッグで動かす */
+.map-scroll.pan {
+  position: relative;
+  overflow: hidden;
+  padding: 0;
+  cursor: grab;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.map-scroll.pan.dragging {
+  cursor: grabbing;
+}
+.map-scroll.pan svg.map {
+  margin: 0;
+  transform-origin: 0 0;
+}
+.map-tools {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.map-tools button {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+.map-tools button:hover,
+.map-tools button:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 .map .ln {
   /* 線は押せない。帯の中で線の上を押しても、下の章の帯のリンクが働く */
   pointer-events: none;

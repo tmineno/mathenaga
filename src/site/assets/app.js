@@ -304,19 +304,11 @@
 
   // ---------- 路線図の章の帯(docs/spec/route-map.md「リンク」) ----------
   // 帯の上には駅の札が重なるので、:hover だけでは駅の上で強調が消える。
-  // ポインタの位置が帯の矩形の中にある間は、その帯に on を付けたままにする。
+  // ポインターが帯の矩形の中にある間は、その帯に on を付けたままにする。
+  // 図は transform で動かすので、画面上の矩形で判定する。
 
   all('svg.map').forEach(function (svg) {
-    var bands = all('a.ch', svg).map(function (a) {
-      var r = a.querySelector('rect.band');
-      return {
-        a: a,
-        x: Number(r.getAttribute('x')),
-        y: Number(r.getAttribute('y')),
-        w: Number(r.getAttribute('width')),
-        h: Number(r.getAttribute('height')),
-      };
-    });
+    var bands = all('a.ch', svg);
     if (bands.length === 0) return;
     var current = null;
     function mark(a) {
@@ -326,21 +318,203 @@
       if (a) a.classList.add('on');
     }
     svg.addEventListener('pointermove', function (e) {
-      var m = svg.getScreenCTM();
-      if (!m) return;
-      var pt = svg.createSVGPoint();
-      pt.x = e.clientX;
-      pt.y = e.clientY;
-      var p = pt.matrixTransform(m.inverse());
       var hit = null;
-      bands.forEach(function (b) {
-        if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) hit = b.a;
+      bands.forEach(function (a) {
+        var r = a.querySelector('rect.band').getBoundingClientRect();
+        if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) hit = a;
       });
       mark(hit);
     });
     svg.addEventListener('pointerleave', function () {
       mark(null);
     });
+  });
+
+  // ---------- 路線図の操作(docs/spec/route-map.md「図の操作」) ----------
+  // スクリプトが動くときだけ、枠のスクロールをやめてドラッグとボタンで動かす。
+
+  var ZOOM_STEP = 1.25;
+  var ZOOM_MAX = 3;
+  var ZOOM_MIN = 0.3;
+  var DRAG_START = 5;
+
+  all('.map-scroll').forEach(function (frame) {
+    var svg = frame.querySelector('svg.map');
+    if (!svg) return;
+    var W = Number(svg.getAttribute('width'));
+    var H = Number(svg.getAttribute('height'));
+    var vb = (svg.getAttribute('viewBox') || '0 0 0 0').split(/\s+/).map(Number);
+    var view = { s: 1, x: 0, y: 0 };
+    var ready = false;
+
+    frame.classList.add('pan');
+    frame.style.height = H + 'px';
+
+    function box() {
+      return { w: frame.clientWidth, h: frame.clientHeight };
+    }
+    function fitScale() {
+      var f = box();
+      return Math.min(1, f.w / W, f.h / H);
+    }
+    function clampZoom(s) {
+      return Math.max(Math.min(ZOOM_MIN, fitScale()), Math.min(ZOOM_MAX, s));
+    }
+    function draw() {
+      var f = box();
+      var cw = W * view.s;
+      var ch = H * view.s;
+      view.x = cw <= f.w ? (f.w - cw) / 2 : Math.min(0, Math.max(f.w - cw, view.x));
+      view.y = ch <= f.h ? (f.h - ch) / 2 : Math.min(0, Math.max(f.h - ch, view.y));
+      svg.style.transform = 'translate(' + view.x + 'px,' + view.y + 'px) scale(' + view.s + ')';
+    }
+    function zoomBy(k) {
+      var f = box();
+      var s2 = clampZoom(view.s * k);
+      view.x = f.w / 2 - ((f.w / 2 - view.x) * s2) / view.s;
+      view.y = f.h / 2 - ((f.h / 2 - view.y) * s2) / view.s;
+      view.s = s2;
+      draw();
+    }
+    function fitAll() {
+      view.s = fitScale();
+      draw();
+    }
+    // 開いたとき:章ページの今の章の帯を横の中央に、ほかは左端から
+    function init() {
+      var f = box();
+      if (f.w === 0) return;
+      ready = true;
+      view.s = 1;
+      view.y = 0;
+      var cur = svg.querySelector('rect.band.current');
+      if (cur) {
+        var cx = Number(cur.getAttribute('x')) + Number(cur.getAttribute('width')) / 2 - vb[0];
+        view.x = f.w / 2 - cx;
+      } else view.x = 0;
+      draw();
+    }
+
+    // ボタン
+    var tools = document.createElement('div');
+    tools.className = 'map-tools';
+    [
+      {
+        text: '+',
+        label: '拡大',
+        act: function () {
+          zoomBy(ZOOM_STEP);
+        },
+      },
+      {
+        text: '−',
+        label: '縮小',
+        act: function () {
+          zoomBy(1 / ZOOM_STEP);
+        },
+      },
+      { text: '全体', label: '全体を表示', act: fitAll },
+    ].forEach(function (b) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = b.text;
+      btn.setAttribute('aria-label', b.label);
+      btn.title = b.label;
+      btn.addEventListener('click', b.act);
+      tools.appendChild(btn);
+    });
+    frame.parentNode.insertBefore(tools, frame);
+
+    // ドラッグ。動かし始めてから pointer capture を取る(押しただけならリンクがそのまま働く)
+    var drag = null;
+    var suppressClick = false;
+    frame.addEventListener('pointerdown', function (e) {
+      if (e.button !== 0) return;
+      suppressClick = false;
+      drag = { id: e.pointerId, x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, moved: false };
+    });
+    frame.addEventListener('pointermove', function (e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      var dx = e.clientX - drag.x;
+      var dy = e.clientY - drag.y;
+      if (!drag.moved) {
+        if (Math.abs(dx) + Math.abs(dy) < DRAG_START) return;
+        drag.moved = true;
+        frame.classList.add('dragging');
+        try {
+          frame.setPointerCapture(e.pointerId);
+        } catch {
+          // 取れなくても動かせる
+        }
+      }
+      view.x = drag.vx + dx;
+      view.y = drag.vy + (e.pointerType === 'touch' ? 0 : dy);
+      draw();
+    });
+    function endDrag(e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      if (drag.moved) {
+        suppressClick = true;
+        frame.classList.remove('dragging');
+      }
+      drag = null;
+    }
+    frame.addEventListener('pointerup', endDrag);
+    frame.addEventListener('pointercancel', endDrag);
+    // ドラッグのあとのクリックでリンク先へ移らないようにする
+    frame.addEventListener(
+      'click',
+      function (e) {
+        if (!suppressClick) return;
+        suppressClick = false;
+        e.preventDefault();
+        e.stopPropagation();
+      },
+      true,
+    );
+    frame.addEventListener('dragstart', function (e) {
+      e.preventDefault();
+    });
+
+    // トラックパッドの横方向のスクロール
+    frame.addEventListener(
+      'wheel',
+      function (e) {
+        if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+        var before = view.x;
+        view.x -= e.deltaX;
+        draw();
+        if (view.x !== before) e.preventDefault();
+      },
+      { passive: false },
+    );
+
+    // フォーカスで枠がスクロールしないようにし、代わりに図を動かして見せる
+    frame.addEventListener('scroll', function () {
+      frame.scrollLeft = 0;
+      frame.scrollTop = 0;
+    });
+    svg.addEventListener('focusin', function (e) {
+      var a = e.target.closest('a');
+      if (!a) return;
+      frame.scrollLeft = 0;
+      frame.scrollTop = 0;
+      var r = a.getBoundingClientRect();
+      var f = frame.getBoundingClientRect();
+      if (r.left >= f.left && r.right <= f.right && r.top >= f.top && r.bottom <= f.bottom) return;
+      view.x += f.left + f.width / 2 - (r.left + r.width / 2);
+      view.y += f.top + f.height / 2 - (r.top + r.height / 2);
+      draw();
+    });
+
+    // 隠れていた図(分野の図)が見えたときや、幅が変わったときに合わせ直す
+    if (window.ResizeObserver) {
+      new ResizeObserver(function () {
+        if (!ready) init();
+        else draw();
+      }).observe(frame);
+    }
+    init();
   });
 
   if (reduceMotion) root.classList.add('reduce-motion');
