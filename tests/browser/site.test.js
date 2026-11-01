@@ -385,7 +385,7 @@ describe('site: 31. 一言でいうとは地の文', () => {
       return { cls: el?.className, text: el?.textContent ?? '' };
     });
     assert.equal(first.cls, 'summary flow');
-    assert.match(first.text, /^完備な空間の縮小写像には不動点がただ一つあり/);
+    assert.match(first.text, /^完備な空間の縮小写像がただ一つもつ不動点と/);
     assert.equal(await page.locator('.box .summary, .box.summary').count(), 0);
     assert.equal(await page.locator('section#banach .summary .tag').count(), 0);
     assert.ok(!(await page.locator('body').innerText()).includes('一言でいうと'));
@@ -721,7 +721,7 @@ describe('site: 位置情報つきのコピー(P-08)', () => {
       'そのままコピー',
       'この文章の位置情報を含んでコピー',
     ]);
-    assert.equal(await copyWith(page, LOC), '[3:A04:17:13]\n何回反復すれば');
+    assert.equal(await copyWith(page, LOC), '[3:A04:18:30]\n何回反復すれば');
     assert.equal(await page.locator('.copy-menu .copy-status').innerText(), 'コピーしました');
     await selectText(page, BANACH_PROSE, '何回反復すれば', '何回反復すれば');
     assert.equal(await copyWith(page, PLAIN), '何回反復すれば');
@@ -766,7 +766,7 @@ describe('site: 位置情報つきのコピー(P-08)', () => {
     await selectAll(page, '#banach .box.drop-assumption .eq');
     assert.equal(
       await copyWith(page, LOC),
-      '[3:A04:20:1]\n$$|T(x) - T(y)| = |x - y|\\left(1 - \\frac{1}{xy}\\right) < |x - y|$$',
+      '[3:A04:21:1]\n$$|T(x) - T(y)| = |x - y|\\left(1 - \\frac{1}{xy}\\right) < |x - y|$$',
     );
     await context.close();
   });
@@ -1423,7 +1423,7 @@ describe('site: 43・44. 同じ分野の応用が2つある駅', () => {
         await page.goto(`${s.url}${CH3}?field=physics`);
         const v = await physics(page);
         assert.equal(v.length, 2);
-        assert.match(v[0].title, /関数の空間/);
+        assert.match(v[0].title, /量子力学の状態空間/);
         assert.match(v[1].title, /二つ目の応用/);
         assert.deepEqual(
           v.map((x) => x.open),

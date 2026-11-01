@@ -210,17 +210,19 @@ describe('build: 受け入れテスト', () => {
       /** @type {string} */ blockName,
       /** @type {string} */ stationId,
       /** @type {string | null} */ field = null,
+      /** @type {'first' | 'last'} */ pick = 'first',
     ) => {
       const st = c3.stations.find((s) => s.id === stationId);
       const block = st.items.find(
         (i) => i.kind === 'block' && i.block.name === blockName && i.block.field === field,
       ).block;
-      const tok = c3.tokens.slice(block.start, block.end + 1).find((t) => t.type === 'math_block');
-      return labels.get(tok);
+      const toks = c3.tokens.slice(block.start, block.end + 1).filter((t) => t.type === 'math_block');
+      return labels.get(pick === 'first' ? toks[0] : toks[toks.length - 1]);
     };
     assert.equal(labelOf('definition', 'cauchy-sequence'), '3.1');
     assert.equal(labelOf('definition', 'contraction'), '3.4');
-    assert.equal(labelOf('application', 'picard-lindelof', 'physics'), `3.${last}`);
+    // ノートンのドームの解は、理論物理の応用の最後の別行立ての式
+    assert.equal(labelOf('application', 'picard-lindelof', 'physics', 'last'), `3.${last}`);
   });
 
   test('12. 式の ID と [[@ID]] による参照', async () => {
@@ -229,8 +231,8 @@ describe('build: 受け入れテスト', () => {
     await edit(root, CH3, (t) =>
       replaceOnce(
         t,
-        'd_\\infty(V_k, V^*) \\le \\frac{\\gamma^k}{1-\\gamma}\\, d_\\infty(V_1, V_0)\n$$',
-        'd_\\infty(V_k, V^*) \\le \\frac{\\gamma^k}{1-\\gamma}\\, d_\\infty(V_1, V_0)\n$$ {#value-iteration-error}',
+        'd_\\infty(V_n, V^*) \\le \\frac{\\gamma^n}{1-\\gamma}\\, d_\\infty(V_1, V_0)\n$$',
+        'd_\\infty(V_n, V^*) \\le \\frac{\\gamma^n}{1-\\gamma}\\, d_\\infty(V_1, V_0)\n$$ {#value-iteration-error}',
       ),
     );
     await edit(root, 'chapters/04-norm-inner-product/index.md', (t) =>
@@ -457,8 +459,8 @@ describe('build: 受け入れテスト', () => {
     await edit(root, CH3, (t) =>
       replaceOnce(
         t,
-        '::: application {field=physics title="関数の空間"}',
-        '::: application {#app-function-space field=physics title="関数の空間"}',
+        '::: application {field=physics title="量子力学の状態空間"}',
+        '::: application {#app-function-space field=physics title="量子力学の状態空間"}',
       ),
     );
     await edit(root, 'chapters/04-norm-inner-product/index.md', (t) =>
@@ -467,7 +469,7 @@ describe('build: 受け入れテスト', () => {
     const r = await buildIn(root);
     assert.deepEqual(r.errors, []);
     const ch3 = await readDist(path.join(root, 'dist'), 'chapters/completeness-fixed-point/index.html');
-    const label = capture(/<summary>応用 (3\.\d+)\(理論物理\) · 関数の空間<\/summary>/, ch3);
+    const label = capture(/<summary>応用 (3\.\d+)\(理論物理\) · 量子力学の状態空間<\/summary>/, ch3);
     assert.match(ch3, /<details class="v" id="app-function-space" data-field="physics">/);
     const ch4 = await readDist(path.join(root, 'dist'), 'chapters/norm-inner-product/index.html');
     assert.ok(
@@ -479,8 +481,8 @@ describe('build: 受け入れテスト', () => {
       await edit(root2, CH3, (t) =>
         replaceOnce(
           t,
-          '::: application {field=physics title="関数の空間"}',
-          '::: application {#app-function-space field=physics title="関数の空間"}',
+          '::: application {field=physics title="量子力学の状態空間"}',
+          '::: application {#app-function-space field=physics title="量子力学の状態空間"}',
         ),
       );
       await edit(root2, CH3, (t) => replaceOnce(t, '## コーシー列', '[[app-function-space]] です。\n\n## コーシー列'));
