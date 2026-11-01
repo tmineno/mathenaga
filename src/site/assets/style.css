@@ -526,9 +526,6 @@ code {
   margin-left: 8px;
   opacity: 0.8;
 }
-.box.summary {
-  font-size: 1.04rem;
-}
 .box.def .tag {
   background: var(--accent-soft);
   color: var(--accent);
