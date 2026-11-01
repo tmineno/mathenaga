@@ -172,6 +172,18 @@ describe('site: 受け入れテスト', () => {
     await context.close();
   });
 
+  test('壊れたアンカー(#% など)で開いても、スクリプトは止まらない', async () => {
+    for (const hash of ['#%', '#%E0%A4']) {
+      const { context, page, errors } = await open();
+      await page.goto(`${server.url}${CH3}${hash}`);
+      // アンカーを読んだ後に組み立てる機能(用語ポップアップ)が動く
+      await page.locator('#completeness .def .term').first().focus();
+      await page.locator('#_pop .pop-h').waitFor();
+      assert.deepEqual(errors, [], hash);
+      await context.close();
+    }
+  });
+
   test('8. 現在地バー', async () => {
     const { context, page } = await open();
     await page.goto(`${server.url}${CH3}`);

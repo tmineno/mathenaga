@@ -184,7 +184,12 @@
   function openTarget() {
     var id = window.location.hash.slice(1);
     if (!id) return;
-    var el = document.getElementById(decodeURIComponent(id));
+    try {
+      id = decodeURIComponent(id);
+    } catch {
+      return; // `#%` のような壊れたアンカーは無視する(ほかの機能の初期化を止めない)
+    }
+    var el = document.getElementById(id);
     if (el && el.tagName === 'DETAILS') /** @type {HTMLDetailsElement} */ (el).open = true;
   }
 
