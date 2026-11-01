@@ -1,5 +1,4 @@
 ---
-chapter: 4
 title: ノルムと内積
 subtitle: 関数に長さと角度を入れる
 line: analysis

@@ -1,5 +1,4 @@
 ---
-chapter: 2
 title: 開集合と連続性
 subtitle: ε-δ を開集合で言い換える
 line: main

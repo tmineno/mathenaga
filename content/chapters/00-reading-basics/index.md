@@ -1,5 +1,4 @@
 ---
-chapter: 0
 title: 数学の読み方
 subtitle: 記号と証明を読み下す
 line: reading

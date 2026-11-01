@@ -1,5 +1,4 @@
 ---
-chapter: 5
 title: ヒルベルト空間
 subtitle: 量子力学の状態空間
 line: analysis

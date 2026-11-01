@@ -1,5 +1,4 @@
 ---
-chapter: 3
 title: 完備性と不動点
 subtitle: 逐次近似はいつ答えにたどり着くか
 line: analysis

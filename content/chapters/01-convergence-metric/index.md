@@ -1,5 +1,4 @@
 ---
-chapter: 1
 title: 収束と距離
 subtitle: 「近さ」を数で測る
 line: main

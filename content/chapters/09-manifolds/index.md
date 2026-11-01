@@ -1,5 +1,4 @@
 ---
-chapter: 9
 title: 多様体
 subtitle: 一般相対論の時空の舞台
 line: geometry

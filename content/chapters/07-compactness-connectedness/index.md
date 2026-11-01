@@ -1,5 +1,4 @@
 ---
-chapter: 7
 title: コンパクト性と連結性
 subtitle: 最大値の定理と中間値の定理の本当の理由
 line: geometry

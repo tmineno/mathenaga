@@ -1,5 +1,4 @@
 ---
-chapter: 6
 title: 位相空間
 subtitle: 距離を使わずに「近さ」を扱う
 line: geometry

@@ -1,5 +1,4 @@
 ---
-chapter: 8
 title: 同相と商位相
 subtitle: 空間を貼り合わせてつくる
 line: geometry
