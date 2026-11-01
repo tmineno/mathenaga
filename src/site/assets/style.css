@@ -43,8 +43,11 @@
 * {
   box-sizing: border-box;
 }
+/* 本文の段とポップアップの文字は rem で書き、html の文字の大きさを基準にする。
+   上端のバー・路線図・コピーのボタン・起票のアイコンの文字は px で書く。 */
 html {
   -webkit-text-size-adjust: 100%;
+  font-size: 16px;
 }
 @media (prefers-reduced-motion: no-preference) {
   html {
@@ -56,7 +59,7 @@ body {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-body);
-  font-size: 16px;
+  font-size: 1rem;
   line-height: 1.85;
   line-break: strict;
   overflow-wrap: anywhere;
@@ -105,11 +108,11 @@ figure.fig {
   max-width: 100%;
 }
 .fig-sub {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--muted);
 }
 figure.fig > figcaption {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--muted);
   text-align: center;
 }
@@ -159,7 +162,7 @@ code {
   padding: 4px 10px;
 }
 .note {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--muted);
 }
 
@@ -168,6 +171,7 @@ code {
   position: sticky;
   top: 0;
   z-index: 5;
+  font-size: 16px;
   background: var(--paper);
   border-bottom: 1px solid var(--rule);
 }
@@ -297,7 +301,7 @@ code {
   gap: 14px;
 }
 .eyebrow {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--muted);
   letter-spacing: 0.08em;
 }
@@ -314,7 +318,7 @@ code {
 .here {
   display: grid;
   gap: 6px;
-  font-size: 14px;
+  font-size: 0.875rem;
   border: 1px solid var(--rule);
   border-radius: 8px;
   background: var(--surface);
@@ -389,7 +393,7 @@ code {
 }
 .pick {
   font: inherit;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 700;
   padding: 6px 16px;
   border: 2px solid var(--accent);
@@ -425,7 +429,7 @@ code {
 .vgroup > details.v:not(.primary) > summary {
   cursor: pointer;
   padding: 6px 12px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--muted);
 }
 .vgroup > details.v:not(.primary)[open] > summary {
@@ -438,7 +442,7 @@ code {
   list-style: none;
   cursor: default;
   display: inline-block;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   line-height: 1.6;
@@ -490,7 +494,7 @@ code {
 }
 .out-label {
   font-family: var(--font-body);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   color: var(--muted);
   border: 1px dashed var(--muted);
@@ -498,7 +502,7 @@ code {
   padding: 0 10px;
 }
 .goal-note {
-  font-size: 14px;
+  font-size: 0.875rem;
   border: 1px solid var(--ok);
   background: var(--ok-soft);
   border-radius: 8px;
@@ -506,7 +510,7 @@ code {
 }
 .gk {
   display: inline-block;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   border-radius: 4px;
   padding: 0 6px;
@@ -548,7 +552,7 @@ code {
 }
 .tag {
   justify-self: start;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   line-height: 1.6;
@@ -619,7 +623,7 @@ details.fold[open] > summary {
 /* 証明の詳細の見出しは札の大きさにそろえる(開閉の三角も札の文字に合わせて小さくする) */
 details.fold.proof > summary {
   padding: 8px 14px;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .fold-body {
   padding: 14px 18px;
@@ -696,7 +700,7 @@ details.fold.proof > summary {
   border: 1px solid var(--rule);
   border-radius: 8px;
   padding: 12px 14px;
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.75;
   box-shadow: 0 6px 24px rgba(10, 14, 22, 0.18);
   display: grid;
@@ -713,11 +717,11 @@ details.fold.proof > summary {
 .pop-en {
   font-family: var(--font-body);
   font-weight: 400;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--muted);
 }
 .pop-s {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--muted);
 }
 .pop-go {
@@ -1140,14 +1144,14 @@ svg.map {
 table.chap {
   border-collapse: collapse;
   width: 100%;
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.6;
 }
 .chap th {
   text-align: left;
   font-weight: 700;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   letter-spacing: 0.06em;
   padding: 8px 12px;
   border-bottom: 2px solid var(--rule);
