@@ -672,6 +672,9 @@
   /** @param {Element} article */
   function setupCopy(article) {
     var chapterNo = article.getAttribute('data-chapter');
+    /** コードなどの空白と改行の印(Unicode の私用領域の文字。本文には現れない) */
+    var PRE_SP = '\uE000';
+    var PRE_NL = '\uE001';
     var BLOCK =
       /^(block|flex|grid|flow-root|list-item|table|table-row|table-row-group|table-header-group|table-footer-group|table-caption)$/;
     var coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
@@ -754,7 +757,8 @@
           var to = node === range.endContainer ? range.endOffset : s.length;
           s = s.slice(node === range.startContainer ? range.startOffset : 0, to);
           var pre = /^pre/.test(getComputedStyle(node.parentElement).whiteSpace);
-          out += pre ? s : s.replace(/[ \t\n\r\f]+/g, ' ');
+          // コードなどの空白と改行は、下の区切りの整理に巻き込まないよう、印に置き換えておく
+          out += pre ? s.replace(/ /g, PRE_SP).replace(/\n/g, PRE_NL) : s.replace(/[ \t\n\r\f]+/g, ' ');
           return;
         }
         if (node.nodeType !== 1) return;
@@ -778,7 +782,13 @@
         if (block && range.comparePoint(el, el.childNodes.length) <= 0) out += '\n';
       }
       walk(range.commonAncestorContainer);
-      out = out.replace(/ *\n[ \n]*/g, '\n').replace(/^\s+/, '');
+      // 区切りの改行のまわりの空白と、続く改行を1つにまとめる。コードの末尾の改行は区切りの改行に含める
+      out = out
+        .replace(/ *\n[ \n]*/g, '\n')
+        .replace(/^\s+/, '')
+        .replace(/\uE001(?=\n)/g, '')
+        .replace(/\uE000/g, ' ')
+        .replace(/\uE001/g, '\n');
       return keepEnd ? out : out.replace(/\s+$/, '');
     }
 

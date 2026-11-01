@@ -836,6 +836,46 @@ describe('site: 位置情報つきのコピー(P-08)', () => {
     await context.close();
   });
 
+  test('45. コードブロックの字下げと空行は、そのままコピーする', async () => {
+    const root = await tempRoot();
+    try {
+      const code = ['if ready:', '    run()', '', 'done()'];
+      await edit(root, CH3_SOURCE, (t) =>
+        replaceOnce(
+          t,
+          '## ピカールの定理',
+          ['手順の例です。', '', '```python', ...code, '```', '', '続きの段落です。', '', '## ピカールの定理'].join(
+            '\n',
+          ),
+        ),
+      );
+      const r = await buildIn(root);
+      assert.deepEqual(r.errors, []);
+      const s = await serve(path.join(root, 'dist'));
+      try {
+        const { context, page, errors } = await openCopy();
+        await page.goto(`${s.url}${CH3}`);
+        await selectText(page, '#banach', '手順の例です。', '続きの段落です。');
+        assert.equal(await copyWith(page, PLAIN), ['手順の例です。', ...code, '続きの段落です。'].join('\n'));
+        // 字下げした行の途中から選ぶと、文字の位置も字下げを数える
+        await selectText(page, '#banach pre', 'run()', 'done()');
+        // コードブロックの段落の番号は、pre の中の code にある
+        const p = await page.locator('#banach pre > code').first().getAttribute('data-p');
+        assert.match(p ?? '', /^\d+$/);
+        const loc = await page.locator('#banach').getAttribute('data-loc');
+        // 1行目と改行、2行目の字下げを数えた次の文字
+        const at = code[0].length + 1 + code[1].indexOf('run()') + 1;
+        assert.equal(await copyWith(page, LOC), `[3:${loc}:${p}:${at}]\n${code.slice(1).join('\n').trimStart()}`);
+        assert.deepEqual(errors, []);
+        await context.close();
+      } finally {
+        await s.close();
+      }
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   test('28. クリップボードに書けなければ「コピーできませんでした」', async () => {
     const { context, page } = await open();
     await page.addInitScript(() => {
