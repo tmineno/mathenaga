@@ -898,6 +898,30 @@ describe('route-map: 図の操作(ブラウザ)', () => {
   });
 });
 
+describe('route-map: 23. 強調した帯の色(ブラウザ)', () => {
+  test('今の章の帯とポインタを重ねた帯は、ライトとダークで決めた強調の色', async () => {
+    for (const [scheme, hl] of /** @type {const} */ ([
+      ['light', 'rgb(236, 232, 250)'],
+      ['dark', 'rgb(64, 54, 111)'],
+    ])) {
+      const { context, page } = await open({ colorScheme: scheme });
+      await page.goto(`${server.url}${CH3}`);
+      const map = page.locator('.map:visible').first();
+      const fill = (/** @type {import('playwright').Locator} */ l) => l.evaluate((e) => getComputedStyle(e).fill);
+      assert.equal(await fill(map.locator('.band.current')), hl, scheme);
+      const other = map
+        .locator('a.ch')
+        .filter({ hasNot: page.locator('.band.current') })
+        .first();
+      const plain = await fill(other.locator('.band'));
+      assert.notEqual(plain, hl, scheme);
+      await other.hover({ force: true });
+      assert.equal(await fill(other.locator('.band')), hl, scheme);
+      await context.close();
+    }
+  });
+});
+
 describe('route-map: 12. ダークテーマの路線の色(ブラウザ)', () => {
   test('解析線は color_dark、本線は color のまま', async () => {
     const stroke = async (/** @type {'light' | 'dark'} */ scheme) => {
