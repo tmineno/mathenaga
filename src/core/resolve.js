@@ -5,7 +5,7 @@ import { issue } from './issues.js';
 
 /**
  * @typedef {object} Resolution
- * @property {'definition' | 'theorem' | 'station' | 'chapter' | 'equation'} kind
+ * @property {'definition' | 'theorem' | 'station' | 'chapter' | 'equation' | 'figure'} kind
  * @property {string} id
  * @property {string} text      表示する文字
  * @property {string} chapterId 参照先がある章の ID
@@ -13,16 +13,18 @@ import { issue } from './issues.js';
 
 /**
  * すべての章の参照を解決する。
- * Preconditions: site は buildSite の結果、equations は numberEquations の byId、statements は numberStatements の byId。
+ * Preconditions: site は buildSite の結果、equations は numberEquations の byId、statements は numberStatements の byId、
+ *   figures は numberFigures の byId。
  * Postconditions: 参照のトークン → Resolution を返す。解決できない参照はエラー(E05、E07)にする。
  * Failure modes: 例外は投げない。
  * Side effects: なし。
  * @param {import('./graph.js').Site} site
  * @param {Map<string, { label: string, chapter: import('./chapter.js').ChapterModel }>} equations
  * @param {Map<string, { label: string, kind: 'definition' | 'theorem', chapter: import('./chapter.js').ChapterModel }>} statements
+ * @param {Map<string, { label: string, chapter: import('./chapter.js').ChapterModel }>} figures
  * @returns {{ resolved: Map<any, Resolution>, errors: import('./issues.js').Issue[] }}
  */
-export function resolveRefs(site, equations, statements) {
+export function resolveRefs(site, equations, statements, figures) {
   const errors = [];
   /** @type {Map<any, Resolution>} */
   const resolved = new Map();
@@ -45,7 +47,7 @@ export function resolveRefs(site, equations, statements) {
           fail('E05', `[[@${key}]] では表示する文字を変えられない`);
           continue;
         }
-        const r = resolveNumber(site, equations, statements, key);
+        const r = resolveNumber(site, equations, statements, figures, key);
         if (typeof r === 'string') fail('E05', r);
         else resolved.set(ref.token, r);
         continue;
@@ -62,10 +64,11 @@ export function resolveRefs(site, equations, statements) {
  * @param {import('./graph.js').Site} site
  * @param {Map<string, { label: string, chapter: import('./chapter.js').ChapterModel }>} equations
  * @param {Map<string, { label: string, kind: 'definition' | 'theorem', chapter: import('./chapter.js').ChapterModel }>} statements
+ * @param {Map<string, { label: string, chapter: import('./chapter.js').ChapterModel }>} figures
  * @param {string} id
  * @returns {Resolution | string}
  */
-function resolveNumber(site, equations, statements, id) {
+function resolveNumber(site, equations, statements, figures, id) {
   const kind = site.kinds.get(id);
   if (!kind) return `[[@${id}]] の参照先 ${id} がない`;
   if (kind === 'station') {
@@ -81,11 +84,16 @@ function resolveNumber(site, equations, statements, id) {
     if (!eq) return `[[@${id}]] の式に番号がない`;
     return { kind: 'equation', id, text: `(${eq.label})`, chapterId: eq.chapter.id };
   }
+  if (kind === 'figure') {
+    const f = figures.get(id);
+    if (!f) return `[[@${id}]] の図に番号がない`;
+    return { kind: 'figure', id, text: `図 ${f.label}`, chapterId: f.chapter.id };
+  }
   const s = statements.get(id);
   if (s && s.kind === kind) {
     return { kind: s.kind, id, text: `${KIND_NAMES[s.kind]} ${s.label}`, chapterId: s.chapter.id };
   }
-  return `[[@${id}]] の ${id} は${KIND_NAMES[kind]}の ID なので番号を差し込めない(駅・章・式・定理・定義だけ)`;
+  return `[[@${id}]] の ${id} は${KIND_NAMES[kind]}の ID なので番号を差し込めない(駅・章・式・定理・定義・図だけ)`;
 }
 
 /**
@@ -103,7 +111,10 @@ function resolveKey(site, names, scope, key, label) {
   if (st) return { kind: 'station', id: key, text: label ?? st.name, chapterId: st.chapter.id };
   const kind = site.kinds.get(key);
   if (kind) {
-    const hint = kind === 'chapter' || kind === 'equation' ? `。${KIND_NAMES[kind]}は [[@${key}]] で指す` : '';
+    const hint =
+      kind === 'chapter' || kind === 'equation' || kind === 'figure'
+        ? `。${KIND_NAMES[kind]}は [[@${key}]] で指す`
+        : '';
     return `E05 [[${key}]] の ${key} は${KIND_NAMES[kind]}の ID で、[[…]] では指せない${hint}`;
   }
   const all = names.get(key) ?? [];

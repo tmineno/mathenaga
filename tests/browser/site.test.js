@@ -8,6 +8,7 @@ import { chromium } from 'playwright';
 import {
   CH3 as CH3_SOURCE,
   CONTENT,
+  addFigures,
   buildIn,
   countMathIn,
   referenceBuild,
@@ -417,6 +418,43 @@ describe('site: 33. 証明は定理の枠の中', () => {
       });
     assert.deepEqual(await size('> details.fold > summary > .tag'), await size('> p.tag'));
     await context.close();
+  });
+});
+
+describe('site: 34. 図の表示', () => {
+  test('図は本文の段の中央に置き、狭い画面では画像を縦に積む', async () => {
+    const root = await tempRoot();
+    try {
+      await addFigures(root);
+      const r = await buildIn(root);
+      assert.deepEqual(r.errors, []);
+      const s = await serve(path.join(root, 'dist'));
+      try {
+        for (const width of [1200, 400]) {
+          const { context, page } = await open({ viewport: { width, height: 900 } });
+          await page.goto(`${s.url}${CH3}`);
+          const fig = page.locator('figure#fig-two');
+          const items = await fig
+            .locator('.fig-item')
+            .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()));
+          const box = await fig.evaluate((f) => f.getBoundingClientRect().toJSON());
+          if (width === 1200) {
+            assert.equal(items[0].top, items[1].top, '1200px で横に並んでいない');
+            const mid = (items[0].left + items[1].right) / 2;
+            assert.ok(Math.abs(mid - (box.left + box.width / 2)) <= 1, '画像の組が段の中央にない');
+          } else {
+            assert.ok(items[1].top > items[0].top, '400px で縦に積まれていない');
+          }
+          assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false);
+          assert.match(await fig.locator('figcaption').innerText(), /^図 3\.2/);
+          await context.close();
+        }
+      } finally {
+        await s.close();
+      }
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
   });
 });
 

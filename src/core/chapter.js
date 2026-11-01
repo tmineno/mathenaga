@@ -74,6 +74,9 @@ const FORBIDDEN_TEX = /\\(tag\*?|label|ref|eqref|notag|nonumber)(?![A-Za-z])/;
  * @property {Array<{ token: any, id: string | null, line: number | null }>} equations
  * @property {Array<{ token: any, line: number | null }>} refs
  * @property {Array<{ token: any, src: string, line: number | null }>} images
+ * @property {Array<{ token: any, id: string | null, images: any[], captions: any[][], line: number | null }>} figures
+ *   captions は画像ごとのキャプション(タイトルを文字と行内の数式に切り分けたもの、image.meta.titleParts)
+ *   図:画像だけの段落(token は paragraph_open、images はその画像のトークン)
  * @property {Array<{ token: any, line: number | null, display: boolean }>} maths
  */
 
@@ -106,6 +109,7 @@ export function analyzeChapter(input) {
     equations: [],
     refs: [],
     images: [],
+    figures: [],
     maths: [],
   };
 
@@ -407,7 +411,18 @@ function checkEnd(chapter, tokens, fail, notices, file) {
  * @param {(code: string, tok: any, msg: string) => void} fail
  */
 function collectInline(chapter, lineOf, fail) {
-  for (const tok of chapter.tokens) {
+  for (let i = 0; i < chapter.tokens.length; i++) {
+    const tok = chapter.tokens[i];
+    const open = chapter.tokens[i - 1];
+    if (tok.type === 'inline' && tok.children && open?.type === 'paragraph_open' && !open.hidden) {
+      const fig = figureOf(tok.children, (code, msg) => fail(code, tok, msg));
+      if (fig) {
+        const line = lineOf(tok);
+        const captions = fig.images.map((im) => captionOf(im, chapter, line, (code, msg) => fail(code, tok, msg)));
+        chapter.figures.push({ token: open, id: fig.id, images: fig.images, captions, line });
+        for (const parts of captions) for (const p of parts) if (p.type === 'math_inline') checkTex(p, fail, tok);
+      }
+    }
     if (tok.type === 'math_block') {
       const line = lineOf(tok);
       let id = null;
@@ -453,6 +468,65 @@ function collectInline(chapter, lineOf, fail) {
       }
     }
   }
+}
+
+/**
+ * 段落が図(画像だけの段落)なら、その画像と ID を返す(content-format.md「図」)。
+ * 最後の画像の後ろの {#ID} は図の ID として読み取り、描画しないように中身を空にする。
+ * 画像の前後にほかの文字がある段落は図ではない(文の中の画像)。
+ * @param {any[]} children  段落の inline トークンの子
+ * @param {(code: string, msg: string) => void} fail
+ * @returns {{ images: any[], id: string | null } | null}
+ */
+function figureOf(children, fail) {
+  const blank = (/** @type {any} */ c) => c.type === 'softbreak' || (c.type === 'text' && c.content.trim() === '');
+  const last = children.map((c) => c.type).lastIndexOf('image');
+  if (last < 0) return null;
+  if (!children.slice(0, last + 1).every((c) => c.type === 'image' || blank(c))) return null;
+  const tail = children.slice(last + 1);
+  if (!tail.every((c) => c.type === 'text' || c.type === 'softbreak')) return null;
+  const images = children.filter((c) => c.type === 'image');
+  const after = tail
+    .map((c) => (c.type === 'text' ? c.content : ''))
+    .join('')
+    .trim();
+  if (after === '') return { images, id: null };
+  const braces = /^\{(.*)\}$/.exec(after);
+  if (!braces) return null;
+  let id = null;
+  const parsed = parseAttrs(braces[1]);
+  for (const p of parsed.problems) fail('E02', p);
+  for (const key of Object.keys(parsed.values)) fail('E02', `図に属性 ${key} は書けない(書けるのは #ID だけ)`);
+  if (parsed.id !== null) {
+    const problem = idProblem(parsed.id);
+    if (problem) fail('E03', problem);
+    id = parsed.id;
+  }
+  for (const c of tail) if (c.type === 'text') c.content = '';
+  return { images, id };
+}
+
+/**
+ * 図の画像のタイトルから、キャプションの一片を取り出す。行内の数式は本文の数式と同じく描画して検査する。
+ * @param {any} image
+ * @param {ChapterModel} chapter
+ * @param {number | null} line
+ * @param {(code: string, msg: string) => void} fail
+ * @returns {any[]}
+ */
+function captionOf(image, chapter, line, fail) {
+  const parts = image.meta?.titleParts ?? [];
+  for (const p of parts) {
+    if (p.type === 'math_inline') chapter.maths.push({ token: p, line, display: false });
+    else if (p.type === 'math_error')
+      fail(
+        'E10',
+        p.meta?.kind === 'inline-display'
+          ? '図のタイトルに $$ は書けない(行内の数式は $…$ で書く)'
+          : `図のタイトルに閉じていない $ がある(「${p.content}」)。$ そのものは \\$ と書く`,
+      );
+  }
+  return parts;
 }
 
 /**

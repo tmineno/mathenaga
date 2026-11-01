@@ -128,6 +128,9 @@ class Renderer {
     /** @type {Map<any, string>} */
     this.eqIds = new Map();
     for (const c of this.site.chapters) for (const e of c.equations) if (e.id) this.eqIds.set(e.token, e.id);
+    /** 図の段落のトークン → 図(content-format.md「図」) */
+    this.figs = new Map();
+    for (const c of this.site.chapters) for (const f of c.figures) this.figs.set(f.token, f);
     /** @type {Map<any, Map<any, number>>} 章 → (トークン → 段落の番号) */
     this.paragraphs = new Map();
   }
@@ -190,6 +193,12 @@ class Renderer {
         return `<div class="eq"${id ? ` id="${h(id)}"` : ''}${no === undefined ? '' : ` data-p="${no}"`}><div class="eq-body">${this.ctx.mathHtml.get(t) ?? ''}</div><span class="eq-num">(${label})</span></div>\n`;
       },
       paragraphNo: paragraphs ? (/** @type {any} */ t) => paragraphs.get(t) : undefined,
+      figure: (/** @type {any} */ t) => {
+        const f = this.figs.get(t);
+        return f
+          ? { label: this.ctx.figures.labels.get(t), id: f.id, images: f.images, captions: f.captions }
+          : undefined;
+      },
       ref: (/** @type {any} */ t) => this.refHtml(t, chapter, plain),
       imageSrc: (/** @type {string} */ src) =>
         /^[a-z][a-z0-9+.-]*:/i.test(src) ? src : `${this.base}chapters/${chapter.id}/${path.posix.normalize(src)}`,
