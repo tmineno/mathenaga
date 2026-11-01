@@ -30,7 +30,7 @@ const ALLOWED_ATTRS = {
   motivation: ['field'],
   definition: ['#', 'name', 'en', 'aliases'],
   theorem: ['#', 'name'],
-  application: ['field', 'title'],
+  application: ['#', 'field', 'title'],
 };
 
 const FORBIDDEN_TEX = /\\(tag\*?|label|ref|eqref|notag|nonumber)(?![A-Za-z])/;

@@ -1397,7 +1397,7 @@ describe('route-map: 24. 倍率を覚える(ブラウザ)', () => {
   });
 });
 
-describe('site: 43. 同じ分野の応用が2つある駅', () => {
+describe('site: 43・44. 同じ分野の応用が2つある駅', () => {
   test('選んだ分野の最初の応用だけを開き、2つ目は折りたたむ', async () => {
     const root = await tempRoot();
     try {
@@ -1405,7 +1405,7 @@ describe('site: 43. 同じ分野の応用が2つある駅', () => {
         replaceOnce(
           t,
           '## 縮小写像',
-          '::: application {field=physics title="二つ目の応用"}\n二つ目の応用の本文です。\n:::\n\n## 縮小写像',
+          '::: application {#app-second field=physics title="二つ目の応用"}\n二つ目の応用の本文です。\n:::\n\n## 縮小写像',
         ),
       );
       const r = await buildIn(root);
@@ -1441,6 +1441,12 @@ describe('site: 43. 同じ分野の応用が2つある駅', () => {
         assert.deepEqual(
           (await physics(page)).map((x) => x.open),
           [false, false],
+        );
+        // 44. アンカーの指す応用は、折りたたまれていても開く
+        await page.goto(`${s.url}${CH3}?field=physics#app-second`);
+        assert.equal(
+          await page.locator('details#app-second').evaluate((d) => /** @type {HTMLDetailsElement} */ (d).open),
+          true,
         );
         await context.close();
       } finally {

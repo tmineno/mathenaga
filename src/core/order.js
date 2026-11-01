@@ -116,6 +116,35 @@ export function numberFigures(chapters, fieldOrder) {
 }
 
 /**
+ * 分野での応用に、章ごとの通し番号を振る(docs/spec/build.md「導出する値」)。
+ * 全分野をまとめて、章ページに並ぶ順(駅の順 → 分野の並び → 書いた順)に 1 から数える。
+ * 分野の選択では変わらない。定義・定理・式・図とは別に数える。
+ * Preconditions: chapters は章グラフの章(章番号を持つ)。
+ * Postconditions: application のブロック → 「3.1」の形の番号、と、応用の ID → { label, chapter } を返す。
+ * Failure modes: なし。
+ * Side effects: なし。
+ * @param {import('./chapter.js').ChapterModel[]} chapters
+ * @param {Map<string, number>} fieldOrder
+ */
+export function numberApplications(chapters, fieldOrder) {
+  /** @type {Map<import('./chapter.js').Block, string>} */
+  const labels = new Map();
+  /** @type {Map<string, { label: string, chapter: import('./chapter.js').ChapterModel }>} */
+  const byId = new Map();
+  for (const chapter of chapters) {
+    let k = 0;
+    for (const st of chapter.stations) {
+      for (const a of byFieldOrder(st.applications, fieldOrder)) {
+        const label = `${chapter.number}.${++k}`;
+        labels.set(a, label);
+        if (a.id && !byId.has(a.id)) byId.set(a.id, { label, chapter });
+      }
+    }
+  }
+  return { labels, byId };
+}
+
+/**
  * 別行立ての式に、章ページに並ぶ順で式番号を振る。
  * Preconditions: chapters は章グラフの章(章番号を持つ)。
  * Postconditions: 式のトークン → 「3.1」の形の番号、と、式の ID → { label, chapter } を返す。

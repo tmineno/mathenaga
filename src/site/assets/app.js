@@ -180,10 +180,20 @@
     });
   }
 
+  /** アンカーの指す先が折りたたみ(ID を付けた応用など)なら開く */
+  function openTarget() {
+    var id = window.location.hash.slice(1);
+    if (!id) return;
+    var el = document.getElementById(decodeURIComponent(id));
+    if (el && el.tagName === 'DETAILS') /** @type {HTMLDetailsElement} */ (el).open = true;
+  }
+
   var isChapter = document.body.classList.contains('page-chapter');
   if (isChapter) {
     apply(initialField());
     applyFolds();
+    openTarget();
+    window.addEventListener('hashchange', openTarget);
   }
 
   document.addEventListener('click', function (e) {
