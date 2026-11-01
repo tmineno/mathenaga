@@ -101,11 +101,12 @@ export function branchStations(site, drawn, all = site.stations) {
     const known = memo.get(id);
     if (known) return known;
     const out = new Set();
+    // 先に登録する。前提が輪になっている原稿(E06)でも、たどり直さずに止まる
+    memo.set(id, out);
     for (const r of site.stationById.get(id)?.requires ?? []) {
       out.add(r);
       for (const a of ancestors(r)) out.add(a);
     }
-    memo.set(id, out);
     return out;
   };
   const earlier = new Set(trunk);

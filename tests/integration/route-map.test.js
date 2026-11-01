@@ -12,6 +12,7 @@ import {
   addMergeLine,
   analyzeIn,
   edit,
+  errorsAfter,
   readDist,
   referenceBuild,
   replaceOnce,
@@ -572,3 +573,19 @@ function segmentHitsBox(s, b) {
   }
   return false;
 }
+
+describe('route-map: 前提の輪', () => {
+  test('前提が輪になった原稿でも、分岐駅を決めるところで止まらず E06 を返す', async () => {
+    // 第1章の2駅が互いを前提にし、その2駅の先の駅を2つ前提にする路線を足す
+    const errors = await errorsAfter(async (root) => {
+      await edit(root, 'chapters/01-convergence-metric/index.md', (t) =>
+        replaceOnce(t, '{#convergence requires=reading-proofs}', '{#convergence requires=reading-proofs,metric-space}'),
+      );
+      await addLine(root, { id: 'skyline', code: 'U', name: '上線', layout: 'up' }, '14-sky', [
+        { name: '上の駅', id: 'upper-a', requires: 'convergence,open-set' },
+      ]);
+    });
+    assert.ok(errors.length > 0);
+    assert.deepEqual([...new Set(errors.map((e) => e.code))], ['E06']);
+  });
+});
