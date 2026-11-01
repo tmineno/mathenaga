@@ -361,6 +361,36 @@ describe('route-map: 14. 章の帯を押すと章のページの先頭へ移る(
   });
 });
 
+describe('route-map: 17. ポインタが帯の中にある間は帯を強調し続ける(ブラウザ)', () => {
+  test('駅の札の上でも第3章の帯は強調のまま。線の上を押すと章へ移る', async () => {
+    const { context, page } = await open();
+    await page.goto(server.url);
+    const link = page.locator('svg.map a.ch[aria-label="第3章 完備性と不動点"]');
+    const band = link.locator('rect.band');
+    const fill = () => band.evaluate((r) => getComputedStyle(r).fill);
+    const normal = await fill();
+    const box = await band.boundingBox();
+    const plate = await page.locator('svg.map a.st[aria-label="A02 完備性"] rect.plate').boundingBox();
+    const next = await page.locator('svg.map a.st[aria-label="A03 縮小写像"] rect.plate').boundingBox();
+    assert.ok(box && plate && next);
+    // 帯の右下の隅(駅のない場所)に入れる
+    await page.mouse.move(box.x + box.width - 4, box.y + box.height - 4, { steps: 4 });
+    const highlighted = await fill();
+    assert.notEqual(highlighted, normal);
+    // A02 の札の上へ動かしても強調のまま
+    await page.mouse.move(plate.x + plate.width / 2, plate.y + plate.height / 2, { steps: 6 });
+    assert.equal(await fill(), highlighted);
+    assert.ok(await link.evaluate((a) => a.classList.contains('on')));
+    // 帯の外へ出すと元に戻る
+    await page.mouse.move(2, 2, { steps: 6 });
+    assert.equal(await fill(), normal);
+    // A02 と A03 の間の線の上を押すと、第3章のページの先頭へ
+    await page.mouse.click((plate.x + plate.width + next.x) / 2, plate.y + plate.height / 2);
+    await page.waitForURL(/\/chapters\/completeness-fixed-point\/$/);
+    await context.close();
+  });
+});
+
 describe('route-map: 12. ダークテーマの路線の色(ブラウザ)', () => {
   test('解析線は color_dark、本線は color のまま', async () => {
     const stroke = async (/** @type {'light' | 'dark'} */ scheme) => {

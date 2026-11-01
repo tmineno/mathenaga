@@ -740,6 +740,8 @@ svg.map {
   max-width: none;
 }
 .map .ln {
+  /* 線は押せない。帯の中で線の上を押しても、下の章の帯のリンクが働く */
+  pointer-events: none;
   fill: none;
   stroke: var(--lc);
   stroke-width: 8;
@@ -803,10 +805,12 @@ svg.map {
 }
 /* 章の帯は章のページの先頭へのリンク */
 .map a.ch:hover .band:not(.current),
+.map a.ch.on .band:not(.current),
 .map a.ch:focus .band:not(.current) {
   fill: var(--accent-soft);
 }
 .map a.ch:hover .band-label,
+.map a.ch.on .band-label,
 .map a.ch:focus .band-label {
   fill: var(--accent);
   text-decoration: underline;
