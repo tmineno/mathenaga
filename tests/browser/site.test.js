@@ -364,6 +364,23 @@ describe('site: 22. 出発点と落とし穴の札', () => {
   });
 });
 
+describe('site: 31. 一言でいうとは地の文', () => {
+  test('summary は見出しと目標の印のすぐ後にあり、枠も札もない', async () => {
+    const { context, page } = await open();
+    await page.goto(`${server.url}${CH3}`);
+    const first = await page.locator('section#banach').evaluate((s) => {
+      const el = [...s.children].find((c) => c.tagName !== 'H2' && !c.classList.contains('goal-note'));
+      return { cls: el?.className, text: el?.textContent ?? '' };
+    });
+    assert.equal(first.cls, 'summary flow');
+    assert.match(first.text, /^完備な空間の縮小写像には不動点がただ一つあり/);
+    assert.equal(await page.locator('.box .summary, .box.summary').count(), 0);
+    assert.equal(await page.locator('section#banach .summary .tag').count(), 0);
+    assert.ok(!(await page.locator('body').innerText()).includes('一言でいうと'));
+    await context.close();
+  });
+});
+
 describe('site: 改善案の起票(P-07)', () => {
   test('18. 各駅の起票のリンクと、Issue フォームの欄', async () => {
     const { context, page } = await open();

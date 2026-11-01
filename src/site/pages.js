@@ -25,7 +25,6 @@ const ISSUE_TIP = 'この駅についてGitHub Issueに起票する';
 const ISSUE_ICON =
   '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M4 4.5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H10l-5 4v-4H4a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8 9.5h8M8 12.5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
 const BLOCK_LABELS = {
-  summary: '一言でいうと',
   why: 'なぜ必要か',
   'proof-sketch': '証明の骨格',
   examples: '例と反例',
@@ -234,6 +233,10 @@ class Renderer {
     }
     if (b.name === 'theorem') {
       return `<div class="box thm" id="${h(b.id)}"><p class="tag">定理 · ${h(b.attrs.name)}</p><div class="flow">${body}</div></div>`;
+    }
+    if (b.name === 'summary') {
+      // 一言でいうと:札も枠もなく、駅の最初の地の文として出す(site.md「駅の表示」)
+      return `<div class="summary flow">${body}</div>`;
     }
     if (b.name === 'proof') {
       return `<details class="fold"><summary>証明の詳細</summary><div class="fold-body flow">${body}</div></details>`;
