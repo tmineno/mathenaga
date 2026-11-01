@@ -1,9 +1,11 @@
 // docs/spec/site.md「Acceptance tests」(Playwright でブラウザを動かす)
 
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { after, before, describe, test } from 'node:test';
 import { chromium } from 'playwright';
-import { referenceBuild, serve } from '../helpers/fixture.js';
+import { buildIn, referenceBuild, serve, tempRoot } from '../helpers/fixture.js';
 
 /** @type {import('playwright').Browser} */
 let browser;
@@ -342,6 +344,92 @@ describe('site: 受け入れテスト', () => {
         }
       }
       await context.close();
+    }
+  });
+});
+
+describe('site: 改善案の起票(P-07)', () => {
+  test('18. 各駅の起票のリンクと、Issue フォームの欄', async () => {
+    const { context, page } = await open();
+    await page.goto(`${server.url}${CH3}`);
+    assert.equal(await page.locator('section.station a.issue').count(), 5);
+    for (const id of ['cauchy-sequence', 'completeness', 'contraction', 'banach', 'picard-lindelof']) {
+      assert.equal(await page.locator(`section.station#${id} a.issue`).count(), 1, id);
+    }
+    const a = page.locator('section.station#banach a.issue');
+    const url = new URL(/** @type {string} */ (await a.getAttribute('href')));
+    assert.equal(`${url.origin}${url.pathname}`, 'https://github.com/example/mathenaga/issues/new');
+    assert.equal(url.searchParams.get('template'), 'station.yml');
+    assert.equal(url.searchParams.get('title'), '[改善案] 第3章 A04 バナッハの不動点定理');
+    assert.equal(url.searchParams.get('station'), '第3章 完備性と不動点 / A04 バナッハの不動点定理(banach)');
+    assert.equal(
+      url.searchParams.get('page'),
+      `${new URL(server.url).origin}/chapters/completeness-fixed-point/#banach`,
+    );
+    assert.equal(await a.getAttribute('target'), '_blank');
+    await context.close();
+  });
+
+  test('19. 幅 1580px では駅の右の余白にあり、駅の中でだけ見え、読み進めても見えている', async () => {
+    const { context, page } = await open({ viewport: { width: 1580, height: 900 } });
+    await page.goto(`${server.url}${CH3}`);
+    const section = page.locator('section.station#banach');
+    const icon = section.locator('a.issue');
+    const opacity = () => icon.evaluate((el) => Number(getComputedStyle(el).opacity));
+    await section.evaluate((el) => window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - 140));
+    await page.waitForTimeout(100);
+    const sbox = await section.boundingBox();
+    assert.ok(sbox);
+    await page.mouse.move(sbox.x + 40, sbox.y + 40);
+    await page.waitForTimeout(250);
+    assert.equal(await opacity(), 1);
+    const ibox = await icon.boundingBox();
+    assert.ok(ibox && ibox.x >= sbox.x + sbox.width, 'アイコンが駅の右端より右にない');
+    await icon.hover();
+    const tip = await icon.evaluate((el) => getComputedStyle(el, '::after').content);
+    assert.equal(tip, '"この駅についてGitHub Issueに起票する"');
+    assert.equal(await icon.getAttribute('aria-label'), 'この駅についてGitHub Issueに起票する');
+    // 駅の外(左の余白)へ出すと見えなくなる
+    await page.mouse.move(2, sbox.y + 40);
+    await page.waitForTimeout(250);
+    assert.equal(await opacity(), 0);
+    // 駅の途中までスクロールしても、アイコンは上端のバーの下に見えている
+    await page.mouse.wheel(0, sbox.height / 2);
+    await page.waitForTimeout(300);
+    const after = await icon.boundingBox();
+    const barBottom = await page.locator('header.bar').evaluate((el) => el.getBoundingClientRect().bottom);
+    assert.ok(after && after.y >= barBottom && after.y + after.height <= 900, `アイコンが画面にない(${after?.y})`);
+    await context.close();
+  });
+
+  test('20. 幅 400px では見出しの行の右端にあり、横スクロールは出ない', async () => {
+    const { context, page } = await open({ viewport: { width: 400, height: 800 } });
+    await page.goto(`${server.url}${CH3}`);
+    for (const id of ['cauchy-sequence', 'banach']) {
+      const s = await page.locator(`section.station#${id}`).boundingBox();
+      const h2 = await page.locator(`section.station#${id} > h2`).boundingBox();
+      const i = await page.locator(`section.station#${id} a.issue`).boundingBox();
+      assert.ok(s && h2 && i);
+      assert.ok(Math.abs(i.x + i.width - (s.x + s.width)) <= 1, `${id}: 右端にない`);
+      assert.ok(i.y < h2.y + h2.height && i.y + i.height > h2.y, `${id}: 見出しの行にない`);
+    }
+    const [sw, cw] = await page.evaluate(() => [
+      document.documentElement.scrollWidth,
+      document.documentElement.clientWidth,
+    ]);
+    assert.ok(sw <= cw);
+    await context.close();
+  });
+
+  test('21. MATHENAGA_REPO_URL を渡さなければ起票のリンクはない', async () => {
+    const root = await tempRoot();
+    try {
+      const r = await buildIn(root, '/', '');
+      assert.deepEqual(r.errors, []);
+      const html = await fs.readFile(path.join(root, 'dist/chapters/completeness-fixed-point/index.html'), 'utf8');
+      assert.ok(!html.includes('class="issue'));
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
     }
   });
 });

@@ -19,6 +19,10 @@ const ASSETS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'assets')
 const KATEX_DIR = path.dirname(createRequire(import.meta.url).resolve('katex'));
 const SITE_NAME = 'MathEnaga';
 const OUT_OF_SCOPE = 'この分野の目標には不要(読み飛ばし可)';
+const ISSUE_TIP = 'この駅についてGitHub Issueに起票する';
+/** 吹き出しのアイコン */
+const ISSUE_ICON =
+  '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M4 4.5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H10l-5 4v-4H4a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8 9.5h8M8 12.5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
 const BLOCK_LABELS = {
   summary: '一言でいうと',
   why: 'なぜ必要か',
@@ -89,6 +93,8 @@ class Renderer {
     /** @type {import('../core/graph.js').Site} */
     this.site = ctx.site;
     this.base = ctx.basePath;
+    /** @type {string} */
+    this.repoUrl = ctx.repoUrl ?? '';
     this.md = ctx.md;
     /** @type {Map<any, string>} */
     this.eqIds = new Map();
@@ -505,8 +511,28 @@ ${aheadSec}
     const appHtml = apps.length ? this.versionGroup(c, apps, 'application', '分野での応用') : '';
     return `<section class="station flow" id="${h(st.id)}" data-station="${h(st.id)}" data-out="${out.join(' ')}">
 <h2>${this.badge(st)}<span class="st-name">${heading}</span>${shared ? `<span class="en">${h(shared.en)}</span>` : ''}<span class="out-label" hidden>${OUT_OF_SCOPE}</span></h2>
-${notes}${items.join('')}${appHtml}
+${notes}${items.join('')}${appHtml}${this.issueLink(c, st)}
 </section>`;
+  }
+
+  /**
+   * 駅の改善案を起票するリンク(site.md「改善案の起票」)。リポジトリの URL がなければ空。
+   * ページの欄は、スクリプトがオリジンを足して完全な URL にする(app.js)。
+   * @param {any} c @param {import('../core/graph.js').StationInfo} st
+   */
+  issueLink(c, st) {
+    if (!this.repoUrl) return '';
+    const page = `${this.chapterUrl(c.id)}#${st.id}`;
+    const params = [
+      ['template', 'station.yml'],
+      ['title', `[改善案] 第${c.number}章 ${st.code} ${st.name}`],
+      ['station', `第${c.number}章 ${c.title} / ${st.code} ${st.name}(${st.id})`],
+      ['page', page],
+    ]
+      .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+      .join('&');
+    const href = `${this.repoUrl}/issues/new?${params}`;
+    return `<div class="issue-rail"><a class="issue" href="${h(href)}" target="_blank" rel="noopener" aria-label="${ISSUE_TIP}" data-tip="${ISSUE_TIP}" data-page="${h(page)}">${ISSUE_ICON}</a></div>`;
   }
 
   /** 現在地の「次の章」。 @param {any} c @param {import('../core/schema.js').Field | null} f */

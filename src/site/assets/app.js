@@ -289,6 +289,19 @@
     });
   }
 
+  // ---------- 改善案の起票(P-07) ----------
+  // ページの欄にオリジンを足して、完全な URL にする。
+
+  all('a.issue[data-page]').forEach(function (a) {
+    try {
+      var url = new URL(a.href);
+      url.searchParams.set('page', window.location.origin + a.getAttribute('data-page'));
+      a.href = url.toString().replace(/\+/g, '%20');
+    } catch {
+      // URL が扱えない環境では、パスのまま
+    }
+  });
+
   // ---------- 路線図の章の帯(docs/spec/route-map.md「リンク」) ----------
   // 帯の上には駅の札が重なるので、:hover だけでは駅の上で強調が消える。
   // ポインタの位置が帯の矩形の中にある間は、その帯に on を付けたままにする。

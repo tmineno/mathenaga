@@ -21,6 +21,7 @@
 
 - `content/` の原稿([content-format.md](content-format.md))。
 - 環境変数 `MATHENAGA_BASE_PATH`:ベースパス。既定は `/`。`/` で始まり `/` で終わる。
+- 環境変数 `MATHENAGA_REPO_URL`:改善案を起票する GitHub のリポジトリの URL(`https://github.com/<owner>/<repo>`)。任意。渡せば章ページの各駅に起票のアイコンを出す([site.md](site.md) の P-07)。
 
 ### ビルドの流れ
 
@@ -111,12 +112,13 @@ dist/
 | `npm run dev` | `npm run build` と同じ | `127.0.0.1` で `dist/` をベースパスの下に配信する(ポートの既定は 8000、環境変数 `PORT` で変える)。`content/` と `src/` の変更のたびに全体を作り直し、開いているブラウザを再読み込みする | ビルドのエラーは端末に出し、ブラウザは前回成功した出力のまま。サーバーは止めない | `dist/` を書き換える |
 | `npm test` | 依存と、Playwright が使うブラウザをインストール済み | 単体テスト、基準原稿を使った結合テスト、Playwright でブラウザを動かす閲覧テスト([site.md](site.md))を実行し、すべて通れば終了コード 0 | 失敗したテストを出し、終了コードは 0 以外 | テストの出力は一時ディレクトリに書き、`dist/` には触れない |
 | `MATHENAGA_BASE_PATH` | `/` で始まり `/` で終わる | すべてのリンクと読み込みに付く | 形式が違えば E13 で止まる | なし |
+| `MATHENAGA_REPO_URL` | 空か、`https://github.com/<owner>/<repo>` の形 | 空でなければ、章ページの各駅に、そのリポジトリの Issue 作成画面へのリンクを置く | 形式が違えば E13 で止まる | なし |
 
 ### CI と公開
 
 - CI(GitHub Actions)は format → lint → typecheck → test の順に実行し、どれかが失敗したらマージできないようにする。型は JSDoc で書き、typecheck で検査する。使う道具は CI を作るときに決め、バージョンを固定する。
 - CI の test では閲覧テストも実行する。そのためにブラウザをインストールする手順を CI に入れる。
-- 公開は、main への push で `npm run build` を実行し、`dist/` を GitHub Pages のプロジェクトサイトに置く。ベースパスは `/<リポジトリ名>/` で、公開のワークフローがリポジトリ名から作って `MATHENAGA_BASE_PATH` に渡す。手元のビルドとプレビューの既定は `/` のまま。
+- 公開は、main への push で `npm run build` を実行し、`dist/` を GitHub Pages のプロジェクトサイトに置く。ベースパスは `/<リポジトリ名>/` で、公開のワークフローがリポジトリ名から作って `MATHENAGA_BASE_PATH` に渡す。リポジトリの URL も `MATHENAGA_REPO_URL` に渡し、改善案の起票のアイコンを出す。手元のビルドとプレビューの既定は、ベースパスが `/`、`MATHENAGA_REPO_URL` は空(アイコンなし)のまま。
 
 ## Failure modes
 
@@ -124,6 +126,7 @@ dist/
 |---|---|---|---|
 | 原稿の誤り | 1段目の検査([content-format.md](content-format.md) の E01〜E11、[route-map.md](route-map.md) の E12) | エラーの一覧、終了コード 1、`dist/` は変わらない | 原稿を直して再実行する |
 | `MATHENAGA_BASE_PATH` の形式が違う(`mathenaga` など) | 1段目の前の設定の読み取り(E13) | 同上 | 値を直す |
+| `MATHENAGA_REPO_URL` の形式が違う(`github.com/example/mathenaga` など) | 1段目の前の設定の読み取り(E13) | 同上 | 値を直すか、空にする |
 | 依存がインストールされていない | Node のモジュール解決 | Node のエラーで止まり、終了コードは 0 以外 | `npm ci` を実行する |
 | Playwright が使うブラウザがインストールされていない | `npm test` の閲覧テストの起動 | 閲覧テストが失敗し、ブラウザがないことを出す | Playwright のブラウザをインストールする |
 | `dist/` を消せない・書けない | 2段目のファイル操作 | 原因のパスを出し、終了コード 1。`dist/` が途中までになることがある | 権限を直して再実行する |
@@ -162,6 +165,7 @@ dist/
 17. 壊した原稿でビルドすると、終了コードは 1 で、ビルドの前から `dist/` にあったファイルはそのまま残る。
 18. `MATHENAGA_BASE_PATH=mathenaga` でビルドすると E13 で止まる。
 19. `npm run dev` で章ページを開いたまま原稿を保存すると、5 秒以内にブラウザの表示が変わる。原稿を壊して保存すると端末にエラーが出て、ブラウザは前の表示のまま。
+20. `MATHENAGA_REPO_URL=github.com/example/mathenaga` でビルドすると E13 で止まる。
 
 ## Open questions
 

@@ -19,6 +19,8 @@ import { generateSite } from './site/pages.js';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BASE_PATH = /^\/(?:[A-Za-z0-9._~-]+\/)*$/;
+/** 改善案を起票するリポジトリ(docs/spec/build.md「入力」) */
+const REPO_URL = /^https:\/\/github\.com\/[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/;
 
 /**
  * @typedef {object} BuildResult
@@ -33,15 +35,21 @@ const BASE_PATH = /^\/(?:[A-Za-z0-9._~-]+\/)*$/;
  * Postconditions: エラー・通知と、2段目に渡す材料(エラーがなければ)を返す。
  * Failure modes: contentDir が読めなければ例外。原稿の誤りはエラーとして返す。
  * Side effects: ファイルを読む。
- * @param {{ contentDir: string, basePath: string }} options
+ * @param {{ contentDir: string, basePath: string, repoUrl?: string }} options
+ *   repoUrl は改善案を起票する GitHub のリポジトリの URL。空なら起票のアイコンを出さない。
  */
-export async function analyze({ contentDir, basePath }) {
+export async function analyze({ contentDir, basePath, repoUrl = '' }) {
   const errors = [];
   const notices = [];
   if (!BASE_PATH.test(basePath)) {
     errors.push(issue('E13', '-', null, `MATHENAGA_BASE_PATH「${basePath}」は / で始まり / で終わる形で書く`));
-    return { errors, notices, ctx: null };
   }
+  if (repoUrl !== '' && !REPO_URL.test(repoUrl)) {
+    errors.push(
+      issue('E13', '-', null, `MATHENAGA_REPO_URL「${repoUrl}」は https://github.com/<owner>/<repo> の形で書く`),
+    );
+  }
+  if (errors.length > 0) return { errors, notices, ctx: null };
   const raw = await readContent(contentDir);
   const md = createMarkdown();
 
@@ -160,7 +168,7 @@ export async function analyze({ contentDir, basePath }) {
   errors.push(...maps.errors);
   notices.push(...maps.notices);
 
-  const ctx = { site, md, equations, resolved: refs.resolved, mathHtml, basePath, chapterFiles };
+  const ctx = { site, md, equations, resolved: refs.resolved, mathHtml, basePath, repoUrl, chapterFiles };
   return { errors: sortIssues(errors), notices: sortIssues(notices), ctx: errors.length ? null : ctx };
 }
 
@@ -170,11 +178,11 @@ export async function analyze({ contentDir, basePath }) {
  * Postconditions: エラーがなければ outDir を消してサイト全体を書き、written を true にする。
  * Failure modes: 原稿の誤りは errors で返す。ファイルの書き込みに失敗すれば例外。
  * Side effects: outDir を消して書き直す。
- * @param {{ contentDir: string, outDir: string, basePath: string }} options
+ * @param {{ contentDir: string, outDir: string, basePath: string, repoUrl?: string }} options
  * @returns {Promise<BuildResult>}
  */
-export async function build({ contentDir, outDir, basePath }) {
-  const { errors, notices, ctx } = await analyze({ contentDir, basePath });
+export async function build({ contentDir, outDir, basePath, repoUrl = '' }) {
+  const { errors, notices, ctx } = await analyze({ contentDir, basePath, repoUrl });
   if (!ctx) return { errors, notices, written: false };
   const files = await generateSite(ctx);
   await writeOutput(outDir, files);
@@ -184,10 +192,12 @@ export async function build({ contentDir, outDir, basePath }) {
 /** `npm run build` の入口。 */
 export async function main() {
   const basePath = process.env.MATHENAGA_BASE_PATH || '/';
+  const repoUrl = process.env.MATHENAGA_REPO_URL || '';
   const result = await build({
     contentDir: path.join(ROOT, 'content'),
     outDir: path.join(ROOT, 'dist'),
     basePath,
+    repoUrl,
   });
   for (const n of result.notices) console.log(formatIssue(n));
   if (result.errors.length > 0) {
