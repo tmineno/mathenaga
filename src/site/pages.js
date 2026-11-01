@@ -29,7 +29,7 @@ const BLOCK_LABELS = {
   'proof-sketch': '証明の骨格',
   examples: '例と反例',
   'drop-assumption': '仮定を外すと',
-  pitfall: 'つまずきポイント',
+  pitfall: '落とし穴',
 };
 const FONTS =
   '<link rel="preconnect" href="https://fonts.googleapis.com">' +
@@ -182,20 +182,23 @@ class Renderer {
 
   /**
    * 共通版と分野版の組。共通版は開いたまま、分野版は折りたたむ(初期状態は未選択)。
+   * 出発点は節の見出し「出発点」の下に置くので、共通版に札を付けず、分野版の札を「〈分野名〉では」にする(site.md)。
    * @param {any} chapter @param {import('../core/chapter.js').Block[]} blocks @param {string} kind @param {string} label
    */
   versionGroup(chapter, blocks, kind, label) {
     const out = [`<div class="vgroup" data-kind="${kind}">`];
     for (const b of byFieldOrder(blocks, this.site.fieldOrder)) {
       if (!b.field) {
-        out.push(
-          `<div class="v common"><p class="tag tag-${kind}">${label}</p><div class="flow">${this.inner(chapter, b)}</div></div>`,
-        );
+        const tag = kind === 'motivation' ? '' : `<p class="tag tag-${kind}">${label}</p>`;
+        out.push(`<div class="v common">${tag}<div class="flow">${this.inner(chapter, b)}</div></div>`);
       } else {
+        const field = h(this.fieldTitle(b.field));
         const title =
           kind === 'application'
-            ? `${label}(${h(this.fieldTitle(b.field))}) · ${h(b.attrs.title ?? '')}`
-            : `${label}(${h(this.fieldTitle(b.field))})`;
+            ? `${label}(${field}) · ${h(b.attrs.title ?? '')}`
+            : kind === 'motivation'
+              ? `${field}では`
+              : `${label}(${field})`;
         out.push(
           `<details class="v" data-field="${h(b.field)}"><summary>${title}</summary><div class="v-body flow">${this.inner(chapter, b)}</div></details>`,
         );
