@@ -13,10 +13,12 @@ import {
   countMathIn,
   definitionIdsIn,
   edit,
+  errorsAfter,
   listFiles,
   readDist,
   referenceBuild,
   replaceOnce,
+  statementsIn,
   tempRoot,
 } from '../helpers/fixture.js';
 
@@ -153,6 +155,9 @@ describe('build: 受け入れテスト', () => {
     assert.equal(c.url, '/chapters/completeness-fixed-point/#def-cauchy-sequence');
     assert.ok(c.html.includes('距離空間'));
     assert.ok(!/<(button|a)\b/.test(c.html), 'html にボタンやリンクがある');
+    const order = await statementsIn(CH3);
+    const pos = order.findIndex((s) => s.kind === 'definition' && s.id === 'cauchy-sequence');
+    assert.equal(c.number, `3.${pos + 1}`);
   });
 
   test('10. [[@ID]] の章と駅', async () => {
@@ -221,6 +226,49 @@ describe('build: 受け入れテスト', () => {
     const ch3 = await readDist(path.join(root, 'dist'), 'chapters/completeness-fixed-point/index.html');
     // 式の要素にはほかの属性(段落の番号 data-p)も付く
     assert.match(ch3, /<div class="eq" id="value-iteration-error"[ >]/);
+  });
+
+  test('21. 定義と定理の札には、章ごとに原稿の順で通し番号が付く', async () => {
+    const { dist, ctx } = await ref();
+    const NAMES = { definition: '定義', theorem: '定理' };
+    let total = 0;
+    for (const c of ctx.site.chapters) {
+      const html = await readDist(dist, `chapters/${c.id}/index.html`);
+      const got = [...html.matchAll(/<p class="tag">(定義|定理) (\d+\.\d+) · /g)].map((m) => `${m[1]} ${m[2]}`);
+      const expected = (await statementsIn(c.file)).map((s, i) => `${NAMES[s.kind]} ${c.number}.${i + 1}`);
+      assert.deepEqual(got, expected, `第${c.number}章`);
+      total += expected.length;
+    }
+    assert.ok(total >= 5, '定義と定理が少なすぎる(テストの前提が崩れている)');
+  });
+
+  test('22. [[@ID]] で定理と、駅と ID を共有しない定義の番号を差し込む', async () => {
+    const order = await statementsIn(CH3);
+    const no = (/** @type {string} */ id) => `3.${order.findIndex((s) => s.id === id) + 1}`;
+    assert.ok(order.some((s) => s.kind === 'definition' && s.id === 'lipschitz' && s.station !== 'lipschitz'));
+    const root = await tempRoot();
+    roots.push(root);
+    await edit(root, 'chapters/04-norm-inner-product/index.md', (t) =>
+      replaceOnce(
+        t,
+        '## ノルム空間',
+        '[[@banach-fixed-point]] と [[@lipschitz]] と [[@cauchy-sequence]] を使います。\n\n## ノルム空間',
+      ),
+    );
+    const r = await buildIn(root);
+    assert.deepEqual(r.errors, []);
+    const ch4 = await readDist(path.join(root, 'dist'), 'chapters/norm-inner-product/index.html');
+    const ch3 = '/chapters/completeness-fixed-point/';
+    assert.ok(ch4.includes(`<a class="num" href="${ch3}#banach-fixed-point">定理 ${no('banach-fixed-point')}</a>`));
+    assert.ok(ch4.includes(`<a class="num" href="${ch3}#def-lipschitz">定義 ${no('lipschitz')}</a>`));
+    // 駅と ID を共有する定義は、これまでどおり駅の表示番号
+    assert.ok(ch4.includes(`<a class="num" href="${ch3}#cauchy-sequence">A01</a>`));
+    const errors = await errorsAfter((root) =>
+      edit(root, CH3, (t) => replaceOnce(t, '## コーシー列', '[[@main]] の駅です。\n\n## コーシー列')),
+    );
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0].code, 'E05');
+    assert.match(errors[0].message, /路線の ID なので番号を差し込めない\(駅・章・式・定理・定義だけ\)/);
   });
 
   test('13. defs.json の定義の式にも式番号が付く', async () => {

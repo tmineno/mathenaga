@@ -539,7 +539,9 @@ code {
   color: var(--surface);
   border-color: transparent;
 }
-.box.proof-sketch .tag {
+.box.proof-sketch .tag,
+.thm-part.proof-sketch > .tag,
+details.fold.proof > summary > .tag {
   background: var(--accent-soft);
   color: var(--accent);
   border-color: transparent;
@@ -554,6 +556,15 @@ code {
   color: var(--warn);
   border-color: transparent;
 }
+/* 定理の枠の中の証明の骨格。定理の本文と線で区切る(site.md「駅の表示」) */
+.thm-part {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  border-top: 1px solid var(--rule);
+  padding-top: 12px;
+}
 details.fold {
   border: 1px solid var(--rule);
   border-radius: 8px;
@@ -566,6 +577,11 @@ details.fold > summary {
 }
 details.fold[open] > summary {
   border-bottom: 1px solid var(--rule);
+}
+/* 証明の詳細の見出しは札の大きさにそろえる(開閉の三角も札の文字に合わせて小さくする) */
+details.fold.proof > summary {
+  padding: 8px 14px;
+  font-size: 12px;
 }
 .fold-body {
   padding: 14px 18px;

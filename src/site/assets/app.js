@@ -152,7 +152,7 @@
     en.className = 'pop-en';
     en.textContent = d.en;
     head.appendChild(badge);
-    head.appendChild(document.createTextNode(d.name));
+    head.appendChild(document.createTextNode('定義 ' + d.number + ' · ' + d.name));
     head.appendChild(en);
     var body = document.createElement('div');
     body.className = 'pop-body flow';

@@ -54,6 +54,38 @@ export function displayRanges(chapter, fieldOrder) {
 }
 
 /**
+ * 定義と定理に、章ごとの通し番号を振る(docs/spec/build.md「導出する値」)。
+ * 定義と定理をまとめて、原稿に書いた順に 1 から数える。式番号とは別に数える。
+ * Preconditions: chapters は章グラフの章(章番号を持つ)。
+ * Postconditions: ブロック → 「3.1」の形の番号と、[[@ID]] で指せる ID → { label, kind, chapter } を返す。
+ *   [[@ID]] で指せるのは、定理と、駅と ID を共有しない定義(駅と共有する ID は駅の番号を指す)。
+ * Failure modes: なし。
+ * Side effects: なし。
+ * @param {import('./chapter.js').ChapterModel[]} chapters
+ */
+export function numberStatements(chapters) {
+  /** @type {Map<import('./chapter.js').Block, string>} */
+  const labels = new Map();
+  /** @type {Map<string, { label: string, kind: 'definition' | 'theorem', chapter: import('./chapter.js').ChapterModel }>} */
+  const byId = new Map();
+  for (const chapter of chapters) {
+    let k = 0;
+    for (const st of chapter.stations) {
+      for (const item of st.items) {
+        if (item.kind !== 'block') continue;
+        const b = item.block;
+        if (b.name !== 'definition' && b.name !== 'theorem') continue;
+        const label = `${chapter.number}.${++k}`;
+        labels.set(b, label);
+        if (b.id === null || (b.name === 'definition' && b.id === st.id) || byId.has(b.id)) continue;
+        byId.set(b.id, { label, kind: b.name, chapter });
+      }
+    }
+  }
+  return { labels, byId };
+}
+
+/**
  * 別行立ての式に、章ページに並ぶ順で式番号を振る。
  * Preconditions: chapters は章グラフの章(章番号を持つ)。
  * Postconditions: 式のトークン → 「3.1」の形の番号、と、式の ID → { label, chapter } を返す。

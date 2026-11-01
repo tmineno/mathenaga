@@ -62,6 +62,33 @@ export function definitionIds(text) {
   return ids;
 }
 
+/**
+ * 原稿の定義(definition)と定理(theorem)を、書いた順に集める。番号の期待値を手で書かずに原稿から作るためのもの。
+ * ID は、書いてあればその ID、定義で書いていなければ駅の ID(content-format.md)。
+ * @param {string} text 章の Markdown
+ * @returns {{ kind: 'definition' | 'theorem', id: string, station: string | null }[]}
+ */
+export function statements(text) {
+  const out = [];
+  let station = null;
+  for (const line of text.split('\n')) {
+    const h = /^## .*\{#([^\s}]+)/.exec(line);
+    if (h) station = h[1];
+    const b = /^:::\s*(definition|theorem)(?![\w-])(?:\s*\{([^}]*)\})?/.exec(line);
+    if (!b) continue;
+    const kind = /** @type {'definition' | 'theorem'} */ (b[1]);
+    const id = /(?:^|\s)#([^\s}]+)/.exec(b[2] ?? '')?.[1] ?? (kind === 'definition' ? station : null);
+    if (!id) throw new Error(`ID の決まらない${kind === 'theorem' ? '定理' : '定義'}: ${line}`);
+    out.push({ kind, id, station });
+  }
+  return out;
+}
+
+/** 基準原稿の章(content/ からの相対パス)の定義と定理を、書いた順に集める。 @param {string} rel */
+export async function statementsIn(rel) {
+  return statements(await fs.readFile(path.join(CONTENT, rel), 'utf8'));
+}
+
 /** 基準原稿の章(content/ からの相対パス)の定義の ID を集める。 @param {string} rel */
 export async function definitionIdsIn(rel) {
   return definitionIds(await fs.readFile(path.join(CONTENT, rel), 'utf8'));

@@ -206,7 +206,8 @@ class Renderer {
     if (t.meta.at) {
       if (r.kind === 'chapter') return `<a class="num" href="${this.chapterUrl(r.id)}">${text}</a>`;
       const cls = r.kind === 'equation' ? 'eqref' : 'num';
-      return `<a class="${cls}" href="${this.anchorUrl(r.chapterId, r.id, chapter)}">${text}</a>`;
+      const anchor = r.kind === 'definition' ? `def-${r.id}` : r.id;
+      return `<a class="${cls}" href="${this.anchorUrl(r.chapterId, anchor, chapter)}">${text}</a>`;
     }
     if (r.kind === 'definition') {
       return `<button type="button" class="term" data-def="${h(r.id)}" aria-haspopup="dialog" aria-expanded="false">${text}</button>`;
@@ -225,21 +226,33 @@ class Renderer {
     return this.range(chapter, b.start + 1, b.end - 1, plain);
   }
 
-  /** @param {any} chapter @param {import('../core/chapter.js').Block} b */
-  blockHtml(chapter, b) {
+  /**
+   * @param {any} chapter @param {import('../core/chapter.js').Block} b
+   * @param {import('../core/chapter.js').Block[]} [proofs]  theorem の枠に入れる、直後の proof-sketch と proof
+   */
+  blockHtml(chapter, b, proofs = []) {
     const body = this.inner(chapter, b);
     if (b.name === 'definition') {
-      return `<div class="box def" id="def-${h(b.id)}"><p class="tag">定義 · ${h(b.attrs.name)}<span class="tag-en">${h(b.attrs.en)}</span></p><div class="flow">${body}</div></div>`;
+      return `<div class="box def" id="def-${h(b.id)}"><p class="tag">定義 ${this.ctx.statements.labels.get(b)} · ${h(b.attrs.name)}<span class="tag-en">${h(b.attrs.en)}</span></p><div class="flow">${body}</div></div>`;
     }
     if (b.name === 'theorem') {
-      return `<div class="box thm" id="${h(b.id)}"><p class="tag">定理 · ${h(b.attrs.name)}</p><div class="flow">${body}</div></div>`;
+      // 証明の骨格と証明の詳細は、定理の枠の中に入れる(site.md「駅の表示」)
+      const inside = proofs
+        .map((p) =>
+          p.name === 'proof'
+            ? this.blockHtml(chapter, p)
+            : `<div class="thm-part proof-sketch"><p class="tag">${BLOCK_LABELS['proof-sketch']}</p><div class="flow">${this.inner(chapter, p)}</div></div>`,
+        )
+        .join('');
+      return `<div class="box thm" id="${h(b.id)}"><p class="tag">定理 ${this.ctx.statements.labels.get(b)} · ${h(b.attrs.name)}</p><div class="flow">${body}</div>${inside}</div>`;
     }
     if (b.name === 'summary') {
       // 一言でいうと:札も枠もなく、駅の最初の地の文として出す(site.md「駅の表示」)
       return `<div class="summary flow">${body}</div>`;
     }
     if (b.name === 'proof') {
-      return `<details class="fold"><summary>証明の詳細</summary><div class="fold-body flow">${body}</div></details>`;
+      // 見出しは、定理の札と同じ大きさの札にする(site.md「駅の表示」)
+      return `<details class="fold proof"><summary><span class="tag">証明の詳細</span></summary><div class="fold-body flow">${body}</div></details>`;
     }
     return `<div class="box ${b.name}"><p class="tag">${BLOCK_LABELS[b.name]}</p><div class="flow">${body}</div></div>`;
   }
@@ -578,11 +591,24 @@ ${aheadSec}
       .join('');
     const items = [];
     const apps = [];
+    /** 定理と、その直後に続く proof-sketch・proof(定理の枠に入れる) */
+    let thm = null;
+    const flush = () => {
+      if (thm) items.push(this.blockHtml(c, thm.block, thm.proofs));
+      thm = null;
+    };
     for (const item of /** @type {any[]} */ (stationItems(st.model, site.fieldOrder))) {
+      if (thm && item.kind === 'block' && (item.block.name === 'proof-sketch' || item.block.name === 'proof')) {
+        thm.proofs.push(item.block);
+        continue;
+      }
+      flush();
       if (item.kind === 'prose') items.push(this.range(c, item.start, item.end));
       else if (item.block.name === 'application') apps.push(item.block);
+      else if (item.block.name === 'theorem') thm = { block: item.block, proofs: [] };
       else items.push(this.blockHtml(c, item.block));
     }
+    flush();
     const appHtml = apps.length ? this.versionGroup(c, apps, 'application', '分野での応用') : '';
     return `<section class="station flow" id="${h(st.id)}" data-station="${h(st.id)}" data-loc="${h(st.code)}" data-out="${out.join(' ')}">
 <h2 data-p="0">${this.badge(st)}<span class="st-name">${heading}</span>${shared ? `<span class="en">${h(shared.en)}</span>` : ''}<span class="out-label" hidden>${OUT_OF_SCOPE}</span></h2>
@@ -677,6 +703,7 @@ ${notes}${items.join('')}${appHtml}${this.issueLink(c, st)}
       out[id] = {
         name: d.name,
         en: d.en,
+        number: this.ctx.statements.labels.get(d.block),
         aliases: d.aliases,
         station: d.station.id,
         code: d.station.code,
