@@ -1,5 +1,5 @@
 // 閲覧時のスクリプト(docs/spec/site.md「閲覧時の機能」)。
-// 分野の切り替え(P-05)、用語ポップアップ(P-01)、現在地バー(P-02)。スクリプトが動かなくても、
+// 分野の切り替え(P-05)、用語ポップアップ(P-01)、現在地バー(P-02)、路線図の章の帯の強調(P-03)。スクリプトが動かなくても、
 // ページは未選択の表示のまま読める。
 (function () {
   'use strict';
@@ -288,6 +288,47 @@
       io.observe(s);
     });
   }
+
+  // ---------- 路線図の章の帯(docs/spec/route-map.md「リンク」) ----------
+  // 帯の上には駅の札が重なるので、:hover だけでは駅の上で強調が消える。
+  // ポインタの位置が帯の矩形の中にある間は、その帯に on を付けたままにする。
+
+  all('svg.map').forEach(function (svg) {
+    var bands = all('a.ch', svg).map(function (a) {
+      var r = a.querySelector('rect.band');
+      return {
+        a: a,
+        x: Number(r.getAttribute('x')),
+        y: Number(r.getAttribute('y')),
+        w: Number(r.getAttribute('width')),
+        h: Number(r.getAttribute('height')),
+      };
+    });
+    if (bands.length === 0) return;
+    var current = null;
+    function mark(a) {
+      if (current === a) return;
+      if (current) current.classList.remove('on');
+      current = a;
+      if (a) a.classList.add('on');
+    }
+    svg.addEventListener('pointermove', function (e) {
+      var m = svg.getScreenCTM();
+      if (!m) return;
+      var pt = svg.createSVGPoint();
+      pt.x = e.clientX;
+      pt.y = e.clientY;
+      var p = pt.matrixTransform(m.inverse());
+      var hit = null;
+      bands.forEach(function (b) {
+        if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) hit = b.a;
+      });
+      mark(hit);
+    });
+    svg.addEventListener('pointerleave', function () {
+      mark(null);
+    });
+  });
 
   if (reduceMotion) root.classList.add('reduce-motion');
 })();
