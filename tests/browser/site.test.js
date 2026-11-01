@@ -11,6 +11,8 @@ import {
   CONTENT,
   addFigures,
   buildIn,
+  edit,
+  replaceOnce,
   countMathIn,
   referenceBuild,
   serve,
@@ -1392,5 +1394,60 @@ describe('route-map: 24. 倍率を覚える(ブラウザ)', () => {
     await page.goto(`${server.url}chapters/norm-inner-product/`);
     assert.equal(await mapScale(page), 1);
     await context.close();
+  });
+});
+
+describe('site: 43. 同じ分野の応用が2つある駅', () => {
+  test('選んだ分野の最初の応用だけを開き、2つ目は折りたたむ', async () => {
+    const root = await tempRoot();
+    try {
+      await edit(root, CH3_SOURCE, (t) =>
+        replaceOnce(
+          t,
+          '## 縮小写像',
+          '::: application {field=physics title="二つ目の応用"}\n二つ目の応用の本文です。\n:::\n\n## 縮小写像',
+        ),
+      );
+      const r = await buildIn(root);
+      assert.deepEqual(r.errors, []);
+      const s = await serve(path.join(root, 'dist'));
+      try {
+        const { context, page } = await open();
+        const physics = (/** @type {import('playwright').Page} */ p) =>
+          p.locator('#completeness details.v[data-field=physics]').evaluateAll((els) =>
+            els.map((d) => ({
+              title: /** @type {HTMLElement} */ (d.querySelector('summary')).innerText,
+              open: /** @type {HTMLDetailsElement} */ (d).open,
+            })),
+          );
+        await page.goto(`${s.url}${CH3}?field=physics`);
+        const v = await physics(page);
+        assert.equal(v.length, 2);
+        assert.match(v[0].title, /関数の空間/);
+        assert.match(v[1].title, /二つ目の応用/);
+        assert.deepEqual(
+          v.map((x) => x.open),
+          [true, false],
+        );
+        // 1つ目は閉じられず、2つ目は開ける
+        const summaries = page.locator('#completeness details.v[data-field=physics] > summary');
+        await summaries.nth(0).click();
+        await summaries.nth(1).click();
+        assert.deepEqual(
+          (await physics(page)).map((x) => x.open),
+          [true, true],
+        );
+        await page.goto(`${s.url}${CH3}?field=cs`);
+        assert.deepEqual(
+          (await physics(page)).map((x) => x.open),
+          [false, false],
+        );
+        await context.close();
+      } finally {
+        await s.close();
+      }
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
   });
 });
