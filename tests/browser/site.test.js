@@ -479,6 +479,86 @@ describe('route-map: 17. ポインタが帯の中にある間は帯を強調し�
   });
 });
 
+describe('route-map: 図の操作(ブラウザ)', () => {
+  /** @param {import('playwright').Page} page */
+  const frameOf = (page) => page.locator('.map-v:visible .map-scroll').first();
+  /** @param {import('playwright').Page} page */
+  const svgBox = async (page) => /** @type {any} */ (await frameOf(page).locator('svg.map').boundingBox());
+
+  test('18. スクロールバーはなく、ドラッグで動く。駅の上からのドラッグでは移らない', async () => {
+    const { context, page } = await open();
+    await page.goto(server.url);
+    const frame = frameOf(page);
+    assert.equal(await frame.evaluate((el) => getComputedStyle(el).overflowX), 'hidden');
+    const before = await svgBox(page);
+    const a02 = /** @type {any} */ (await frame.locator('a.st[aria-label="A02 完備性"] rect.plate').boundingBox());
+    await page.mouse.move(a02.x + a02.width / 2, a02.y + a02.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(a02.x - 150, a02.y + a02.height / 2, { steps: 10 });
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+    const after = await svgBox(page);
+    assert.ok(after.x < before.x - 100, `図が左へ動いていない(${before.x} → ${after.x})`);
+    assert.equal(new URL(page.url()).pathname, '/');
+    await context.close();
+  });
+
+  test('19. 拡大・縮小・全体を表示', async () => {
+    const { context, page } = await open();
+    await page.goto(server.url);
+    const w0 = (await svgBox(page)).width;
+    await page.locator('.map-tools button[aria-label="拡大"]').first().click();
+    const w1 = (await svgBox(page)).width;
+    assert.ok(Math.abs(w1 / w0 - 1.25) < 0.01, `拡大 ${w0} → ${w1}`);
+    await page.locator('.map-tools button[aria-label="縮小"]').first().click();
+    await page.locator('.map-tools button[aria-label="縮小"]').first().click();
+    const w2 = (await svgBox(page)).width;
+    assert.ok(w2 < w0, `縮小 ${w0} → ${w2}`);
+    await page.locator('.map-tools button[aria-label="全体を表示"]').first().click();
+    const f = /** @type {any} */ (await frameOf(page).boundingBox());
+    const b = await svgBox(page);
+    assert.ok(b.x >= f.x - 1 && b.x + b.width <= f.x + f.width + 1, '横が枠に収まらない');
+    assert.ok(b.y >= f.y - 1 && b.y + b.height <= f.y + f.height + 1, '縦が枠に収まらない');
+    await context.close();
+  });
+
+  test('20. 幅 400px の第3章では、今の章の帯の中央が枠の中に見える', async () => {
+    const { context, page } = await open({ viewport: { width: 400, height: 800 } });
+    await page.goto(`${server.url}${CH3}`);
+    const frame = frameOf(page);
+    const f = /** @type {any} */ (await frame.boundingBox());
+    const band = /** @type {any} */ (await frame.locator('rect.band.current').boundingBox());
+    const cx = band.x + band.width / 2;
+    assert.ok(cx > f.x && cx < f.x + f.width, `帯の中央 ${cx} が枠 ${f.x}..${f.x + f.width} の外`);
+    await context.close();
+  });
+
+  test('21. 枠の外の駅にフォーカスすると、枠の中に見える', async () => {
+    const { context, page } = await open({ viewport: { width: 400, height: 800 } });
+    await page.goto(server.url);
+    const frame = frameOf(page);
+    const link = frame.locator('a.st[aria-label="G07 多様体"]');
+    const f = /** @type {any} */ (await frame.boundingBox());
+    const before = /** @type {any} */ (await link.boundingBox());
+    assert.ok(before.x > f.x + f.width, '最初から枠の中にある');
+    await link.focus();
+    await page.waitForTimeout(100);
+    const r = /** @type {any} */ (await link.boundingBox());
+    assert.ok(r.x >= f.x && r.x + r.width <= f.x + f.width, `フォーカスした駅が枠の外(${r.x})`);
+    await context.close();
+  });
+
+  test('22. スクリプトを止めると、ボタンはなく横スクロールになる', async () => {
+    const { context, page } = await open({ javaScriptEnabled: false });
+    await page.goto(server.url);
+    assert.equal(await page.locator('.map-tools').count(), 0);
+    const frame = page.locator('.map-scroll').first();
+    assert.equal(await frame.evaluate((el) => getComputedStyle(el).overflowX), 'auto');
+    assert.ok(await frame.evaluate((el) => el.scrollWidth > el.clientWidth));
+    await context.close();
+  });
+});
+
 describe('route-map: 12. ダークテーマの路線の色(ブラウザ)', () => {
   test('解析線は color_dark、本線は color のまま', async () => {
     const stroke = async (/** @type {'light' | 'dark'} */ scheme) => {
