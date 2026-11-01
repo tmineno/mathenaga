@@ -170,14 +170,21 @@
     }
   }
 
-  /** 証明の詳細と確認問題の答えを、表示の設定の「最初から開く」の状態にする */
-  function applyFolds() {
-    all('details.fold.proof').forEach(function (d) {
-      d.open = settings.openProof;
-    });
-    all('details.fold.answer').forEach(function (d) {
-      d.open = settings.openAnswer;
-    });
+  /**
+   * 証明の詳細と確認問題の答えを、表示の設定の「最初から開く」の状態にする。
+   * @param {string} [only] 'openProof' か 'openAnswer' なら、その種類の折りたたみだけ(設定を変えたとき)
+   */
+  function applyFolds(only) {
+    if (only !== 'openAnswer') {
+      all('details.fold.proof').forEach(function (d) {
+        d.open = settings.openProof;
+      });
+    }
+    if (only !== 'openProof') {
+      all('details.fold.answer').forEach(function (d) {
+        d.open = settings.openAnswer;
+      });
+    }
   }
 
   /** アンカーの指す先が折りたたみ(ID を付けた応用など)なら開く */
@@ -1291,7 +1298,7 @@
       setItem(SETTINGS_KEY, JSON.stringify(settings));
       say('');
       if (LOOK.indexOf(k) >= 0) applyLook();
-      else if (isChapter && (k === 'openProof' || k === 'openAnswer')) applyFolds();
+      else if (isChapter && (k === 'openProof' || k === 'openAnswer')) applyFolds(k);
       else if (isChapter && k === 'openOther') apply(field);
     }
     reset.addEventListener('click', function () {

@@ -1257,6 +1257,24 @@ describe('site: 表示の設定(P-09)', () => {
     await context.close();
   });
 
+  test('「最初から開く」の1つを変えても、ほかの種類の折りたたみは読者が開け閉めしたまま', async () => {
+    const { context, page } = await open();
+    await page.goto(`${server.url}${CH3}`);
+    const answer = page.locator('details.fold.answer').first();
+    const proof = page.locator('details.fold.proof').first();
+    await answer.evaluate((d) => d.toggleAttribute('open', true));
+    await choose(page, 'openProof', true);
+    assert.ok(await answer.evaluate((d) => /** @type {HTMLDetailsElement} */ (d).open), '答えが閉じた');
+    assert.ok(await proof.evaluate((d) => /** @type {HTMLDetailsElement} */ (d).open));
+    await proof.evaluate((d) => d.toggleAttribute('open', false));
+    await choose(page, 'openAnswer', true);
+    assert.ok(!(await proof.evaluate((d) => /** @type {HTMLDetailsElement} */ (d).open)), '証明の詳細が開いた');
+    await choose(page, 'openAnswer', false);
+    assert.ok(!(await answer.evaluate((d) => /** @type {HTMLDetailsElement} */ (d).open)));
+    assert.ok(!(await proof.evaluate((d) => /** @type {HTMLDetailsElement} */ (d).open)), '証明の詳細が開いた');
+    await context.close();
+  });
+
   test('40. 用語ポップアップを押したときだけ出す', async () => {
     const { context, page } = await open();
     await page.goto(`${server.url}${CH3}`);
