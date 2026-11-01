@@ -31,9 +31,9 @@ function expectError(errors, code, file) {
   return hit;
 }
 
-/** 路線ファイルの解析線に planned を足す。 @param {string} body */
-const planned = (body) => (/** @type {string} */ t) =>
-  replaceOnce(t, '  layout: up\n', `  layout: up\n  planned:\n${body}`);
+/** 基準原稿の路線ファイルにある、未執筆の第10章の行 */
+const PLANNED_10 = '    - chapter: 10\n';
+const STATIONS_10 = '      stations: [有界作用素, 双対空間, 随伴作用素]\n';
 
 describe('content-format: 受け入れテスト', () => {
   test('1. banach 駅から proof-sketch を消すと E08 の1件だけで止まり、dist/ は変わらない', async () => {
@@ -239,48 +239,27 @@ describe('content-format: 受け入れテスト', () => {
       [
         'planned の章番号が章フォルダと重複',
         'E04',
-        (r) => edit(r, 'lines.yml', planned('    - chapter: 3\n      title: 作用素\n      stations: [有界作用素]\n')),
+        (r) => edit(r, 'lines.yml', (t) => replaceOnce(t, PLANNED_10, '    - chapter: 3\n')),
       ],
       [
         'planned の requires の参照先がない',
         'E05',
         (r) =>
-          edit(
-            r,
-            'lines.yml',
-            planned(
-              '    - chapter: 10\n      title: 作用素\n      stations: [有界作用素]\n      requires: [no-such-station]\n',
-            ),
-          ),
+          edit(r, 'lines.yml', (t) => replaceOnce(t, STATIONS_10, `${STATIONS_10}      requires: [no-such-station]\n`)),
       ],
-      [
-        'planned の stations がない',
-        'E08',
-        (r) => edit(r, 'lines.yml', planned('    - chapter: 10\n      title: 作用素\n')),
-      ],
+      ['planned の stations がない', 'E08', (r) => edit(r, 'lines.yml', (t) => replaceOnce(t, STATIONS_10, ''))],
       [
         'planned の requires が章番号の大きい章の駅を指す',
         'E06',
         async (r) => {
-          await fs.rename(path.join(r, 'content/chapters/09-manifolds'), path.join(r, 'content/chapters/11-manifolds'));
-          await edit(
-            r,
-            'lines.yml',
-            planned(
-              '    - chapter: 10\n      title: 作用素\n      stations: [有界作用素]\n      requires: [manifold]\n',
-            ),
-          );
+          await fs.rename(path.join(r, 'content/chapters/09-manifolds'), path.join(r, 'content/chapters/14-manifolds'));
+          await edit(r, 'lines.yml', (t) => replaceOnce(t, STATIONS_10, `${STATIONS_10}      requires: [manifold]\n`));
         },
       ],
       [
         'planned の知らない項目',
         'E02',
-        (r) =>
-          edit(
-            r,
-            'lines.yml',
-            planned('    - chapter: 10\n      id: operators\n      title: 作用素\n      stations: [有界作用素]\n'),
-          ),
+        (r) => edit(r, 'lines.yml', (t) => replaceOnce(t, PLANNED_10, `${PLANNED_10}      id: operators\n`)),
       ],
     ];
     for (const [name, code, mutate] of cases) {

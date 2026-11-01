@@ -1,5 +1,6 @@
 # 路線ファイル(docs/spec/content-format.md「路線ファイル」)
 # layout は幹線から分岐する向き(up / down / right)。書かない路線は幹線になる。
+# planned は未執筆の章。全体の路線図にだけ灰色で描く。章を書いたら章フォルダを置き、ここから消す。
 - id: reading
   code: Z
   name: 0番線
@@ -15,9 +16,23 @@
   color: "#5B45B8"
   color_dark: "#AA98F2"
   layout: up
+  planned:
+    - chapter: 10
+      title: 有界作用素
+      stations: [有界作用素, 双対空間, 随伴作用素]
+    - chapter: 11
+      title: スペクトル理論
+      stations: [スペクトル, コンパクト作用素, スペクトル分解]
 - id: geometry
   code: G
   name: 幾何線
   color: "#0F7F73"
   color_dark: "#4DC1B3"
   layout: down
+  planned:
+    - chapter: 12
+      title: 接空間とベクトル場
+      stations: [接空間, ベクトル場, リー微分]
+    - chapter: 13
+      title: 微分形式
+      stations: [微分形式, 外微分, ストークスの定理]
