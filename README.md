@@ -1,9 +1,4 @@
-<h1>
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.svg">
-    <img src="docs/assets/banner-light.svg" alt="MathEnaga" width="328" height="114">
-  </picture>
-</h1>
+<h1><img src="docs/assets/banner.svg" alt="MathEnaga" width="332" height="118"></h1>
 
 大学数学を、物理・情報など他分野の学生に届ける静的サイトと、それを原稿から作るビルドツール。
 
@@ -32,7 +27,7 @@ npx playwright install chromium   # npm test の閲覧テストに使う
 | `npm run format` / `format:check` | Prettier で整形する / 整形済みか確かめる                                                                                |
 | `npm run lint`                    | ESLint                                                                                                                  |
 | `npm run typecheck`               | JSDoc の型を TypeScript で検査する                                                                                      |
-| `npm run banner`                  | `src/site/assets/logo.txt` から README のバナー(`docs/assets/banner-*.svg`)を作り直す                                   |
+| `npm run banner`                  | `src/site/assets/logo.txt` から README のバナー(`docs/assets/banner.svg`)を作り直す                                     |
 
 環境変数:
 

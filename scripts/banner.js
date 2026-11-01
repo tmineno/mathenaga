@@ -6,11 +6,10 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { ROOT } from '../src/build.js';
-import { BANNERS, bannerSvg, parseBitmap, trim } from '../src/site/logo.js';
+import { BANNER_FILE, bannerSvg, parseBitmap, trim } from '../src/site/logo.js';
 
 const logo = trim(parseBitmap(await fs.readFile(path.join(ROOT, 'src/site/assets/logo.txt'), 'utf8')));
-for (const { file, ink } of BANNERS) {
-  await fs.mkdir(path.dirname(path.join(ROOT, file)), { recursive: true });
-  await fs.writeFile(path.join(ROOT, file), bannerSvg(logo, ink));
-  console.log(file);
-}
+const file = path.join(ROOT, BANNER_FILE);
+await fs.mkdir(path.dirname(file), { recursive: true });
+await fs.writeFile(file, bannerSvg(logo));
+console.log(BANNER_FILE);
