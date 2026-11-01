@@ -154,7 +154,7 @@ describe('site: 受け入れテスト', () => {
     await pop.locator('.pop-h').waitFor();
     const head = await pop.locator('.pop-h').innerText();
     assert.match(head, /A01/);
-    assert.match(head, /コーシー列/);
+    assert.match(head, /定義 3\.\d+ · コーシー列/);
     assert.match(head, /Cauchy sequence/);
     assert.equal(await pop.locator('a.pop-go').getAttribute('href'), '#def-cauchy-sequence');
     await pop.locator('a.pop-go').click();

@@ -206,7 +206,8 @@ class Renderer {
     if (t.meta.at) {
       if (r.kind === 'chapter') return `<a class="num" href="${this.chapterUrl(r.id)}">${text}</a>`;
       const cls = r.kind === 'equation' ? 'eqref' : 'num';
-      return `<a class="${cls}" href="${this.anchorUrl(r.chapterId, r.id, chapter)}">${text}</a>`;
+      const anchor = r.kind === 'definition' ? `def-${r.id}` : r.id;
+      return `<a class="${cls}" href="${this.anchorUrl(r.chapterId, anchor, chapter)}">${text}</a>`;
     }
     if (r.kind === 'definition') {
       return `<button type="button" class="term" data-def="${h(r.id)}" aria-haspopup="dialog" aria-expanded="false">${text}</button>`;
@@ -232,7 +233,7 @@ class Renderer {
   blockHtml(chapter, b, proofs = []) {
     const body = this.inner(chapter, b);
     if (b.name === 'definition') {
-      return `<div class="box def" id="def-${h(b.id)}"><p class="tag">定義 · ${h(b.attrs.name)}<span class="tag-en">${h(b.attrs.en)}</span></p><div class="flow">${body}</div></div>`;
+      return `<div class="box def" id="def-${h(b.id)}"><p class="tag">定義 ${this.ctx.statements.labels.get(b)} · ${h(b.attrs.name)}<span class="tag-en">${h(b.attrs.en)}</span></p><div class="flow">${body}</div></div>`;
     }
     if (b.name === 'theorem') {
       // 証明の骨格と証明の詳細は、定理の枠の中に入れる(site.md「駅の表示」)
@@ -243,7 +244,7 @@ class Renderer {
             : `<div class="thm-part proof-sketch"><p class="tag">${BLOCK_LABELS['proof-sketch']}</p><div class="flow">${this.inner(chapter, p)}</div></div>`,
         )
         .join('');
-      return `<div class="box thm" id="${h(b.id)}"><p class="tag">定理 · ${h(b.attrs.name)}</p><div class="flow">${body}</div>${inside}</div>`;
+      return `<div class="box thm" id="${h(b.id)}"><p class="tag">定理 ${this.ctx.statements.labels.get(b)} · ${h(b.attrs.name)}</p><div class="flow">${body}</div>${inside}</div>`;
     }
     if (b.name === 'summary') {
       // 一言でいうと:札も枠もなく、駅の最初の地の文として出す(site.md「駅の表示」)
@@ -702,6 +703,7 @@ ${notes}${items.join('')}${appHtml}${this.issueLink(c, st)}
       out[id] = {
         name: d.name,
         en: d.en,
+        number: this.ctx.statements.labels.get(d.block),
         aliases: d.aliases,
         station: d.station.id,
         code: d.station.code,

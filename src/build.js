@@ -7,7 +7,7 @@ import { buildSite } from './core/graph.js';
 import { idProblem } from './core/ids.js';
 import { formatIssue, issue, sortIssues } from './core/issues.js';
 import { checkMaps } from './core/navigation.js';
-import { numberEquations } from './core/order.js';
+import { numberEquations, numberStatements } from './core/order.js';
 import { resolveRefs } from './core/resolve.js';
 import { checkField, checkFrontMatter, checkLines } from './core/schema.js';
 import { parseChapterDir, splitFrontMatter } from './core/source.js';
@@ -133,7 +133,8 @@ export async function analyze({ contentDir, basePath, repoUrl = '' }) {
   const site = g.site;
 
   const equations = numberEquations(site.chapters, site.fieldOrder);
-  const refs = resolveRefs(site, equations.byId);
+  const statements = numberStatements(site.chapters);
+  const refs = resolveRefs(site, equations.byId, statements.byId);
   errors.push(...refs.errors);
 
   /** @type {Map<any, string>} */
@@ -168,7 +169,7 @@ export async function analyze({ contentDir, basePath, repoUrl = '' }) {
   errors.push(...maps.errors);
   notices.push(...maps.notices);
 
-  const ctx = { site, md, equations, resolved: refs.resolved, mathHtml, basePath, repoUrl, chapterFiles };
+  const ctx = { site, md, equations, statements, resolved: refs.resolved, mathHtml, basePath, repoUrl, chapterFiles };
   return { errors: sortIssues(errors), notices: sortIssues(notices), ctx: errors.length ? null : ctx };
 }
 
