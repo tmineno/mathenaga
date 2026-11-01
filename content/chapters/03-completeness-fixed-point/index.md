@@ -49,11 +49,11 @@ line: analysis
 [[距離空間]] $(X, d)$ の点列 $(x_n)$ がコーシー列であるとは、次が成り立つことをいう。
 
 $$
-\forall \varepsilon > 0,\ \exists N,\ \forall m, n \ge N:\quad d(x_m, x_n) < \varepsilon
+\forall \varepsilon > 0\ \ \exists N\ \ \forall m, n \ge N:\quad d(x_m, x_n) < \varepsilon
 $$
 :::
 
-読み方:どんなに小さな許容誤差 $\varepsilon$ を指定されても、ある番号 $N$ から先の項は、どの二つをとっても距離が $\varepsilon$ 未満に収まります。
+どんなに小さな許容誤差 $\varepsilon$ を指定されても、ある番号 $N$ から先の項は、どの二つをとっても距離が $\varepsilon$ 未満に収まります。
 
 ::: examples
 - 収束する点列はコーシー列です。極限を $x$ とすると、三角不等式から $d(x_m, x_n) \le d(x_m, x) + d(x, x_n)$ で、右辺の二つの項はどちらもいくらでも小さくできます。
