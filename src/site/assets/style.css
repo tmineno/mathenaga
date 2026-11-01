@@ -16,6 +16,8 @@
     'Zen Kaku Gothic New', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', 'Yu Gothic', system-ui, sans-serif;
   --font-body: 'BIZ UDPGothic', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', 'Yu Gothic', system-ui, sans-serif;
   --font-code: 'Barlow Semi Condensed', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;
+  /* ページの段の幅。上端のバー・本文・路線図の枠の左右の端を、この幅でそろえる。 */
+  --page: 1160px;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -132,7 +134,7 @@ code {
   border-bottom: 1px solid var(--rule);
 }
 .bar-in {
-  max-width: 1160px;
+  max-width: var(--page);
   margin: 0 auto;
   display: flex;
   flex-wrap: wrap;
@@ -213,7 +215,7 @@ code {
 
 /* 本文の枠 */
 .wrap {
-  max-width: 1160px;
+  max-width: var(--page);
   margin: 0 auto;
   padding: 32px 16px 72px;
   display: grid;
@@ -230,13 +232,7 @@ code {
   grid-template-columns: minmax(0, 1fr);
 }
 .chapter > * {
-  max-width: 42em;
-  width: 100%;
-  justify-self: center;
   min-width: 0;
-}
-.chapter > .mapsec {
-  max-width: 1160px;
 }
 .chapter section {
   scroll-margin-top: 112px;
@@ -816,7 +812,6 @@ svg.map {
 .intro {
   display: grid;
   gap: 12px;
-  max-width: 44em;
 }
 .intro h1 {
   font-size: clamp(1.9rem, 4.2vw, 2.6rem);
@@ -836,7 +831,6 @@ svg.map {
   padding: 0;
   display: grid;
   gap: 8px;
-  max-width: 44em;
 }
 .goal-list li,
 .field-list li {
@@ -859,7 +853,6 @@ svg.map {
 }
 .tbl-scroll {
   overflow-x: auto;
-  max-width: 44em;
 }
 table.chap {
   border-collapse: collapse;

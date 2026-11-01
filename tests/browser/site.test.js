@@ -312,6 +312,38 @@ describe('site: 受け入れテスト', () => {
     assert.ok(sw <= cw);
     await context.close();
   });
+
+  test('17. 本文の段の幅が路線図の枠の幅にそろう', async () => {
+    for (const width of [1580, 1200]) {
+      const { context, page } = await open({ viewport: { width, height: 900 } });
+      for (const u of [`${CH3}?field=physics`, 'fields/physics/', '']) {
+        await page.goto(server.url + u);
+        const { frame, rows } = await page.evaluate(() => {
+          const edges = (/** @type {Element} */ el) => {
+            const r = el.getBoundingClientRect();
+            return { left: r.left, right: r.right, width: r.width };
+          };
+          const frameEl = [...document.querySelectorAll('.map-scroll')].find((el) => edges(el).width > 0);
+          const column = document.querySelector('.chapter') || document.querySelector('.wrap');
+          return {
+            frame: frameEl ? edges(frameEl) : null,
+            rows: [...(column?.children ?? [])]
+              .map((el) => ({ name: `${el.tagName.toLowerCase()}.${el.className}`, ...edges(el) }))
+              .filter((r) => r.width > 0),
+          };
+        });
+        assert.ok(frame, `${u} (${width}px): 路線図の枠が見えない`);
+        assert.ok(rows.length >= 3, `${u} (${width}px): 段の要素が少ない`);
+        for (const r of rows) {
+          assert.ok(
+            Math.abs(r.left - frame.left) <= 1 && Math.abs(r.right - frame.right) <= 1,
+            `${u} (${width}px): ${r.name} ${r.left}..${r.right} が路線図の枠 ${frame.left}..${frame.right} とそろわない`,
+          );
+        }
+      }
+      await context.close();
+    }
+  });
 });
 
 describe('route-map: 12. ダークテーマの路線の色(ブラウザ)', () => {
