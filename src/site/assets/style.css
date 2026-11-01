@@ -1037,41 +1037,67 @@ svg.map {
   stroke-width: 4;
 }
 
-/* 改善案の起票(site.md「改善案の起票」)。駅の中にポインターかフォーカスがある間だけ見せる。 */
+/* 駅のしおり(site.md「しおり」)と改善案の起票(site.md「改善案の起票」)のアイコン。
+   しおりを左、起票を右に横に並べ、駅の中にポインターかフォーカスがある間だけ見せる。しおりに入れた駅のアイコンは常に見せる。 */
 .chapter > section.station {
   position: relative;
 }
 /* アイコンは駅の最後の子に置く(見出しの前に置くと .flow の余白で見出しがずれる) */
-.chapter > section.station > .issue-rail {
+.chapter > section.station > .st-tools {
   position: absolute;
   top: 0;
   right: 0;
   z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
   margin: 0;
 }
-.issue {
+.issue,
+.bm {
   position: relative;
   display: grid;
   place-items: center;
   width: 34px;
   height: 34px;
+  padding: 0;
   border-radius: 8px;
   color: var(--muted);
   background: var(--surface);
   border: 1px solid var(--rule);
   opacity: 0;
   transition: opacity 0.12s;
+  cursor: pointer;
+}
+.bm[hidden] {
+  display: none;
 }
 .station:hover .issue,
-.station:focus-within .issue {
+.station:focus-within .issue,
+.station:hover .bm,
+.station:focus-within .bm {
   opacity: 1;
 }
 .issue:hover,
-.issue:focus-visible {
+.issue:focus-visible,
+.bm:hover,
+.bm:focus-visible {
   color: var(--accent);
   border-color: var(--accent);
 }
-.issue::after {
+.bm svg path {
+  fill: none;
+}
+.bm[aria-pressed='true'] {
+  opacity: 1;
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.bm[aria-pressed='true'] svg path {
+  fill: currentColor;
+}
+.issue::after,
+.bm::after {
   content: attr(data-tip);
   position: absolute;
   top: calc(100% + 6px);
@@ -1087,26 +1113,30 @@ svg.map {
   opacity: 0;
 }
 .issue:hover::after,
-.issue:focus-visible::after {
+.issue:focus-visible::after,
+.bm:hover::after,
+.bm:focus-visible::after {
   opacity: 1;
 }
 @media (hover: none) {
-  .issue {
+  .issue,
+  .bm {
     opacity: 0.6;
   }
 }
-/* 狭い幅:見出しの行の右端。見出しの文字がアイコンにかからないよう右をあける */
+/* 狭い幅:見出しの行の右端。見出しの文字がアイコンにかからないよう右をあける(アイコン2つ分) */
 .chapter > section.station > h2 {
-  padding-right: 44px;
+  padding-right: 84px;
 }
-/* 本文の段の右に余白がある幅(段の幅 + 80px 以上):駅の右の余白に置き、駅の中では上端のバーの下にとどまる。
+/* 本文の段の右に余白がある幅(段の幅 + 180px 以上):駅の右の余白に置き、駅の中では上端のバーの下にとどまる。
    段の幅は本文の幅の設定で変わるので、設定ごとに幅の条件を分ける(media query には変数を書けない) */
-@media (min-width: 940px) {
-  :root[data-width='narrow'] .chapter > section.station > .issue-rail {
+@media (min-width: 1040px) {
+  :root[data-width='narrow'] .chapter > section.station > .st-tools {
     bottom: 0;
-    right: -52px;
+    right: -92px;
   }
-  :root[data-width='narrow'] .issue {
+  :root[data-width='narrow'] .st-tools > .issue,
+  :root[data-width='narrow'] .st-tools > .bm {
     position: sticky;
     top: 120px;
   }
@@ -1114,12 +1144,13 @@ svg.map {
     padding-right: 0;
   }
 }
-@media (min-width: 1240px) {
-  :root:not([data-width='narrow']):not([data-width='wide']) .chapter > section.station > .issue-rail {
+@media (min-width: 1340px) {
+  :root:not([data-width='narrow']):not([data-width='wide']) .chapter > section.station > .st-tools {
     bottom: 0;
-    right: -52px;
+    right: -92px;
   }
-  :root:not([data-width='narrow']):not([data-width='wide']) .issue {
+  :root:not([data-width='narrow']):not([data-width='wide']) .st-tools > .issue,
+  :root:not([data-width='narrow']):not([data-width='wide']) .st-tools > .bm {
     position: sticky;
     top: 120px;
   }
@@ -1127,12 +1158,13 @@ svg.map {
     padding-right: 0;
   }
 }
-@media (min-width: 1480px) {
-  :root[data-width='wide'] .chapter > section.station > .issue-rail {
+@media (min-width: 1580px) {
+  :root[data-width='wide'] .chapter > section.station > .st-tools {
     bottom: 0;
-    right: -52px;
+    right: -92px;
   }
-  :root[data-width='wide'] .issue {
+  :root[data-width='wide'] .st-tools > .issue,
+  :root[data-width='wide'] .st-tools > .bm {
     position: sticky;
     top: 120px;
   }
@@ -1337,8 +1369,7 @@ table.chap {
   padding-top: 12px;
   border-top: 1px solid var(--rule);
 }
-.settings-actions button,
-.resume button {
+.settings-actions button {
   font: inherit;
   padding: 5px 12px;
   border: 1px solid var(--rule);
@@ -1347,8 +1378,7 @@ table.chap {
   color: var(--ink);
   cursor: pointer;
 }
-.settings-actions button:hover,
-.resume button:hover {
+.settings-actions button:hover {
   border-color: var(--accent);
   color: var(--accent);
 }
@@ -1357,24 +1387,93 @@ table.chap {
   color: var(--muted);
 }
 
-/* しおりの「続きから」の案内(site.md「しおり」) */
-.resume {
-  display: flex;
-  flex-wrap: wrap;
+/* 上端のバーのしおりのボタンと、その下に開くしおりの一覧(site.md「しおり」)。文字は px で書く */
+.bm-open {
+  display: inline-flex;
   align-items: center;
-  gap: 8px 12px;
-  padding: 10px 14px;
+  gap: 4px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 4px 10px 4px 7px;
   border: 1px solid var(--rule);
-  border-left: 4px solid var(--accent);
   border-radius: 8px;
   background: var(--surface);
-  font-size: 0.875rem;
+  color: var(--muted);
+  cursor: pointer;
 }
-.resume-text {
+.bm-open[hidden] {
+  display: none;
+}
+.bm-open svg {
+  width: 16px;
+  height: 16px;
+}
+.bm-open svg path {
+  fill: none;
+}
+.bm-open:hover,
+.bm-open[aria-expanded='true'] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.bm-panel {
+  position: fixed;
+  z-index: 15;
+  width: min(340px, calc(100vw - 32px));
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
+  padding: 12px 14px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.bm-panel h2 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.bm-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.bm-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bm-list a {
   flex: 1 1 auto;
   min-width: 0;
+  padding: 4px 0;
+  color: var(--ink);
 }
-.resume .resume-x {
-  padding: 5px 9px;
+.bm-list a:hover {
+  color: var(--accent);
+}
+.bm-del {
+  flex: none;
+  padding: 2px 8px;
+  font: inherit;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+}
+.bm-del:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.bm-empty {
+  margin: 0;
   color: var(--muted);
 }

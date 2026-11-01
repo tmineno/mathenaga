@@ -25,6 +25,12 @@ const ISSUE_TIP = 'この駅についてGitHub Issueに起票する';
 /** 吹き出しのアイコン */
 const ISSUE_ICON =
   '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M4 4.5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H10l-5 4v-4H4a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8 9.5h8M8 12.5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+const BOOKMARK_TIP = 'この駅をしおりに入れる';
+/** しおりのアイコン(site.md「しおり」)。入れた駅では CSS で塗りつぶす */
+const BOOKMARK_ICON =
+  '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M6.5 3.5h11v17l-5.5-4.2-5.5 4.2z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>';
+/** 上端のバーのしおりのボタン。スクリプトが動くときだけ見せる(app.js) */
+const BOOKMARK_OPEN = `<button type="button" class="bm-open" aria-expanded="false" aria-controls="_bookmarks" hidden>${BOOKMARK_ICON}<span>しおり</span></button>`;
 const BLOCK_LABELS = {
   why: 'なぜ必要か',
   'proof-sketch': '証明の骨格',
@@ -383,6 +389,12 @@ class Renderer {
   /** @param {{ title: string, bodyClass: string, bar: string, main: string }} p */
   page(p) {
     const fields = JSON.stringify(this.site.fields.map((f) => ({ id: f.id, title: f.title }))).replace(/</g, '\\u003c');
+    // しおりの一覧で、駅の ID から表示番号・駅名・章を引くための索引(読む順。site.md「しおり」)
+    const stations = JSON.stringify(
+      this.site.stations
+        .filter((st) => !st.planned)
+        .map((st) => ({ id: st.id, code: st.code, name: st.name, ch: st.chapter.number, chapter: st.chapter.id })),
+    ).replace(/</g, '\\u003c');
     return `<!doctype html>
 <html lang="ja" data-base="${h(this.base)}" data-defs="${h(this.asset('defs.json'))}">
 <head>
@@ -397,6 +409,7 @@ ${FONTS}
 <link rel="stylesheet" href="${this.asset('assets/style.css')}">
 <link rel="stylesheet" href="${this.asset('assets/lines.css')}">
 <script type="application/json" id="_fields">${fields}</script>
+<script type="application/json" id="_stations">${stations}</script>
 <script src="${this.asset('assets/app.js')}" defer></script>
 </head>
 <body class="${p.bodyClass}">
@@ -435,7 +448,7 @@ ${p.main}
     const main = `<section class="intro"><h1 class="logo-h">${this.logoSvg}</h1></section>
 <section class="sec"><h2 class="sec-h">路線図</h2><div class="map-v">${map.html}</div></section>
 <section class="sec"><h2 class="sec-h">分野</h2><ul class="field-list">${fields}</ul></section>`;
-    return this.page({ title: SITE_NAME, bodyClass: 'page-top', bar: this.barStart(''), main });
+    return this.page({ title: SITE_NAME, bodyClass: 'page-top', bar: `${this.barStart('')}${BOOKMARK_OPEN}`, main });
   }
 
   // ---------- 分野の入口ページ ----------
@@ -477,7 +490,7 @@ ${p.main}
     return this.page({
       title: `${f.title} | ${SITE_NAME}`,
       bodyClass: 'page-field',
-      bar: this.barStart('分野の入口'),
+      bar: `${this.barStart('分野の入口')}${BOOKMARK_OPEN}`,
       main,
     });
   }
@@ -507,7 +520,7 @@ ${p.main}
           `<a href="#${h(s.id)}" class="l-${s.lineId}" data-st="${h(s.id)}" data-out="${outFields(s.id).join(' ')}">${h(s.code)}</a>`,
       )
       .join('');
-    const bar = `${this.barStart(`第${c.number}章 ${c.title}`)}<div class="switch" role="group" aria-label="分野">${switchButtons}</div><nav class="mini" aria-label="この章の駅">${mini}</nav>`;
+    const bar = `${this.barStart(`第${c.number}章 ${c.title}`)}<div class="switch" role="group" aria-label="分野">${switchButtons}</div>${BOOKMARK_OPEN}<nav class="mini" aria-label="この章の駅">${mini}</nav>`;
 
     // 見出しと現在地
     const range = this.codeRange(stations);
@@ -660,8 +673,18 @@ ${aheadSec}
     const appHtml = apps.length ? this.versionGroup(c, apps, 'application', '分野での応用') : '';
     return `<section class="station flow" id="${h(st.id)}" data-station="${h(st.id)}" data-loc="${h(st.code)}" data-out="${out.join(' ')}">
 <h2 data-p="0">${this.badge(st)}<span class="st-name">${heading}</span>${shared ? `<span class="en">${h(shared.en)}</span>` : ''}<span class="out-label" hidden>${OUT_OF_SCOPE}</span></h2>
-${notes}${items.join('')}${appHtml}${this.issueLink(c, st)}
+${notes}${items.join('')}${appHtml}${this.stationTools(c, st)}
 </section>`;
+  }
+
+  /**
+   * 駅のしおりのボタン(site.md「しおり」)と起票のリンクを横に並べた置き場。駅の最後の子に置く。
+   * しおりのボタンはスクリプトが動くときだけ見せる(app.js)。
+   * @param {any} c @param {import('../core/graph.js').StationInfo} st
+   */
+  stationTools(c, st) {
+    const bookmark = `<button type="button" class="bm" data-bm="${h(st.id)}" aria-pressed="false" aria-label="${BOOKMARK_TIP}" data-tip="${BOOKMARK_TIP}" hidden>${BOOKMARK_ICON}</button>`;
+    return `<div class="st-tools">${bookmark}${this.issueLink(c, st)}</div>`;
   }
 
   /**
@@ -681,7 +704,7 @@ ${notes}${items.join('')}${appHtml}${this.issueLink(c, st)}
       .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
       .join('&');
     const href = `${this.repoUrl}/issues/new?${params}`;
-    return `<div class="issue-rail"><a class="issue" href="${h(href)}" target="_blank" rel="noopener" aria-label="${ISSUE_TIP}" data-tip="${ISSUE_TIP}" data-page="${h(page)}">${ISSUE_ICON}</a></div>`;
+    return `<a class="issue" href="${h(href)}" target="_blank" rel="noopener" aria-label="${ISSUE_TIP}" data-tip="${ISSUE_TIP}" data-page="${h(page)}">${ISSUE_ICON}</a>`;
   }
 
   /** 現在地の「次の章」。 @param {any} c @param {import('../core/schema.js').Field | null} f */
