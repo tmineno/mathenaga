@@ -65,4 +65,5 @@ MathEnaga は、大学数学を他分野の学生に届ける静的ウェブサ�
 | front matter | 章の md の冒頭にある YAML | — |
 | 見出し属性 | 見出しの末尾に付ける {…} | — |
 | 定義索引 | 全定義をまとめた1つの JSON | defs.json |
-| 基準原稿 | 受け入れテストに使う原稿。`content/` にある10章で、第0章(reading-basics)・第1章(convergence-metric)・第2章(open-sets-continuity)・第3章(completeness-fixed-point)・第4章(norm-inner-product)は完成稿、ほかの章は路線図と検証のための仮原稿。受け入れテストの数値(数式の個数、式番号、通知の件数など)は、第0〜4章を完成稿にした原稿で数え、第0章に集合と写像の駅を足した 2026-11-02 の原稿で数え直した。路線ファイルは [content-format.md](content-format.md) の例のとおり(0番線の `style: dotted`、解析線と幾何線の `color_dark`)である。路線ファイルには、未執筆の章として第10〜13章(解析線に2章、幾何線に2章)と第16・17章(集合線に2章)を planned で書いてある(各3駅)。原稿を書き進めたら、数値を数え直す | `content/` |
+| テスト用原稿 | 受け入れテストで値を確かめるときの入力。2026-11-02 の `content/` を写して固定したもの([ADR-004](../adr/ADR-004-frozen-test-manuscript.md))。原稿を書いても変わらず、変えるのはテストの意図を変えるときだけ。10章で、第0章(reading-basics)・第1章(convergence-metric)・第2章(open-sets-continuity)・第3章(completeness-fixed-point)・第4章(norm-inner-product)は完成稿、ほかの章は路線図と検証のための仮原稿。路線ファイルは [content-format.md](content-format.md) の例のとおり(0番線の `style: dotted`、解析線と幾何線の `color_dark`)である。路線ファイルには、未執筆の章として第10〜13章(解析線に2章、幾何線に2章)と第16・17章(集合線に2章)を planned で書いてある(各3駅) | `tests/fixtures/content/` |
+| 今の原稿 | 書き進めている原稿。受け入れテストでは、値を書かない不変条件だけを確かめる([ADR-004](../adr/ADR-004-frozen-test-manuscript.md)) | `content/` |

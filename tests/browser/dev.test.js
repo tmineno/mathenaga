@@ -9,6 +9,7 @@ import path from 'node:path';
 import { after, test } from 'node:test';
 import { chromium } from 'playwright';
 import { ROOT } from '../../src/build.js';
+import { CONTENT } from '../helpers/fixture.js';
 
 /** リロードまでの上限(ms)。docs/spec/build.md「Performance/Safety」の 5 秒。 */
 const RELOAD_LIMIT_MS = 5000;
@@ -30,7 +31,7 @@ test('19. 保存すると数秒以内に表示が変わり、壊した原稿で�
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mathenaga-dev-'));
   cleanups.push(() => fs.rm(dir, { recursive: true, force: true }));
   await fs.cp(path.join(ROOT, 'src'), path.join(dir, 'src'), { recursive: true });
-  await fs.cp(path.join(ROOT, 'content'), path.join(dir, 'content'), { recursive: true });
+  await fs.cp(CONTENT, path.join(dir, 'content'), { recursive: true });
   await fs.symlink(path.join(ROOT, 'node_modules'), path.join(dir, 'node_modules'), 'dir');
   const port = await freePort();
   const child = spawn(process.execPath, [path.join(dir, 'src/dev/server.js')], {

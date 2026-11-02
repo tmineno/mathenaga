@@ -374,10 +374,10 @@ $$\forall \varepsilon > 0,\ \exists N,\ \forall m, n \ge N: d(x_m, x_n) < \varep
 
 ## Acceptance tests
 
-1. 基準原稿の第3章の banach 駅から proof-sketch を消すと、エラーは E08 の1件だけ(`chapters/03-completeness-fixed-point/index.md` の banach 駅に proof-sketch がない)で、終了コードは 1、`dist/` は変わらない。
-2. 基準原稿をビルドすると、エラーはなく終了コードは 0 である。通知は N01 が理論物理で9駅(cauchy-sequence と contraction を含む)、情報科学で1駅(cauchy-sequence)で、どちらにも第0章の駅は入らない。N02 が第0〜4章以外の5章である。
-3. 基準原稿の第3章で、completeness 駅の定義の中の `[[コーシー列]]` は定義 cauchy-sequence に、章頭の `[[banach|バナッハの不動点定理]]` は駅 banach へのリンクに、banach 駅の定理の中の `[[completeness|完備]]` は定義 completeness に、picard-lindelof 駅の定理の中の `[[一様収束]]` は第1章の定義 uniform-convergence に解決する。
-4. 基準原稿を次のように壊すと、括弧の中のコードのエラーが、壊したファイルと行で出る。
+1. テスト用原稿の第3章の banach 駅から proof-sketch を消すと、エラーは E08 の1件だけ(`chapters/03-completeness-fixed-point/index.md` の banach 駅に proof-sketch がない)で、終了コードは 1、`dist/` は変わらない。
+2. テスト用原稿をビルドすると、エラーはなく終了コードは 0 である。通知は N01 が理論物理で9駅(cauchy-sequence と contraction を含む)、情報科学で1駅(cauchy-sequence)で、どちらにも第0章の駅は入らない。N02 が第0〜4章以外の5章である。
+3. テスト用原稿の第3章で、completeness 駅の定義の中の `[[コーシー列]]` は定義 cauchy-sequence に、章頭の `[[banach|バナッハの不動点定理]]` は駅 banach へのリンクに、banach 駅の定理の中の `[[completeness|完備]]` は定義 completeness に、picard-lindelof 駅の定理の中の `[[一様収束]]` は第1章の定義 uniform-convergence に解決する。
+4. テスト用原稿を次のように壊すと、括弧の中のコードのエラーが、壊したファイルと行で出る。
    1. ある駅の requires に存在しない ID を書く(E05)。
    2. 2つの章に同じ駅の ID を書く(E04)。
    3. 第3章の completeness に `requires=banach` を足す(E06。循環の一覧に completeness と banach が入る)。

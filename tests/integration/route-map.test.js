@@ -48,7 +48,7 @@ const PROBABILITY =
   '- id: probability\n  code: P\n  name: 確率線\n  color: "#B5562A"\n  layout: down\n  planned:\n    - chapter: 14\n      title: 測度と確率\n      stations: [測度空間, 積分, 確率空間]\n';
 
 /**
- * 基準原稿の路線ファイルを書き換えた一時ディレクトリ。
+ * テスト用原稿の路線ファイルを書き換えた一時ディレクトリ。
  * @param {(t: string) => string} fn
  */
 async function rootWithLines(fn) {

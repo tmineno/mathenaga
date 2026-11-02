@@ -31,7 +31,7 @@ function expectError(errors, code, file) {
   return hit;
 }
 
-/** 基準原稿の路線ファイルにある、未執筆の第10章の行 */
+/** テスト用原稿の路線ファイルにある、未執筆の第10章の行 */
 const PLANNED_10 = '    - chapter: 10\n';
 const STATIONS_10 = '      stations: [有界作用素, 双対空間, 随伴作用素]\n';
 
@@ -51,7 +51,7 @@ describe('content-format: 受け入れテスト', () => {
     assert.equal(await fs.readFile(path.join(root, 'dist', 'marker.txt'), 'utf8'), 'before');
   });
 
-  test('2. 基準原稿はエラーなしで通り、通知は N01 と N02 だけ', async () => {
+  test('2. テスト用原稿はエラーなしで通り、通知は N01 と N02 だけ', async () => {
     const { result } = await referenceBuild();
     assert.deepEqual(result.errors, []);
     assert.equal(result.written, true);

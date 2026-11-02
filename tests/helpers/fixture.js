@@ -1,4 +1,4 @@
-// テストの補助:基準原稿を一時ディレクトリにコピーして書き換え、ビルドする。
+// テストの補助:テスト用原稿(tests/fixtures/content/。ADR-004)を一時ディレクトリにコピーして書き換え、ビルドする。
 
 import fs from 'node:fs/promises';
 import http from 'node:http';
@@ -7,7 +7,8 @@ import path from 'node:path';
 import { analyze, build, ROOT } from '../../src/build.js';
 import { createStaticHandler } from '../../src/dev/static.js';
 
-export const CONTENT = path.join(ROOT, 'content');
+/** テスト用原稿。content/ の写しを固定したもの(ADR-004)。値を確かめるテストはこれを入力にする。 */
+export const CONTENT = path.join(ROOT, 'tests/fixtures/content');
 export const CH3 = 'chapters/03-completeness-fixed-point/index.md';
 
 /**
@@ -84,22 +85,22 @@ export function statements(text) {
   return out;
 }
 
-/** 基準原稿の章(content/ からの相対パス)の定義と定理を、書いた順に集める。 @param {string} rel */
+/** テスト用原稿の章(content/ からの相対パス)の定義と定理を、書いた順に集める。 @param {string} rel */
 export async function statementsIn(rel) {
   return statements(await fs.readFile(path.join(CONTENT, rel), 'utf8'));
 }
 
-/** 基準原稿の章(content/ からの相対パス)の定義の ID を集める。 @param {string} rel */
+/** テスト用原稿の章(content/ からの相対パス)の定義の ID を集める。 @param {string} rel */
 export async function definitionIdsIn(rel) {
   return definitionIds(await fs.readFile(path.join(CONTENT, rel), 'utf8'));
 }
 
-/** 基準原稿の章(content/ からの相対パス)の数式を数える。 @param {string} rel */
+/** テスト用原稿の章(content/ からの相対パス)の数式を数える。 @param {string} rel */
 export async function countMathIn(rel) {
   return countMath(await fs.readFile(path.join(CONTENT, rel), 'utf8'));
 }
 
-/** 基準原稿をコピーした一時ディレクトリを作る。中に content/ がある。 */
+/** テスト用原稿をコピーした一時ディレクトリを作る。中に content/ がある。 */
 export async function tempRoot() {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mathenaga-test-'));
   await fs.cp(CONTENT, path.join(dir, 'content'), { recursive: true });
@@ -234,7 +235,7 @@ export async function errorsAfter(mutate) {
   }
 }
 
-/** 基準原稿のビルド結果(テストのあいだ共有する)。 */
+/** テスト用原稿のビルド結果(テストのあいだ共有する)。 */
 let shared = null;
 /** @param {string} [basePath] */
 export async function referenceBuild(basePath = '/') {

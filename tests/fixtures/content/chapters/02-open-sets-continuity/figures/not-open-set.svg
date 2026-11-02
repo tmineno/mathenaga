@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="300" viewBox="0 0 360 300" role="img" aria-label="開集合でない F:境目の点 b を含むので、b を中心とする開球 B(b, r) は、r をどれほど小さくしても F の外の点を含む"><style>
+.jp{font-family:'Hiragino Kaku Gothic ProN','Noto Sans JP','Yu Gothic',sans-serif;fill:#18202e}
+.m{font-family:'Times New Roman','Noto Serif',serif;font-style:italic}
+.up{font-style:normal}
+.sub{font-size:12px;fill:#596377}
+.set{fill:#ece8fa}
+.edge-open{fill:none;stroke:#5b45b8;stroke-width:2;stroke-dasharray:6 5}
+.edge-closed{fill:none;stroke:#5b45b8;stroke-width:2.5}
+.ball{fill:#5b45b8;fill-opacity:.16;stroke:#5b45b8;stroke-width:1.5;stroke-dasharray:4 3}
+.out{fill:#fbeedf;stroke:#a3560f;stroke-width:1.5;stroke-dasharray:4 3}
+.warn{fill:#a3560f}
+.ink{fill:#18202e}
+.line{stroke:#18202e;stroke-width:1.2;fill:none}
+.lead{stroke:#596377;stroke-width:1;fill:none}
+@media (prefers-color-scheme:dark){
+.jp{fill:#e4e8ef}.sub{fill:#a0a9b9}.set{fill:#221d38}
+.edge-open,.edge-closed{stroke:#aa98f2}.ball{fill:#aa98f2;stroke:#aa98f2}
+.out{fill:#31230f;stroke:#e69c59}.warn{fill:#e69c59}.ink{fill:#e4e8ef}.line{stroke:#e4e8ef}.lead{stroke:#a0a9b9}}</style><defs><clipPath id="ball"><circle cx="52" cy="150" r="30"/></clipPath></defs>
+<text class="jp" x="180" y="26" text-anchor="middle" font-size="16" font-weight="700">開集合でない <tspan class="m">F</tspan></text>
+<text class="jp sub" x="180" y="46" text-anchor="middle">境目(実線)の点 <tspan class="m">b</tspan> を <tspan class="m">F</tspan> に含む</text>
+<g transform="translate(14 0)">
+<path class="set" d="M 52 150 C 52 74 140 52 204 70 C 274 90 312 138 292 198 C 272 258 172 268 108 244 C 68 228 52 198 52 150 Z"/>
+<circle class="out" cx="52" cy="150" r="30" style="stroke:none"/>
+<path class="set" d="M 52 150 C 52 74 140 52 204 70 C 274 90 312 138 292 198 C 272 258 172 268 108 244 C 68 228 52 198 52 150 Z" clip-path="url(#ball)"/>
+<path class="ball" d="M 52 150 C 52 74 140 52 204 70 C 274 90 312 138 292 198 C 272 258 172 268 108 244 C 68 228 52 198 52 150 Z" clip-path="url(#ball)" style="stroke:none"/>
+<circle class="out" cx="52" cy="150" r="30" style="fill:none"/>
+<path class="edge-closed" d="M 52 150 C 52 74 140 52 204 70 C 274 90 312 138 292 198 C 272 258 172 268 108 244 C 68 228 52 198 52 150 Z"/>
+<circle class="ink" cx="52" cy="150" r="3.5"/>
+<text class="jp m" x="60" y="155" font-size="16">b</text>
+<text class="jp m" x="28" y="112" font-size="14">B<tspan class="up">(</tspan>b<tspan class="up">, </tspan>r<tspan class="up">)</tspan></text>
+<path class="lead" d="M 32 166 L 30 236"/>
+<text class="jp warn" x="4" y="252" font-size="13">はみ出す部分</text>
+</g>
+<text class="jp sub" x="180" y="294" text-anchor="middle"><tspan class="m">r</tspan> をどれほど小さくしても、外の点を含む</text></svg>
