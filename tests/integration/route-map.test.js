@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { after, describe, test } from 'node:test';
-import { layoutBoxes, layoutMap, mapDescription, wrapLabel } from '../../src/core/map.js';
+import { layoutMap, mapDescription, wrapLabel } from '../../src/core/map.js';
 import {
   MERGE_LINE,
   addFinalGoal,
@@ -18,6 +18,7 @@ import {
   replaceOnce,
   tempRoot,
 } from '../helpers/fixture.js';
+import { assertNoOverlap } from '../helpers/map-checks.js';
 
 const roots = [];
 after(async () => {
@@ -48,7 +49,7 @@ const PROBABILITY =
   '- id: probability\n  code: P\n  name: 確率線\n  color: "#B5562A"\n  layout: down\n  planned:\n    - chapter: 14\n      title: 測度と確率\n      stations: [測度空間, 積分, 確率空間]\n';
 
 /**
- * 基準原稿の路線ファイルを書き換えた一時ディレクトリ。
+ * テスト用原稿の路線ファイルを書き換えた一時ディレクトリ。
  * @param {(t: string) => string} fn
  */
 async function rootWithLines(fn) {
@@ -592,50 +593,6 @@ describe('route-map: 駅名の折り返し', () => {
     assert.deepEqual(wrapLabel('記号の読み方'), ['記号の読み方']);
   });
 });
-
-/**
- * @param {string} name
- * @param {any} layout
- */
-function assertNoOverlap(name, layout) {
-  const { boxes, segments } = layoutBoxes(layout);
-  const shrink = (/** @type {any} */ b) => ({ ...b, x: b.x + 0.5, y: b.y + 0.5, w: b.w - 1, h: b.h - 1 });
-  const hit = (/** @type {any} */ a, /** @type {any} */ b) =>
-    a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
-  for (let i = 0; i < boxes.length; i++) {
-    for (let j = i + 1; j < boxes.length; j++) {
-      const a = shrink(boxes[i]);
-      const b = shrink(boxes[j]);
-      assert.ok(!hit(a, b), `${name}: ${a.kind}(${a.owner}) と ${b.kind}(${b.owner}) が重なる`);
-    }
-  }
-  const stationAt = new Map(layout.stations.map((s) => [`${s.x},${s.y}`, s.info.id]));
-  for (const seg of segments) {
-    const ends = new Set([stationAt.get(`${seg.x1},${seg.y1}`), stationAt.get(`${seg.x2},${seg.y2}`)]);
-    for (const b of boxes) {
-      if (b.kind === 'plate' && ends.has(b.owner)) continue;
-      if (b.kind === 'plate' && seg.y1 === seg.y2 && seg.y1 === b.y + b.h / 2 && onRow(layout, b.owner, seg)) continue;
-      assert.ok(!segmentHitsBox(seg, shrink(b)), `${name}: 線(${seg.lineId}) が ${b.kind}(${b.owner}) に重なる`);
-    }
-  }
-}
-
-/** 水平の線が、同じ段の自分の路線の駅を通るのはよい。 @param {any} layout @param {string} id @param {any} seg */
-function onRow(layout, id, seg) {
-  const s = layout.stations.find((x) => x.info.id === id);
-  return s && s.info.lineId === seg.lineId;
-}
-
-/** @param {{ x1: number, y1: number, x2: number, y2: number }} s @param {{ x: number, y: number, w: number, h: number }} b */
-function segmentHitsBox(s, b) {
-  const steps = 64;
-  for (let i = 0; i <= steps; i++) {
-    const x = s.x1 + ((s.x2 - s.x1) * i) / steps;
-    const y = s.y1 + ((s.y2 - s.y1) * i) / steps;
-    if (x > b.x && x < b.x + b.w && y > b.y && y < b.y + b.h) return true;
-  }
-  return false;
-}
 
 describe('route-map: 前提の輪', () => {
   test('前提が輪になった原稿でも、分岐駅を決めるところで止まらず E06 を返す', async () => {
