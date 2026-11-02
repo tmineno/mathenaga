@@ -5,14 +5,14 @@ line: reading
 ---
 
 ::: goal
-定義や定理を記号のまま正確に読み下し、証明のどこで仮定が使われているかを追えるようになる。
+定義や定理を記号のまま正確に読み下し、証明のどこで仮定が使われているかを追えるようになる。また、集合の演算と写像の言葉(単射・全射・全単射)を使って、この先の定義を読めるようになる。
 :::
 
 ::: motivation
 大学の数学の教科書は、$\forall \varepsilon > 0\ \exists \delta > 0$ のような記号の列と、決まった型の証明で書かれています。記号の列は、読み方を知っていれば、ふつうの日本語の文に戻せます。証明も、型を知っていれば、要点がどこにあるかの見当がつきます。
 :::
 
-この章では、記号の読み方と、定義・定理・証明の読み方を順に扱います。ここで身につけた読み方は、[[@convergence-metric]] 以降のすべての章で使います。
+この章では、記号の読み方([[@reading-symbols]])と、定義・定理・証明の読み方([[@reading-proofs]])を順に扱います。ここで身につけた読み方は、[[@convergence-metric]] 以降のすべての章で使います。最後に、この先の章で使う集合と写像の言葉をまとめて定めます([[@sets-maps]])。
 
 ## 記号の読み方 {#reading-symbols}
 
@@ -114,7 +114,7 @@ $$
 | $A := B$ | $A$ を $B$ で定める | 左辺を、右辺の意味で新しく使う |
 | $P :\iff Q$ | $P$ を $Q$ で定める | 左辺の主張を、右辺と同じ意味として新しく使う |
 
-このサイトでは、$A \subset B$ を $A = B$ の場合も含めて使います。本によっては、これを $A \subseteq B$ と書き、$A \subset B$ を $A \ne B$ の場合に限ることがあります。
+このサイトでは、$A \subset B$ を $A = B$ の場合も含めて使います。本によっては、これを $A \subseteq B$ と書き、$A \subset B$ を $A \ne B$ の場合に限ることがあります。集合を組み合わせる操作と写像の種類は、[[@sets-maps]] で扱います。
 
 数学では、集合に「近さ」や「足し算」のような仕組みを加えたものを空間 (space) と呼び、その要素を、数や関数であっても点と呼びます。距離空間・ノルム空間・内積空間・位相空間のように、どんな仕組みを加えたかで名前が付きます。
 
@@ -180,12 +180,220 @@ $$
 $P \Rightarrow Q$ が正しくても、逆の $Q \Rightarrow P$ が正しいとは限りません。たとえば「収束する数列は有界である」は正しい主張ですが、逆の「有界な数列は収束する」は正しくありません。$(-1)^n$ は有界ですが収束しません。一方、対偶の「有界でない数列は収束しない」は、もとの主張と同値なので正しい主張です。
 :::
 
+## 集合と写像 {#sets-maps requires=reading-proofs}
+
+::: summary
+集合を組み合わせて新しい集合を作る操作と、写像が要素をどう対応させるかを区別する言葉。
+:::
+
+::: why
+[[@reading-symbols]] では、$x \in A$ や $f: X \to Y$ のような記号の読み方だけを見ました。この先の章では、集合や写像を組み合わせて新しい対象を作ります。開集合をいくつも集めた和集合を考え([[@open-set]])、部分集合の集まりで位相を定め([[@topological-space]])、二つの空間が「同じ形」であることを、要素どうしを過不足なく対応させる写像で述べます([[@homeomorphism]])。無限集合の大きさを比べるときにも、同じ種類の写像を使います。この駅では、そのための言葉をまとめて定めます。
+:::
+
+### 和集合・共通部分・補集合
+
+集合 $A$ の要素がどれも集合 $X$ の要素であるとき($A \subset X$ のとき)、$A$ を $X$ の部分集合 (subset) と呼びます。二つの集合が等しいとは、同じ要素をもつこと、つまり $A \subset B$ かつ $B \subset A$ であることです。この節では、考える集合はどれも、ある集合 $X$ の部分集合とします。実数の区間を考えるときは $X = \mathbb{R}$ です。
+
+$X$ の部分集合 $A$、$B$ からは、次の集合が作れます。
+
+$$
+A \cup B := \{x \in X \mid x \in A \lor x \in B\}, \qquad A \cap B := \{x \in X \mid x \in A \land x \in B\}, \qquad A \setminus B := \{x \in X \mid x \in A \land x \notin B\}
+$$
+
+$A \cup B$ を和集合 (union)、$A \cap B$ を共通部分 (intersection)、$A \setminus B$ を差集合 (difference) と呼びます。
+
+集合をいくつも、ときには無限個集めて扱うときは、集めた集合に名札を付けます。集合 $\Lambda$ の各要素 $\lambda$ に、$X$ の部分集合 $A_\lambda$ が一つずつ決まっているとき、これを集合族 (family of sets) と呼び、$(A_\lambda)_{\lambda \in \Lambda}$ と書きます。$\Lambda$ を添字の集合 (index set) と呼び、無限集合でもかまいません。
+
+::: definition {#union name="和集合" en="union"}
+集合族 $(A_\lambda)_{\lambda \in \Lambda}$ について、
+
+$$
+\bigcup_{\lambda \in \Lambda} A_\lambda := \{x \in X \mid \exists \lambda \in \Lambda: x \in A_\lambda\}
+$$
+
+をその和集合という。
+:::
+
+::: definition {#intersection name="共通部分" en="intersection"}
+集合族 $(A_\lambda)_{\lambda \in \Lambda}$ について、
+
+$$
+\bigcap_{\lambda \in \Lambda} A_\lambda := \{x \in X \mid \forall \lambda \in \Lambda: x \in A_\lambda\}
+$$
+
+をその共通部分という。
+:::
+
+::: definition {#complement name="補集合" en="complement"}
+$X$ の部分集合 $A$ について、$X \setminus A = \{x \in X \mid x \notin A\}$ を $A$ の補集合という。
+:::
+
+和集合は「少なくとも一つの $A_\lambda$ に属する」点、共通部分は「すべての $A_\lambda$ に属する」点の集まりです。和集合には $\exists$ が、共通部分には $\forall$ が対応します。$\Lambda = \{1, 2\}$ なら、和集合は $A_1 \cup A_2$、共通部分は $A_1 \cap A_2$ です。
+
+::: examples
+- $X = \mathbb{R}$、$A = [0, 2]$、$B = (1, 3)$ とすると、$A \cup B = [0, 3)$、$A \cap B = (1, 2]$、$A \setminus B = [0, 1]$、$A$ の補集合は $(-\infty, 0) \cup (2, \infty)$ です。
+- 正の整数 $n$ を添字とする族 $A_n = [1/n, 1]$ の和集合は $(0, 1]$ です。$0 < x \le 1$ をみたす $x$ は、$1/n \le x$ となる $n$ をとれば $A_n$ に属し、$0$ 以下の数と $1$ より大きい数は、どの $A_n$ にも属しません。共通部分は $\{1\}$ です。$A_1 = \{1\}$ で、$1$ はどの $A_n$ にも属するからです。
+:::
+
+補集合をとると、和集合は共通部分に、共通部分は和集合に変わります。
+
+::: theorem {#de-morgan-sets name="集合のド・モルガンの法則"}
+$X$ の部分集合の族 $(A_\lambda)_{\lambda \in \Lambda}$ について、次が成り立つ。
+
+$$
+X \setminus \bigcup_{\lambda \in \Lambda} A_\lambda = \bigcap_{\lambda \in \Lambda} (X \setminus A_\lambda), \qquad X \setminus \bigcap_{\lambda \in \Lambda} A_\lambda = \bigcup_{\lambda \in \Lambda} (X \setminus A_\lambda)
+$$
+:::
+
+::: proof-sketch
+1. $x \in X$ が左の式の左辺に属することは、「$\exists \lambda \in \Lambda: x \in A_\lambda$」の否定と同じである(和集合と補集合の定義を使う)。
+2. その否定は「$\forall \lambda \in \Lambda: x \notin A_\lambda$」で、これは $x$ が左の式の右辺に属することと同じである(量化子を含む主張の否定と、共通部分の定義を使う)。
+3. 右の式も、和集合と共通部分の役割を逆にして同じように示せる(1、2 と同じ定義と否定の規則を使う)。
+:::
+
+::: proof
+$x \in X$ を任意にとります。和集合と補集合の定義から、$x \in X \setminus \bigcup_{\lambda \in \Lambda} A_\lambda$ は「$\exists \lambda \in \Lambda: x \in A_\lambda$ でない」ということです。量化子を取り替えて否定を作ると([[@reading-symbols]]。範囲を付けた $\exists \lambda \in \Lambda$ も、略記を戻して否定を作ると同じ規則に従います)、これは「$\forall \lambda \in \Lambda: x \notin A_\lambda$」、つまり「すべての $\lambda \in \Lambda$ について $x \in X \setminus A_\lambda$」と同値です。共通部分の定義から、これは $x \in \bigcap_{\lambda \in \Lambda} (X \setminus A_\lambda)$ ということです。$x$ は任意だったので、左の式の両辺は同じ要素をもち、等しくなります。
+
+右の式も同じです。$x \in X \setminus \bigcap_{\lambda \in \Lambda} A_\lambda$ は「$\forall \lambda \in \Lambda: x \in A_\lambda$ でない」ということで、量化子を取り替えると「$\exists \lambda \in \Lambda: x \notin A_\lambda$」、すなわち $x \in \bigcup_{\lambda \in \Lambda} (X \setminus A_\lambda)$ と同値です。
+:::
+
+この法則を使うと、開集合についての性質を、補集合をとって閉集合についての性質に言い換えられます([[@open-set]])。
+
+### 直積と冪集合
+
+::: definition {#product name="直積" en="Cartesian product" aliases="直積集合"}
+集合 $X$、$Y$ について、$x \in X$ と $y \in Y$ の組 $(x, y)$ の全体
+
+$$
+X \times Y := \{(x, y) \mid x \in X \land y \in Y\}
+$$
+
+を $X$ と $Y$ の直積という。組どうしは $(x, y) = (x', y') :\iff x = x' \land y = y'$ で等しいとする。
+:::
+
+組 $(x, y)$ は並び順を区別します。$X = Y$ のときも、$x \ne y$ なら $(x, y) \ne (y, x)$ です。平面 $\mathbb{R}^2 = \mathbb{R} \times \mathbb{R}$ は実数の組の集合で、同じように $m$ 個の実数の組を集めた集合が $\mathbb{R}^m$ です。[[@metric-space]] の距離 $d: X \times X \to \mathbb{R}$ は、点の組に実数を一つ対応させる写像です。
+
+::: definition {#power-set name="冪集合" en="power set"}
+集合 $X$ について、$X$ の部分集合の全体
+
+$$
+\mathcal{P}(X) := \{A \mid A \subset X\}
+$$
+
+を $X$ の冪集合という。
+:::
+
+$X = \{1, 2\}$ なら、$\mathcal{P}(X) = \{\emptyset, \{1\}, \{2\}, \{1, 2\}\}$ で、要素は 4 個です。$\emptyset$ と $X$ 自身も $X$ の部分集合なので、要素に入ります。$X$ の要素が $n$ 個なら、要素ごとに「部分集合に入れるか、入れないか」の2通りを選ぶので、$\mathcal{P}(X)$ の要素は $2^n$ 個です。冪集合を $2^X$ と書く本もあります。[[@topological-space]] の位相は、$\mathcal{P}(X)$ の部分集合として定めます。
+
+### 写像
+
+写像 (map) $f: X \to Y$ は、$X$ の各要素 $x$ に、$Y$ の要素 $f(x)$ を一つずつ対応させます。$X$ を定義域 (domain)、$Y$ を終域 (codomain) と呼びます。写像は、定義域・終域・対応のさせ方の三つで決まります。対応のさせ方が同じでも、定義域か終域が違えば別の写像とみなします。
+
+::: definition {#image name="像" en="image"}
+写像 $f: X \to Y$ と $X$ の部分集合 $A$ について、$f(A) := \{y \in Y \mid \exists x \in A: y = f(x)\}$ を、$f$ による $A$ の像という。
+:::
+
+反対向きに、$Y$ の部分集合を $X$ へ引き戻す逆像は、[[@preimage]] で定めます。
+
+::: definition {#composition name="合成" en="composition"}
+写像 $f: X \to Y$ と $g: Y \to Z$ について、$x \in X$ を $g(f(x))$ に写す写像 $g \circ f: X \to Z$ を、$f$ と $g$ の合成という。
+:::
+
+::: definition {#identity-map name="恒等写像" en="identity map"}
+集合 $X$ の各要素 $x$ を $x$ 自身に写す写像を、$X$ の恒等写像といい、$\mathrm{id}_X$ と書く。
+:::
+
+$g \circ f$ は「$f$ を施してから $g$ を施す」写像で、右に書いた写像が先です。合成が定まるのは、$f$ の終域が $g$ の定義域と一致するときです。
+
+::: definition {#injection name="単射" en="injection"}
+写像 $f: X \to Y$ が単射であるとは、次が成り立つことをいう。
+
+$$
+\forall x, x' \in X:\quad f(x) = f(x') \Rightarrow x = x'
+$$
+:::
+
+::: definition {#surjection name="全射" en="surjection"}
+写像 $f: X \to Y$ が全射であるとは、次が成り立つことをいう。
+
+$$
+\forall y \in Y\ \ \exists x \in X:\quad f(x) = y
+$$
+:::
+
+::: definition {#bijection name="全単射" en="bijection"}
+単射かつ全射である写像を、全単射という。
+:::
+
+単射の条件は、対偶をとると「$x \ne x'$ なら $f(x) \ne f(x')$」で、異なる要素を同じ値に写さないことです。全射の条件は、$Y$ のどの要素も何かの値になっていること、つまり $f(X) = Y$ です。全単射は、$X$ の要素と $Y$ の要素が、もれなく、重ならずに一つずつ対応していることを表します。
+
+::: examples
+- $f: \mathbb{R} \to \mathbb{R}$、$f(x) = 2x + 1$ は全単射です。$f(x) = f(x')$ なら $2x + 1 = 2x' + 1$ から $x = x'$ で、$y \in \mathbb{R}$ には $x = (y - 1)/2$ が $f(x) = y$ をみたします。
+- $f: \mathbb{R} \to \mathbb{R}$、$f(x) = x^2$ は単射でも全射でもありません。$f(-1) = f(1)$ で、$-1$ はどの $x$ の値にもならないからです。定義域と終域を $[0, \infty)$ にした $[0, \infty) \to [0, \infty)$、$x \mapsto x^2$ は全単射です。
+- 指数関数 $\exp: \mathbb{R} \to \mathbb{R}$ は単射ですが、値は正の数だけなので全射ではありません。終域を $(0, \infty)$ にすると全単射になります。
+- $A \subset X$ のとき、$a \in A$ を $a$ 自身に写す写像 $A \to X$ を包含写像 (inclusion map) と呼びます。包含写像は単射で、$A \ne X$ なら全射ではありません。
+- 直積から $p(x, y) = x$ で定める $p: X \times Y \to X$ を射影 (projection) と呼びます。$Y$ が空でなければ $p$ は全射です。$x \in X$ に対して $Y$ の要素 $y$ を一つ選べば $p(x, y) = x$ だからです。$Y = \emptyset$ なら $X \times Y = \emptyset$ なので、$X$ が空でないかぎり全射ではありません。
+- 正の整数 $n$ を $2n$ に写す写像は、正の整数全体から正の偶数全体への全単射です。正の偶数全体は、正の整数全体の一部で、全体と等しくはありません。それでも、二つのあいだには要素を過不足なく対応させる写像があります。有限集合では、全体と等しくない部分集合と全体のあいだに、全単射はありません。
+:::
+
+### 逆写像
+
+::: definition {#inverse-map name="逆写像" en="inverse map"}
+写像 $f: X \to Y$ について、写像 $g: Y \to X$ が
+
+$$
+g \circ f = \mathrm{id}_X, \qquad f \circ g = \mathrm{id}_Y
+$$
+
+をみたすとき、$g$ を $f$ の逆写像という。
+:::
+
+$g$ は、$f$ で写した点をもとに戻し、$f$ も、$g$ で写した点をもとに戻します。上の例の $f(x) = 2x + 1$ では $g(y) = (y - 1)/2$ が逆写像で、$g(f(x)) = (2x + 1 - 1)/2 = x$、$f(g(y)) = 2 \cdot (y - 1)/2 + 1 = y$ です。どんな写像に逆写像があるかは、次の定理が答えます。
+
+::: theorem {#bijection-inverse name="全単射と逆写像"}
+写像 $f: X \to Y$ について、次の二つは同値である。
+
+1. $f$ は全単射である。
+2. $f$ は逆写像をもつ。
+:::
+
+::: proof-sketch
+1. 条件 2 を仮定し、逆写像を $g$ とする。$f(x) = f(x')$ なら、$g$ で写して $x = g(f(x)) = g(f(x')) = x'$ となるので、$f$ は単射である($g \circ f = \mathrm{id}_X$ を使う)。
+2. $y \in Y$ について $x := g(y)$ とおくと $f(x) = f(g(y)) = y$ なので、$f$ は全射である($f \circ g = \mathrm{id}_Y$ を使う)。
+3. 条件 1 を仮定する。各 $y \in Y$ について、$f(x) = y$ となる $x \in X$ がちょうど一つあるので、それを $g(y)$ と定める(全射であることと単射であることを使う)。
+4. 定め方から $f(g(y)) = y$ である。$x \in X$ について、$g(f(x))$ は $f(x') = f(x)$ をみたすただ一つの $x'$ で、$x$ 自身がこれをみたすので、$g(f(x)) = x$ である(3 の「ただ一つ」、つまり単射であることを使う)。
+:::
+
+::: proof
+**条件 2 から条件 1.** $f$ が逆写像 $g$ をもつとします。$x, x' \in X$ が $f(x) = f(x')$ をみたせば、両辺を $g$ で写して $g(f(x)) = g(f(x'))$ で、$g \circ f = \mathrm{id}_X$ から $x = x'$ です。よって $f$ は単射です。また、$y \in Y$ を任意にとって $x := g(y)$ とおくと、$f \circ g = \mathrm{id}_Y$ から $f(x) = f(g(y)) = y$ です。よって $f$ は全射です。
+
+**条件 1 から条件 2.** $f$ が全単射だとします。$y \in Y$ を任意にとると、全射なので $f(x) = y$ となる $x \in X$ があり、単射なので、そのような $x$ はただ一つです($f(x) = f(x') = y$ なら $x = x'$)。この $x$ を $g(y)$ と書くと、写像 $g: Y \to X$ が定まり、定め方から、すべての $y \in Y$ について $f(g(y)) = y$、すなわち $f \circ g = \mathrm{id}_Y$ です。次に、$x \in X$ を任意にとり、$y := f(x)$ とおきます。$g(y)$ は $f(x') = y$ をみたすただ一つの $x'$ で、$x$ 自身がこれをみたすので、$g(f(x)) = g(y) = x$ です。よって $g \circ f = \mathrm{id}_X$ で、$g$ は $f$ の逆写像です。
+:::
+
+::: drop-assumption
+**「単射」を外す。** $f: \mathbb{R} \to [0, \infty)$、$f(x) = x^2$ は全射ですが、単射ではありません。$g(y) = \sqrt{y}$ とすると、すべての $y \ge 0$ で $f(g(y)) = y$ ですが、$g(f(-1)) = \sqrt{1} = 1$ なので $g \circ f \ne \mathrm{id}_{\mathbb{R}}$ です。証明の3段目で、$y = 1$ に対して $f(x) = 1$ となる $x$ が $1$ と $-1$ の二つあります。どちらを $g(1)$ に選んでも、もう一方の $x$ では $g(f(x)) = x$ が成り立ちません。
+
+**「全射」を外す。** $\exp: \mathbb{R} \to \mathbb{R}$ は単射ですが、全射ではありません。$y > 0$ で $g(y) = \log y$、$y \le 0$ で $g(y) = 0$ と定めると、すべての $x$ で $g(\exp(x)) = x$ ですが、$\exp(g(-1)) = \exp(0) = 1$ なので $\exp \circ g \ne \mathrm{id}_{\mathbb{R}}$ です。証明の3段目で、$y = -1$ に対して $\exp(x) = -1$ となる $x$ がないので、$g(-1)$ をどう決めても $\exp(g(-1)) = -1$ にはなりません。
+:::
+
+逆写像は、あればただ一つです。$g$ と $g'$ がどちらも $f$ の逆写像なら、$g = g \circ \mathrm{id}_Y = g \circ (f \circ g') = (g \circ f) \circ g' = \mathrm{id}_X \circ g' = g'$ だからです(3つ目の等号は、どちらの辺も $y$ を $g(f(g'(y)))$ に写すことによる)。そこで、全単射 $f$ の逆写像を $f^{-1}$ と書きます。
+
+::: pitfall
+- 記号 $f^{-1}$ には二つの意味があります。逆像 $f^{-1}(V)$([[@preimage]])はどんな写像にも定まりますが、逆写像 $f^{-1}$ は全単射にしかありません。$f$ が全単射なら、逆像 $f^{-1}(V)$ と、逆写像 $f^{-1}$ による $V$ の像は同じ集合になるので、記号が重なっても食い違いは起きません。
+- 単射か、全射かは、定義域と終域によって変わります。上の例の $x \mapsto x^2$ は、$\mathbb{R} \to \mathbb{R}$ では単射でも全射でもなく、$[0, \infty) \to [0, \infty)$ では全単射です。写像が全射かどうかを問うときは、終域を確かめます。
+- 「1対1の写像」(one-to-one map)は単射の意味で、「1対1対応」(one-to-one correspondence)は全単射の意味で使われます。紛らわしいので、このサイトでは単射・全射・全単射と書きます。
+- 添字の集合 $\Lambda$ が空集合のとき、和集合は $\emptyset$、共通部分は $X$ になります。$\exists \lambda \in \emptyset$ の主張はいつも偽で、$\forall \lambda \in \emptyset$ の主張はいつも真だからです([[@reading-symbols]] の落とし穴)。
+:::
+
 ::: review
 - 命題と述語を区別し、論理結合子と量化子で書かれた式を日本語に読み下せる。含意 $P \Rightarrow Q$ の真理値表を言える。
 - $\forall$ と $\exists$ を日本語に読み下し、順番を入れ替えると主張が変わる場合があることを例で説明できる。
 - 量化子を含む主張の否定を作れる。
 - 定理を仮定と結論に分け、証明のどこで各仮定が使われているかを追える。
 - 逆と対偶の違いを説明でき、場合分け・対偶・背理法・数学的帰納法の型を見分けられる。
+- 集合族の和集合と共通部分を $\exists$ と $\forall$ で書き、補集合についてのド・モルガンの法則を、量化子を含む主張の否定から導ける。
+- 直積と冪集合を、要素の少ない集合で書き出せる。
+- 写像が単射か全射かを、定義域と終域に注意して判定でき、全単射であることと逆写像をもつことが同値であることを証明できる。
 :::
 
 ::: question
@@ -218,4 +426,20 @@ $P \Rightarrow Q$ が正しくても、逆の $Q \Rightarrow P$ が正しいと�
 
 ::: answer
 $\neg(P \Rightarrow Q)$ は $P \land \neg Q$ です。ただし「$x^2 = 4 \Rightarrow x = 2$」をすべての実数 $x$ についての主張($\forall x$ が省略されている)と読むと、否定は「ある実数 $x$ について $x^2 = 4$ かつ $x \ne 2$」です。$x = -2$ がそうなので、否定の方が正しく、もとの主張は誤りです。
+:::
+
+::: question
+写像 $f: X \to Y$ と $g: Y \to Z$ について、$f$ と $g$ がどちらも単射なら $g \circ f$ も単射であること、どちらも全射なら $g \circ f$ も全射であることを示してください。
+:::
+
+::: answer
+単射について:$x, x' \in X$ が $g(f(x)) = g(f(x'))$ をみたすとします。$g$ が単射なので $f(x) = f(x')$ で、$f$ が単射なので $x = x'$ です。全射について:$z \in Z$ を任意にとります。$g$ が全射なので $g(y) = z$ となる $y \in Y$ があり、$f$ が全射なので $f(x) = y$ となる $x \in X$ があります。この $x$ について $(g \circ f)(x) = g(f(x)) = g(y) = z$ です。
+:::
+
+::: question
+$X = \{1, 2, 3\}$ の冪集合 $\mathcal{P}(X)$ の要素をすべて書き出してください。また、$X$ から $\{0, 1\}$ への写像はいくつありますか。
+:::
+
+::: answer
+$\mathcal{P}(X)$ の要素は $\emptyset$、$\{1\}$、$\{2\}$、$\{3\}$、$\{1, 2\}$、$\{1, 3\}$、$\{2, 3\}$、$\{1, 2, 3\}$ の 8 個です。$X$ から $\{0, 1\}$ への写像は、$1$、$2$、$3$ の行き先をそれぞれ 0 か 1 から選ぶので、$2^3 = 8$ 個です。部分集合 $A$ に、$A$ の要素を 1 に、それ以外の要素を 0 に写す写像を対応させると、$\mathcal{P}(X)$ から写像の全体への全単射になります。個数が一致するのはこのためです。
 :::

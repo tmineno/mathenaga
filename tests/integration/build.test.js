@@ -66,6 +66,7 @@ describe('build: 受け入れテスト', () => {
     const { site } = await ref();
     const expected = {
       'reading-symbols': 'Z01',
+      'sets-maps': 'Z03',
       'metric-space': 'M02',
       'continuous-map': 'M04',
       'cauchy-sequence': 'A01',
@@ -78,9 +79,9 @@ describe('build: 受け入れテスト', () => {
     for (const [id, code] of Object.entries(expected)) assert.equal(site.stationById.get(id).code, code, id);
   });
 
-  test('2. 乗換駅は3つだけ', async () => {
+  test('2. 乗換駅は4つだけ', async () => {
     const { site } = await ref();
-    assert.deepEqual([...site.transfers].sort(), ['continuous-map', 'metric-space', 'reading-proofs']);
+    assert.deepEqual([...site.transfers].sort(), ['continuous-map', 'metric-space', 'reading-proofs', 'sets-maps']);
   });
 
   test('3. 第3章の前提は第1章だけ', async () => {
@@ -102,6 +103,7 @@ describe('build: 受け入れテスト', () => {
       'metric-space',
       'reading-proofs',
       'reading-symbols',
+      'sets-maps',
     ]);
     assert.deepEqual(
       site.fieldChapters.get('cs').map((c) => c.number),

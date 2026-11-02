@@ -134,15 +134,15 @@ const covers = (band, station) =>
   band.y <= station.y && station.y <= band.y + band.h && band.x <= station.x && station.x <= band.x + band.w;
 
 describe('route-map: 受け入れテスト', () => {
-  test('1. 全体の図:書いた21駅と未執筆の18駅、幹線の並び、分岐', async () => {
+  test('1. 全体の図:書いた22駅と未執筆の18駅、幹線の並び、分岐', async () => {
     const { overall } = await maps();
-    assert.equal(overall.stations.filter((s) => !s.info.planned).length, 21);
+    assert.equal(overall.stations.filter((s) => !s.info.planned).length, 22);
     assert.equal(overall.stations.filter((s) => s.info.planned).length, 18);
     const trunk = overall.stations
       .filter((s) => s.y === 0)
       .sort((a, b) => a.x - b.x)
       .map((s) => s.info.code);
-    assert.deepEqual(trunk, ['Z01', 'Z02', 'M01', 'M02', 'M03', 'M04']);
+    assert.deepEqual(trunk, ['Z01', 'Z02', 'Z03', 'M01', 'M02', 'M03', 'M04']);
     const analysis = overall.stations.filter((s) => s.info.lineId === 'analysis' && !s.info.planned);
     const geometry = overall.stations.filter((s) => s.info.lineId === 'geometry' && !s.info.planned);
     assert.equal(analysis.length, 8);
@@ -160,11 +160,11 @@ describe('route-map: 受け入れテスト', () => {
     assert.deepEqual(start('geometry'), [at(overall, 'continuous-map').x, 0]);
   });
 
-  test('2. 全体の図の乗換駅は Z02・M02・M04', async () => {
+  test('2. 全体の図の乗換駅は Z02・Z03・M02・M04', async () => {
     const { overall } = await maps();
     assert.deepEqual(
       overall.stations.filter((s) => s.transfer).map((s) => s.info.code),
-      ['Z02', 'M02', 'M04'],
+      ['Z02', 'Z03', 'M02', 'M04'],
     );
   });
 
@@ -172,7 +172,7 @@ describe('route-map: 受け入れテスト', () => {
     const { cs, dist } = await maps();
     assert.deepEqual(
       cs.stations.map((s) => s.info.code),
-      ['Z01', 'Z02', 'M01', 'M02', 'A01', 'A02', 'A03', 'A04'],
+      ['Z01', 'Z02', 'Z03', 'M01', 'M02', 'A01', 'A02', 'A03', 'A04'],
     );
     assert.ok(at(cs, 'banach').final);
     assert.ok(!cs.stations.some((s) => s.info.lineId === 'geometry'));
@@ -183,7 +183,7 @@ describe('route-map: 受け入れテスト', () => {
 
   test('4. 理論物理の図', async () => {
     const { physics } = await maps();
-    assert.equal(physics.stations.length, 20);
+    assert.equal(physics.stations.length, 21);
     assert.ok(!at(physics, 'compact-connected'));
     assert.deepEqual(
       physics.stations.filter((s) => s.final).map((s) => s.info.code),
@@ -347,7 +347,7 @@ describe('route-map: 章の帯と未執筆の章', () => {
       for (const id of inside) assert.ok(covers(b, at(layout, id)), `第${n}章の帯が ${id} にかからない`);
       for (const id of outside) assert.ok(!covers(b, at(layout, id)), `第${n}章の帯が ${id} にかかる`);
     };
-    expect(overall, 0, ['reading-symbols', 'reading-proofs'], ['convergence']);
+    expect(overall, 0, ['reading-symbols', 'reading-proofs', 'sets-maps'], ['convergence']);
     expect(overall, 3, ['cauchy-sequence', 'picard-lindelof'], ['normed-space', 'metric-space']);
     expect(overall, 7, ['compact-connected'], ['hausdorff', 'homeomorphism']);
     assert.deepEqual(
@@ -642,7 +642,11 @@ describe('route-map: 前提の輪', () => {
     // 第1章の2駅が互いを前提にし、その2駅の先の駅を2つ前提にする路線を足す
     const errors = await errorsAfter(async (root) => {
       await edit(root, 'chapters/01-convergence-metric/index.md', (t) =>
-        replaceOnce(t, '{#convergence requires=reading-proofs}', '{#convergence requires=reading-proofs,metric-space}'),
+        replaceOnce(
+          t,
+          '{#convergence requires=reading-proofs,sets-maps}',
+          '{#convergence requires=reading-proofs,sets-maps,metric-space}',
+        ),
       );
       await addLine(root, { id: 'skyline', code: 'U', name: '上線', layout: 'up' }, '14-sky', [
         { name: '上の駅', id: 'upper-a', requires: 'convergence,open-set' },
