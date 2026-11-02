@@ -455,7 +455,11 @@ export function layoutMap(site, drawn, opts = {}) {
   // 支線の向きと段
   const { rows, fallbacks } = planRows(site, branches, trunkIds, lastTrunk);
   const simpleRows = rows.filter((r) => r.simple);
-  const downFrom = new Set(simpleRows.filter((r) => r.dir === 'down').map((r) => r.info.branch.id));
+  /** 下へ分かれる線の出る幹線の駅 → その駅から出る線それぞれの、下りる段の数 @type {Map<string, number[]>} */
+  const downDrops = new Map();
+  for (const r of simpleRows) {
+    if (r.dir === 'down') downDrops.set(r.info.branch.id, [...(downDrops.get(r.info.branch.id) ?? []), r.row + 1]);
+  }
   const upFrom = new Set(simpleRows.filter((r) => r.dir === 'up').map((r) => r.info.branch.id));
   /** 上へ分かれる線の出る幹線の駅 → その駅から出る線のうち、最も高い段までの段の数 @type {Map<string, number>} */
   const upRise = new Map();
@@ -539,9 +543,10 @@ export function layoutMap(site, drawn, opts = {}) {
       const p = measure(info, 'trunk');
       if (prev) {
         let dx = Math.max(GEOM.minDx, prev.half + p.half + GEOM.gap);
-        if (downFrom.has(prev.info.id)) {
-          const sx = stubFor(prev);
-          dx = Math.max(dx, sx + GEOM.downDx * 0.55 + p.half + GEOM.gap);
+        // 次の駅の駅名(下端は札の中心から 55 下)が、下へ分かれる線より右に来るようにする
+        for (const drop of downDrops.get(prev.info.id) ?? []) {
+          const sx = stubFor(prev, drop);
+          dx = Math.max(dx, sx + (GEOM.downDx * 0.55) / drop + p.half + GEOM.gap);
         }
         p.x = prev.x + dx;
       }
@@ -624,7 +629,7 @@ export function layoutMap(site, drawn, opts = {}) {
             [x, y],
           ];
         } else if (r.dir === 'down') {
-          const sx = stubFor(b);
+          const sx = stubFor(b, r.row + 1);
           pts.push([b.x + sx, 0], [b.x + sx + GEOM.downDx, y]);
           flags.push(firstPlanned, firstPlanned);
           x = b.x + sx + GEOM.downDx;
@@ -751,9 +756,14 @@ export function layoutMap(site, drawn, opts = {}) {
   return layout;
 }
 
-/** 下の段への線が、幹線を右へ少し進んでから下りる長さ。 @param {PlacedStation} b */
-function stubFor(b) {
-  return Math.max(10, b.labelW / 2 + 4 - GEOM.downDx * 0.18);
+/**
+ * 下の段への線が、幹線を右へ少し進んでから下りる長さ。分岐駅の駅名の上端(札の中心から 18 下)の高さで、
+ * 線が駅名の右端より 4 右に来るようにする。斜めの線は横幅 downDx で drop 段下りるので、2段目・3段目へ
+ * 下りる線は傾きが急で、駅名の上端までに右へ進む量は段の数で割った値になる。
+ * @param {PlacedStation} b @param {number} drop  下りる段の数(1段目なら 1)
+ */
+function stubFor(b, drop) {
+  return Math.max(10, b.labelW / 2 + 4 - (GEOM.downDx * 0.18) / drop);
 }
 
 /** @param {number} v */

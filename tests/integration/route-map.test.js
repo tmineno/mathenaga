@@ -554,6 +554,23 @@ describe('route-map: 2段目より遠い段へ分かれる支線', () => {
       });
     }
   });
+
+  test('2段目・3段目へ下りる線は、分かれる駅の駅名に重ならない', async () => {
+    // 0番線の Z02 と本線の M02 から1本ずつ下へ分かれる(幾何線が1段目なので、2段目と3段目)。どちらが3段目でも
+    for (const [a, b] of [
+      ['reading-proofs', 'metric-space'],
+      ['metric-space', 'reading-proofs'],
+    ]) {
+      await assertClearWith(`${a}/${b}`, async (root) => {
+        await addLine(root, { id: 'deepline', code: 'D', name: '下線', layout: 'down' }, '14-deep', [
+          { name: '下の駅', id: 'lower-a', requires: a },
+        ]);
+        await addLine(root, { id: 'deepline-two', code: 'E', name: '下二線', layout: 'down' }, '15-deep-two', [
+          { name: '下の駅二', id: 'lower-b', requires: b },
+        ]);
+      });
+    }
+  });
 });
 
 describe('route-map: 重なりの検査そのもの', () => {
