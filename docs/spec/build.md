@@ -152,6 +152,8 @@ dist/
 
 テスト用原稿を入力にした結合テストで確かめる([ADR-004](../adr/ADR-004-frozen-test-manuscript.md))。数式と式番号の個数、定義の ID の一覧は期待値を手で書かず、テストがビルドとは別の数え方で原稿から数える。
 
+次のことは、値を書かない形で今の原稿でも確かめる。期待する個数や並びは、テストが原稿から作る:8 のうち全章の参照が解決することと数式の個数、9 のうち `defs.json` に全定義が1項目ずつ ID の順に並ぶこと、11 のうち式番号の振り方、16、21、26 のうち版の印がファイルの中身のハッシュと一致すること、27 のうち応用の札の番号。
+
 1. 表示番号:reading-symbols = Z01、sets-maps = Z03、metric-space = M02、continuous-map = M04、cauchy-sequence = A01、banach = A04、picard-lindelof = A05、hilbert-space = A08、torus = G06、manifold = G07。
 2. 乗換駅は reading-proofs、sets-maps、metric-space、continuous-map の4つだけ。
 3. 第3章の前提は第1章だけ。
