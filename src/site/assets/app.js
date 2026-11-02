@@ -170,21 +170,33 @@
     }
   }
 
-  /** 証明の詳細と確認問題の答えを、表示の設定の「最初から開く」の状態にする */
-  function applyFolds() {
-    all('details.fold.proof').forEach(function (d) {
-      d.open = settings.openProof;
-    });
-    all('details.fold.answer').forEach(function (d) {
-      d.open = settings.openAnswer;
-    });
+  /**
+   * 証明の詳細と確認問題の答えを、表示の設定の「最初から開く」の状態にする。
+   * @param {string} [only] 'openProof' か 'openAnswer' なら、その種類の折りたたみだけ(設定を変えたとき)
+   */
+  function applyFolds(only) {
+    if (only !== 'openAnswer') {
+      all('details.fold.proof').forEach(function (d) {
+        d.open = settings.openProof;
+      });
+    }
+    if (only !== 'openProof') {
+      all('details.fold.answer').forEach(function (d) {
+        d.open = settings.openAnswer;
+      });
+    }
   }
 
   /** アンカーの指す先が折りたたみ(ID を付けた応用など)なら開く */
   function openTarget() {
     var id = window.location.hash.slice(1);
     if (!id) return;
-    var el = document.getElementById(decodeURIComponent(id));
+    try {
+      id = decodeURIComponent(id);
+    } catch {
+      return; // `#%` のような壊れたアンカーは無視する(ほかの機能の初期化を止めない)
+    }
+    var el = document.getElementById(id);
     if (el && el.tagName === 'DETAILS') /** @type {HTMLDetailsElement} */ (el).open = true;
   }
 
@@ -215,6 +227,8 @@
   var current = null;
   var timer = null;
   var shownAt = 0;
+  /** 閉じたポップアップの用語へフォーカスを戻している間(その focus では開き直さない) */
+  var refocusing = false;
 
   function loadDefs() {
     if (!defsPromise) {
@@ -318,7 +332,14 @@
     if (el) el.setAttribute('aria-expanded', 'false');
     current = null;
     if (pop) pop.hidden = true;
-    if (returnFocus && el) el.focus();
+    if (returnFocus && el) {
+      refocusing = true;
+      try {
+        el.focus();
+      } finally {
+        refocusing = false;
+      }
+    }
   }
 
   /** 表示の設定で「押したときだけ出す」なら、重ねる・フォーカスする・離れるでは開け閉めしない */
@@ -341,7 +362,7 @@
     });
     el.addEventListener('mouseleave', hideSoon);
     el.addEventListener('focus', function () {
-      if (!clickOnly()) show(el, false);
+      if (!clickOnly() && !refocusing) show(el, false);
     });
     el.addEventListener('click', function () {
       if (current === el && Date.now() - shownAt > 400) hide(false);
@@ -472,8 +493,9 @@
       var f = box();
       return Math.min(1, f.w / W, f.h / H);
     }
+    /** 保存した倍率を、この図で選べる範囲(全体を表示の倍率から 3 倍まで)に収める */
     function clampZoom(s) {
-      return Math.max(Math.min(ZOOM_MIN, fitScale()), Math.min(ZOOM_MAX, s));
+      return Math.max(fitScale(), Math.min(ZOOM_MAX, s));
     }
     function draw() {
       var f = box();
@@ -485,7 +507,10 @@
     }
     function zoomBy(k) {
       var f = box();
-      var s2 = clampZoom(view.s * k);
+      // 縮小は、図全体が枠に収まる倍率(0.3 倍より小さければ 0.3 倍)まで(route-map.md「図の操作」)
+      var s2 = Math.min(ZOOM_MAX, Math.max(Math.max(ZOOM_MIN, fitScale()), view.s * k));
+      // 全体を表示でそれより小さくしていても、縮小で大きくはしない
+      if (k < 1) s2 = Math.min(s2, view.s);
       view.x = f.w / 2 - ((f.w / 2 - view.x) * s2) / view.s;
       view.y = f.h / 2 - ((f.h / 2 - view.y) * s2) / view.s;
       view.s = s2;
@@ -647,6 +672,9 @@
   /** @param {Element} article */
   function setupCopy(article) {
     var chapterNo = article.getAttribute('data-chapter');
+    /** コードなどの空白と改行の印(Unicode の私用領域の文字。本文には現れない) */
+    var PRE_SP = '\uE000';
+    var PRE_NL = '\uE001';
     var BLOCK =
       /^(block|flex|grid|flow-root|list-item|table|table-row|table-row-group|table-header-group|table-footer-group|table-caption)$/;
     var coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
@@ -729,7 +757,8 @@
           var to = node === range.endContainer ? range.endOffset : s.length;
           s = s.slice(node === range.startContainer ? range.startOffset : 0, to);
           var pre = /^pre/.test(getComputedStyle(node.parentElement).whiteSpace);
-          out += pre ? s : s.replace(/[ \t\n\r\f]+/g, ' ');
+          // コードなどの空白と改行は、下の区切りの整理に巻き込まないよう、印に置き換えておく
+          out += pre ? s.replace(/ /g, PRE_SP).replace(/\n/g, PRE_NL) : s.replace(/[ \t\n\r\f]+/g, ' ');
           return;
         }
         if (node.nodeType !== 1) return;
@@ -753,7 +782,13 @@
         if (block && range.comparePoint(el, el.childNodes.length) <= 0) out += '\n';
       }
       walk(range.commonAncestorContainer);
-      out = out.replace(/ *\n[ \n]*/g, '\n').replace(/^\s+/, '');
+      // 区切りの改行のまわりの空白と、続く改行を1つにまとめる。コードの末尾の改行は区切りの改行に含める
+      out = out
+        .replace(/ *\n[ \n]*/g, '\n')
+        .replace(/^\s+/, '')
+        .replace(/\uE001(?=\n)/g, '')
+        .replace(/\uE000/g, ' ')
+        .replace(/\uE001/g, '\n');
       return keepEnd ? out : out.replace(/\s+$/, '');
     }
 
@@ -1277,7 +1312,7 @@
       setItem(SETTINGS_KEY, JSON.stringify(settings));
       say('');
       if (LOOK.indexOf(k) >= 0) applyLook();
-      else if (isChapter && (k === 'openProof' || k === 'openAnswer')) applyFolds();
+      else if (isChapter && (k === 'openProof' || k === 'openAnswer')) applyFolds(k);
       else if (isChapter && k === 'openOther') apply(field);
     }
     reset.addEventListener('click', function () {

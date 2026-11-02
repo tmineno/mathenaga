@@ -172,6 +172,34 @@ describe('site: 受け入れテスト', () => {
     await context.close();
   });
 
+  test('押して開いた用語ポップアップは、Esc で閉じたままになり、用語にフォーカスが戻る', async () => {
+    const { context, page } = await open();
+    await page.goto(`${server.url}${CH3}`);
+    const term = page.locator('#completeness .def .term').first();
+    const pop = page.locator('#_pop');
+    await term.click();
+    await pop.locator('.pop-h').waitFor();
+    await page.waitForFunction(() => document.activeElement?.id === '_pop');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    assert.ok(await pop.isHidden(), 'フォーカスを戻したときに開き直した');
+    assert.equal(await term.getAttribute('aria-expanded'), 'false');
+    assert.ok(await term.evaluate((el) => el === document.activeElement), '用語にフォーカスが戻らない');
+    await context.close();
+  });
+
+  test('壊れたアンカー(#% など)で開いても、スクリプトは止まらない', async () => {
+    for (const hash of ['#%', '#%E0%A4']) {
+      const { context, page, errors } = await open();
+      await page.goto(`${server.url}${CH3}${hash}`);
+      // アンカーを読んだ後に組み立てる機能(用語ポップアップ)が動く
+      await page.locator('#completeness .def .term').first().focus();
+      await page.locator('#_pop .pop-h').waitFor();
+      assert.deepEqual(errors, [], hash);
+      await context.close();
+    }
+  });
+
   test('8. 現在地バー', async () => {
     const { context, page } = await open();
     await page.goto(`${server.url}${CH3}`);
@@ -808,6 +836,46 @@ describe('site: 位置情報つきのコピー(P-08)', () => {
     await context.close();
   });
 
+  test('45. コードブロックの字下げと空行は、そのままコピーする', async () => {
+    const root = await tempRoot();
+    try {
+      const code = ['if ready:', '    run()', '', 'done()'];
+      await edit(root, CH3_SOURCE, (t) =>
+        replaceOnce(
+          t,
+          '## ピカールの定理',
+          ['手順の例です。', '', '```python', ...code, '```', '', '続きの段落です。', '', '## ピカールの定理'].join(
+            '\n',
+          ),
+        ),
+      );
+      const r = await buildIn(root);
+      assert.deepEqual(r.errors, []);
+      const s = await serve(path.join(root, 'dist'));
+      try {
+        const { context, page, errors } = await openCopy();
+        await page.goto(`${s.url}${CH3}`);
+        await selectText(page, '#banach', '手順の例です。', '続きの段落です。');
+        assert.equal(await copyWith(page, PLAIN), ['手順の例です。', ...code, '続きの段落です。'].join('\n'));
+        // 字下げした行の途中から選ぶと、文字の位置も字下げを数える
+        await selectText(page, '#banach pre', 'run()', 'done()');
+        // コードブロックの段落の番号は、pre の中の code にある
+        const p = await page.locator('#banach pre > code').first().getAttribute('data-p');
+        assert.match(p ?? '', /^\d+$/);
+        const loc = await page.locator('#banach').getAttribute('data-loc');
+        // 1行目と改行、2行目の字下げを数えた次の文字
+        const at = code[0].length + 1 + code[1].indexOf('run()') + 1;
+        assert.equal(await copyWith(page, LOC), `[3:${loc}:${p}:${at}]\n${code.slice(1).join('\n').trimStart()}`);
+        assert.deepEqual(errors, []);
+        await context.close();
+      } finally {
+        await s.close();
+      }
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   test('28. クリップボードに書けなければ「コピーできませんでした」', async () => {
     const { context, page } = await open();
     await page.addInitScript(() => {
@@ -911,6 +979,30 @@ describe('route-map: 図の操作(ブラウザ)', () => {
     assert.ok(b.x >= f.x - 1 && b.x + b.width <= f.x + f.width + 1, '横が枠に収まらない');
     assert.ok(b.y >= f.y - 1 && b.y + b.height <= f.y + f.height + 1, '縦が枠に収まらない');
     await context.close();
+  });
+
+  test('縮小は、図全体が枠に収まる倍率(0.3 倍より小さければ 0.3 倍)で止まる', async () => {
+    for (const width of [1200, 400]) {
+      const { context, page } = await open({ viewport: { width, height: 900 } });
+      await page.goto(server.url);
+      const frame = frameOf(page);
+      const svg = frame.locator('svg.map');
+      const natural = Number(await svg.getAttribute('width'));
+      const naturalH = Number(await svg.getAttribute('height'));
+      const f = /** @type {any} */ (await frame.boundingBox());
+      const fit = Math.min(1, f.width / natural, f.height / naturalH);
+      const scale = async () => (await svgBox(page)).width / natural;
+      for (let i = 0; i < 12; i++) await page.locator('.map-tools button[aria-label="縮小"]').first().click();
+      const floor = Math.max(0.3, fit);
+      assert.ok(Math.abs((await scale()) - floor) < 0.01, `幅 ${width}: ${await scale()} (期待 ${floor})`);
+      // 全体を表示で下限より小さくしても、縮小で大きくはならない
+      await page.locator('.map-tools button[aria-label="全体を表示"]').first().click();
+      const fitted = await scale();
+      assert.ok(Math.abs(fitted - fit) < 0.01, `全体を表示 ${fitted} (期待 ${fit})`);
+      await page.locator('.map-tools button[aria-label="縮小"]').first().click();
+      assert.ok((await scale()) <= fitted + 0.001, `縮小で大きくなった ${fitted} → ${await scale()}`);
+      await context.close();
+    }
   });
 
   test('20. 幅 400px の第3章では、今の章の帯の中央が枠の中に見える', async () => {
@@ -1226,6 +1318,24 @@ describe('site: 表示の設定(P-09)', () => {
     assert.ok(!(await states('details.fold.answer')).some(Boolean));
     assert.ok(!(await states('details.v[data-field=cs]')).some(Boolean));
     assert.ok((await states('details.v[data-field=physics]')).every(Boolean));
+    await context.close();
+  });
+
+  test('「最初から開く」の1つを変えても、ほかの種類の折りたたみは読者が開け閉めしたまま', async () => {
+    const { context, page } = await open();
+    await page.goto(`${server.url}${CH3}`);
+    const answer = page.locator('details.fold.answer').first();
+    const proof = page.locator('details.fold.proof').first();
+    await answer.evaluate((d) => d.toggleAttribute('open', true));
+    await choose(page, 'openProof', true);
+    assert.ok(await answer.evaluate((d) => /** @type {HTMLDetailsElement} */ (d).open), '答えが閉じた');
+    assert.ok(await proof.evaluate((d) => /** @type {HTMLDetailsElement} */ (d).open));
+    await proof.evaluate((d) => d.toggleAttribute('open', false));
+    await choose(page, 'openAnswer', true);
+    assert.ok(!(await proof.evaluate((d) => /** @type {HTMLDetailsElement} */ (d).open)), '証明の詳細が開いた');
+    await choose(page, 'openAnswer', false);
+    assert.ok(!(await answer.evaluate((d) => /** @type {HTMLDetailsElement} */ (d).open)));
+    assert.ok(!(await proof.evaluate((d) => /** @type {HTMLDetailsElement} */ (d).open)), '証明の詳細が開いた');
     await context.close();
   });
 

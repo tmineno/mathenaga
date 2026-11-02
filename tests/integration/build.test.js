@@ -374,6 +374,30 @@ describe('build: 受け入れテスト', () => {
     }
   });
 
+  test('25. 参照形式の画像(![…][名前])でも、キャプションの \\$ と \\{ を書いたとおりに読む', async () => {
+    const root = await tempRoot();
+    roots.push(root);
+    await addFigures(root);
+    await edit(root, CH3, (t) =>
+      replaceOnce(
+        t,
+        '![一枚目の説明](figures/a.svg "一枚の図"){#fig-one}',
+        String.raw`![一枚目の説明][one]{#fig-one}
+
+[one]: figures/a.svg "集合 $\{x \mid x > 0\}$、\$5"`,
+      ),
+    );
+    const r = await buildIn(root);
+    assert.deepEqual(r.errors, []);
+    const ch3 = await readDist(path.join(root, 'dist'), 'chapters/completeness-fixed-point/index.html');
+    const caption = /<figure class="fig" id="fig-one"[\s\S]*?<figcaption>([\s\S]*?)<\/figcaption>/.exec(ch3)?.[1] ?? '';
+    assert.deepEqual(
+      [...caption.matchAll(/<annotation encoding="application\/x-tex">([^<]*)<\/annotation>/g)].map((m) => m[1]),
+      [String.raw`\{x \mid x &gt; 0\}`],
+    );
+    assert.match(caption, /、\$5$/);
+  });
+
   test('26. ページが読むファイルの URL に、中身の版の印が付く', async () => {
     const root = await tempRoot();
     roots.push(root);

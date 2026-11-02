@@ -3,6 +3,7 @@
 
 import MarkdownIt from 'markdown-it';
 import container from 'markdown-it-container';
+import referenceRule from 'markdown-it/lib/rules_block/reference.mjs';
 import imageRule from 'markdown-it/lib/rules_inline/image.mjs';
 
 /** ブロックのトークン名。`container_<名前>_open` の形になる。 */
@@ -227,18 +228,41 @@ function mathInlineRule(state, silent) {
 /**
  * 画像の規則を包み、タイトルを文字と行内の数式に切り分けて image.meta.titleParts に入れる。
  * markdown-it はタイトルのエスケープを解いてしまう(`\{` が `{` になる)ので、解く前のタイトルを
- * parseLinkTitle から受け取って切り分ける。参照形式の画像(`![alt][ref]`)は解いた後のタイトルを使う。
+ * parseLinkTitle から受け取って切り分ける。参照形式の画像(`![alt][ref]`)は、参照の定義
+ * (`[ref]: src "タイトル"`)を読むときに解く前のタイトルを覚えておき、それを使う。
  * @param {MarkdownIt} md
  */
 function keepImageTitleParts(md) {
-  /** @type {{ raw: string | null } | null} */
+  /** 読んでいるタイトルの、解く前の文字の範囲 @type {{ raw: string | null, start?: number } | null} */
   let slot = null;
   const parseLinkTitle = md.helpers.parseLinkTitle;
   md.helpers.parseLinkTitle = (str, start, max, prev) => {
     const res = parseLinkTitle(str, start, max, prev);
-    if (slot && slot.raw === null && !prev && res.ok) slot.raw = str.slice(start + 1, res.pos - 1);
+    if (slot && slot.raw === null) {
+      // 参照の定義のタイトルは複数行にわたることがあり、行ごとに呼ばれる(2回目からは prev がある)
+      if (!prev) slot.start = start;
+      if (res.ok && slot.start !== undefined) slot.raw = str.slice(slot.start + 1, res.pos - 1);
+    }
     return res;
   };
+  md.block.ruler.at('reference', (state, startLine, endLine, silent) => {
+    const outer = slot;
+    const mine = { raw: /** @type {string | null} */ (null) };
+    slot = mine;
+    const before = new Set(Object.keys(state.env.references ?? {}));
+    let ok;
+    try {
+      ok = referenceRule(state, startLine, endLine, silent);
+    } finally {
+      slot = outer;
+    }
+    if (!ok || silent || mine.raw === null) return ok;
+    for (const [label, ref] of Object.entries(state.env.references ?? {})) {
+      // 同じ名前の2つ目からの定義は使われないので、新しく加わった定義にだけ付ける
+      if (!before.has(label) && md.utils.unescapeAll(mine.raw) === ref.title) ref.rawTitle = mine.raw;
+    }
+    return ok;
+  });
   md.inline.ruler.at('image', (state, silent) => {
     const outer = slot;
     const mine = { raw: /** @type {string | null} */ (null) };
@@ -255,13 +279,31 @@ function keepImageTitleParts(md) {
     const title = token.attrGet('title');
     if (title === null) return ok;
     // 中の alt を読むときに別のタイトルを拾っていないか、解いた形で照らし合わせる
-    const raw = mine.raw !== null && md.utils.unescapeAll(mine.raw) === title ? mine.raw : null;
+    let raw = mine.raw !== null && md.utils.unescapeAll(mine.raw) === title ? mine.raw : null;
+    if (mine.raw === null) raw = referenceRawTitle(state.env.references, token.attrGet('src'), title);
     token.meta = {
       ...token.meta,
       titleParts: raw === null ? lexTitle(title, (s) => s) : lexTitle(raw, md.utils.unescapeAll),
     };
     return ok;
   });
+}
+
+/**
+ * 参照形式の画像が使った参照の定義の、解く前のタイトル。画像のトークンには参照の名前が残らないので、
+ * 行き先とタイトルが同じ定義を探す。解く前の書き方が1つに決まらなければ null(解いた後のタイトルを使う)。
+ * @param {Record<string, { href: string, title: string, rawTitle?: string }> | undefined} refs
+ * @param {string | null} src
+ * @param {string} title  解いた後のタイトル
+ * @returns {string | null}
+ */
+function referenceRawTitle(refs, src, title) {
+  const raws = new Set(
+    Object.values(refs ?? {})
+      .filter((r) => r.href === src && r.title === title)
+      .map((r) => r.rawTitle ?? title),
+  );
+  return raws.size === 1 ? [...raws][0] : null;
 }
 
 /**
