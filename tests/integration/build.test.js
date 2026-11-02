@@ -10,12 +10,12 @@ import { chapterInField, nextChapter, prerequisiteChapters, transferGuide } from
 import { versionOf } from '../../src/site/pages.js';
 import {
   CH3,
-  CONTENT,
   MERGE_LINE,
   addFigures,
   addFinalGoal,
   addMergeLine,
   analyzeIn,
+  applicationLabels,
   buildIn,
   countMathIn,
   definitionIdsIn,
@@ -447,35 +447,12 @@ describe('build: 受け入れテスト', () => {
   });
 
   test('27. 応用の番号と、[[@ID]] による応用の参照', async () => {
-    // 期待する札の並びは原稿から集める:駅の順 → 分野の並び(分野ファイルの名前の順)→ 書いた順
-    const fieldFiles = (await fs.readdir(path.join(CONTENT, 'fields'))).filter((f) => f.endsWith('.yml')).sort();
-    /** @type {Map<string, string>} */
-    const fieldTitle = new Map();
-    for (const f of fieldFiles) {
-      const yml = await fs.readFile(path.join(CONTENT, 'fields', f), 'utf8');
-      fieldTitle.set(f.replace(/\.yml$/, ''), capture(/^title:\s*(.+)$/m, yml).trim());
-    }
-    const order = [...fieldTitle.keys()];
     const { dist } = await ref();
     let total = 0;
-    for (const dir of (await fs.readdir(path.join(CONTENT, 'chapters'))).sort()) {
-      const m = /^(\d+)-(.+)$/.exec(dir);
-      if (!m) continue;
-      const src = await fs.readFile(path.join(CONTENT, 'chapters', dir, 'index.md'), 'utf8');
-      const expected = [];
-      let k = 0;
-      for (const station of src.split(/^## /m).slice(1)) {
-        const apps = [...station.matchAll(/^::: application \{([^}]*)\}$/gm)].map((a, i) => ({
-          field: capture(/field=(\S+)/, a[1]),
-          title: capture(/title="([^"]*)"/, a[1]),
-          i,
-        }));
-        apps.sort((a, b) => order.indexOf(a.field) - order.indexOf(b.field) || a.i - b.i);
-        for (const a of apps) expected.push(`応用 ${Number(m[1])}.${++k}(${fieldTitle.get(a.field)}) · ${a.title}`);
-      }
-      const html = await readDist(dist, `chapters/${m[2]}/index.html`);
+    for (const [id, expected] of await applicationLabels()) {
+      const html = await readDist(dist, `chapters/${id}/index.html`);
       const actual = [...html.matchAll(/<summary>(応用 [^<]*)<\/summary>/g)].map((x) => x[1]);
-      assert.deepEqual(actual, expected, dir);
+      assert.deepEqual(actual, expected, id);
       total += expected.length;
     }
     assert.ok(total > 0);

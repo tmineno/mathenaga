@@ -9,6 +9,8 @@ import { createStaticHandler } from '../../src/dev/static.js';
 
 /** テスト用原稿。content/ の写しを固定したもの(ADR-004)。値を確かめるテストはこれを入力にする。 */
 export const CONTENT = path.join(ROOT, 'tests/fixtures/content');
+/** 今の原稿。値を書かない不変条件だけを確かめる(ADR-004)。 */
+export const CURRENT_CONTENT = path.join(ROOT, 'content');
 export const CH3 = 'chapters/03-completeness-fixed-point/index.md';
 
 /**
@@ -85,25 +87,81 @@ export function statements(text) {
   return out;
 }
 
-/** テスト用原稿の章(content/ からの相対パス)の定義と定理を、書いた順に集める。 @param {string} rel */
-export async function statementsIn(rel) {
-  return statements(await fs.readFile(path.join(CONTENT, rel), 'utf8'));
+/**
+ * 原稿の章(content/ からの相対パス)の定義と定理を、書いた順に集める。
+ * @param {string} rel @param {string} [src] 原稿の場所(既定はテスト用原稿)
+ */
+export async function statementsIn(rel, src = CONTENT) {
+  return statements(await fs.readFile(path.join(src, rel), 'utf8'));
 }
 
-/** テスト用原稿の章(content/ からの相対パス)の定義の ID を集める。 @param {string} rel */
-export async function definitionIdsIn(rel) {
-  return definitionIds(await fs.readFile(path.join(CONTENT, rel), 'utf8'));
+/**
+ * 原稿の章(content/ からの相対パス)の定義の ID を集める。
+ * @param {string} rel @param {string} [src] 原稿の場所(既定はテスト用原稿)
+ */
+export async function definitionIdsIn(rel, src = CONTENT) {
+  return definitionIds(await fs.readFile(path.join(src, rel), 'utf8'));
 }
 
-/** テスト用原稿の章(content/ からの相対パス)の数式を数える。 @param {string} rel */
-export async function countMathIn(rel) {
-  return countMath(await fs.readFile(path.join(CONTENT, rel), 'utf8'));
+/**
+ * 原稿の章(content/ からの相対パス)の数式を数える。
+ * @param {string} rel @param {string} [src] 原稿の場所(既定はテスト用原稿)
+ */
+export async function countMathIn(rel, src = CONTENT) {
+  return countMath(await fs.readFile(path.join(src, rel), 'utf8'));
 }
 
-/** テスト用原稿をコピーした一時ディレクトリを作る。中に content/ がある。 */
-export async function tempRoot() {
+/** 正規表現の最初の括弧の中身。合わなければ例外。 @param {RegExp} re @param {string} text */
+function capture(re, text) {
+  const m = re.exec(text);
+  if (!m) throw new Error(`${re} が合わない`);
+  return m[1];
+}
+
+/**
+ * 応用の札の、章ごとの期待する並びを原稿から集める(build.md 受け入れテスト 27)。
+ * 並びは、駅の順 → 分野の並び(分野ファイルの名前の順)→ 書いた順。
+ * @param {string} [src] 原稿の場所(既定はテスト用原稿)
+ * @returns {Promise<Map<string, string[]>>} 章の ID → 「応用 N.k(分野名) · title」の並び
+ */
+export async function applicationLabels(src = CONTENT) {
+  const fieldFiles = (await fs.readdir(path.join(src, 'fields'))).filter((f) => f.endsWith('.yml')).sort();
+  /** @type {Map<string, string>} */
+  const fieldTitle = new Map();
+  for (const f of fieldFiles) {
+    const yml = await fs.readFile(path.join(src, 'fields', f), 'utf8');
+    fieldTitle.set(f.replace(/\.yml$/, ''), capture(/^title:\s*(.+)$/m, yml).trim());
+  }
+  const order = [...fieldTitle.keys()];
+  /** @type {Map<string, string[]>} */
+  const out = new Map();
+  for (const dir of (await fs.readdir(path.join(src, 'chapters'))).sort()) {
+    const m = /^(\d+)-(.+)$/.exec(dir);
+    if (!m) continue;
+    const text = await fs.readFile(path.join(src, 'chapters', dir, 'index.md'), 'utf8');
+    const expected = [];
+    let k = 0;
+    for (const station of text.split(/^## /m).slice(1)) {
+      const apps = [...station.matchAll(/^::: application \{([^}]*)\}$/gm)].map((a, i) => ({
+        field: capture(/field=(\S+)/, a[1]),
+        title: capture(/title="([^"]*)"/, a[1]),
+        i,
+      }));
+      apps.sort((a, b) => order.indexOf(a.field) - order.indexOf(b.field) || a.i - b.i);
+      for (const a of apps) expected.push(`応用 ${Number(m[1])}.${++k}(${fieldTitle.get(a.field)}) · ${a.title}`);
+    }
+    out.set(m[2], expected);
+  }
+  return out;
+}
+
+/**
+ * 原稿をコピーした一時ディレクトリを作る。中に content/ がある。
+ * @param {string} [src] 原稿の場所(既定はテスト用原稿)
+ */
+export async function tempRoot(src = CONTENT) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mathenaga-test-'));
-  await fs.cp(CONTENT, path.join(dir, 'content'), { recursive: true });
+  await fs.cp(src, path.join(dir, 'content'), { recursive: true });
   return dir;
 }
 
@@ -240,11 +298,23 @@ let shared = null;
 /** @param {string} [basePath] */
 export async function referenceBuild(basePath = '/') {
   if (shared && shared.basePath === basePath) return shared;
-  const root = await tempRoot();
+  shared = await buildFrom(CONTENT, basePath);
+  return shared;
+}
+
+/** 今の原稿のビルド結果(テストのあいだ共有する)。 */
+let sharedCurrent = null;
+export async function currentBuild() {
+  sharedCurrent ??= await buildFrom(CURRENT_CONTENT, '/');
+  return sharedCurrent;
+}
+
+/** @param {string} src @param {string} basePath */
+async function buildFrom(src, basePath) {
+  const root = await tempRoot(src);
   const result = await buildIn(root, basePath);
   const a = await analyzeIn(root, basePath);
-  shared = { root, dist: path.join(root, 'dist'), result, ctx: a.ctx, basePath };
-  return shared;
+  return { root, dist: path.join(root, 'dist'), result, ctx: a.ctx, basePath };
 }
 
 /** @param {string} dist @param {string} rel */
