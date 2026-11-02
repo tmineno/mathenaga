@@ -12,6 +12,7 @@ import {
   addMergeLine,
   analyzeIn,
   edit,
+  errorsAfter,
   readDist,
   referenceBuild,
   replaceOnce,
@@ -105,6 +106,24 @@ async function mergeRoot(opts = {}) {
 /** @param {any} site */
 const overallOf = (site) =>
   layoutMap(site, new Set(site.stations.map((/** @type {any} */ s) => s.id)), { planned: true });
+
+/**
+ * 路線を足した原稿で、全体の図と、各章を強調した全体の図に重なりがないことを確かめる。
+ * @param {string} name @param {(root: string) => Promise<void>} mutate
+ */
+async function assertClearWith(name, mutate) {
+  const root = await tempRoot();
+  roots.push(root);
+  await mutate(root);
+  const r = await analyzeIn(root);
+  assert.deepEqual(r.errors, [], name);
+  const s = r.ctx.site;
+  const all = new Set(s.stations.map((x) => x.id));
+  assertNoOverlap(`${name}/全体`, layoutMap(s, all, { planned: true }));
+  for (const c of s.chapters) {
+    assertNoOverlap(`${name}/第${c.number}章`, layoutMap(s, all, { planned: true, highlight: c.id }));
+  }
+}
 
 /** 路線の線(paths の項目)のうち、始まりの点。 @param {any} layout @param {string} lineId */
 const starts = (layout, lineId) =>
@@ -507,6 +526,51 @@ describe('route-map: 支線からの分岐と合流', () => {
       '幾何線より幹線から遠い下の段',
     );
   });
+
+  test('合流する支線の最初の駅名が長くても、入ってくる線は駅名に重ならない', async () => {
+    await assertClearWith('長い駅名の合流', (root) =>
+      addLine(root, MERGE_LINE, '14-riemannian-geometry', [
+        { name: '概念の名前と長い定理', id: 'geodesic', requires: 'hilbert-space,manifold' },
+        { name: '曲率', id: 'curvature', requires: 'geodesic' },
+      ]),
+    );
+  });
+});
+
+describe('route-map: 2段目より遠い段へ分かれる支線', () => {
+  test('2段目・3段目へ上る線は、分かれる章の札にも、途中の段の章の札にも重ならない', async () => {
+    // 第0章の2駅から1本ずつ上へ分かれる(解析線が1段目なので、2段目と3段目)。どちらの駅から先に分かれても
+    for (const [a, b] of [
+      ['reading-symbols', 'reading-proofs'],
+      ['reading-proofs', 'reading-symbols'],
+    ]) {
+      await assertClearWith(`${a}/${b}`, async (root) => {
+        await addLine(root, { id: 'skyline', code: 'U', name: '上線', layout: 'up' }, '14-sky', [
+          { name: '上の駅', id: 'upper-a', requires: a },
+        ]);
+        await addLine(root, { id: 'skyline-two', code: 'V', name: '上二線', layout: 'up' }, '15-sky-two', [
+          { name: '上の駅二', id: 'upper-b', requires: b },
+        ]);
+      });
+    }
+  });
+
+  test('2段目・3段目へ下りる線は、分かれる駅の駅名に重ならない', async () => {
+    // 0番線の Z02 と本線の M02 から1本ずつ下へ分かれる(幾何線が1段目なので、2段目と3段目)。どちらが3段目でも
+    for (const [a, b] of [
+      ['reading-proofs', 'metric-space'],
+      ['metric-space', 'reading-proofs'],
+    ]) {
+      await assertClearWith(`${a}/${b}`, async (root) => {
+        await addLine(root, { id: 'deepline', code: 'D', name: '下線', layout: 'down' }, '14-deep', [
+          { name: '下の駅', id: 'lower-a', requires: a },
+        ]);
+        await addLine(root, { id: 'deepline-two', code: 'E', name: '下二線', layout: 'down' }, '15-deep-two', [
+          { name: '下の駅二', id: 'lower-b', requires: b },
+        ]);
+      });
+    }
+  });
 });
 
 describe('route-map: 重なりの検査そのもの', () => {
@@ -572,3 +636,19 @@ function segmentHitsBox(s, b) {
   }
   return false;
 }
+
+describe('route-map: 前提の輪', () => {
+  test('前提が輪になった原稿でも、分岐駅を決めるところで止まらず E06 を返す', async () => {
+    // 第1章の2駅が互いを前提にし、その2駅の先の駅を2つ前提にする路線を足す
+    const errors = await errorsAfter(async (root) => {
+      await edit(root, 'chapters/01-convergence-metric/index.md', (t) =>
+        replaceOnce(t, '{#convergence requires=reading-proofs}', '{#convergence requires=reading-proofs,metric-space}'),
+      );
+      await addLine(root, { id: 'skyline', code: 'U', name: '上線', layout: 'up' }, '14-sky', [
+        { name: '上の駅', id: 'upper-a', requires: 'convergence,open-set' },
+      ]);
+    });
+    assert.ok(errors.length > 0);
+    assert.deepEqual([...new Set(errors.map((e) => e.code))], ['E06']);
+  });
+});
