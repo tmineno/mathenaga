@@ -134,10 +134,10 @@ const covers = (band, station) =>
   band.y <= station.y && station.y <= band.y + band.h && band.x <= station.x && station.x <= band.x + band.w;
 
 describe('route-map: 受け入れテスト', () => {
-  test('1. 全体の図:書いた21駅と未執筆の12駅、幹線の並び、分岐', async () => {
+  test('1. 全体の図:書いた21駅と未執筆の18駅、幹線の並び、分岐', async () => {
     const { overall } = await maps();
     assert.equal(overall.stations.filter((s) => !s.info.planned).length, 21);
-    assert.equal(overall.stations.filter((s) => s.info.planned).length, 12);
+    assert.equal(overall.stations.filter((s) => s.info.planned).length, 18);
     const trunk = overall.stations
       .filter((s) => s.y === 0)
       .sort((a, b) => a.x - b.x)
@@ -330,11 +330,11 @@ describe('route-map: 章の帯と未執筆の章', () => {
     const { overall, cs, physics } = await maps();
     assert.deepEqual(
       overall.bands.map((b) => b.number),
-      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 16, 17],
     );
     assert.deepEqual(
       overall.bands.filter((b) => b.planned).map((b) => b.number),
-      [10, 11, 12, 13],
+      [10, 11, 12, 13, 16, 17],
     );
     const band = (/** @type {any} */ layout, /** @type {number} */ n) => layout.bands.find((b) => b.number === n);
     const expect = (
