@@ -32,7 +32,7 @@ $1, \frac{1}{2}, \frac{1}{3}, \frac{1}{4}, \dots$ は 0 に「限りなく近づ
 
 この章では、まず実数や平面の点列について収束を定義し([[@convergence]])、その定義が距離のいくつかの性質しか使っていないことに注目して、距離空間を導入します([[@metric-space]])。
 
-## 点列の収束 {#convergence requires=reading-proofs}
+## 点列の収束 {#convergence requires=reading-proofs,sets-maps}
 
 ::: summary
 どんなに小さな許容誤差を決めても、ある番号から先の項がすべて、ある点からその誤差未満の所に入ること。
@@ -43,7 +43,7 @@ $1, \frac{1}{2}, \frac{1}{3}, \frac{1}{4}, \dots$ は 0 に「限りなく近づ
 :::
 
 ::: definition {#sequence name="点列" en="sequence"}
-集合 $X$ の点列とは、正の整数 $n = 1, 2, 3, \dots$ のそれぞれに、$X$ の点 $x_n$ をちょうど一つ対応させたものをいう。$(x_n)$ と書き、$x_n$ を第 $n$ 項と呼ぶ。$X$ が数の集合のときは、数列とも呼ぶ。
+集合 $X$ の点列とは、正の整数 $n = 1, 2, 3, \dots$ のそれぞれに、$X$ の点 $x_n$ をちょうど一つ対応させたもの、つまり正の整数全体から $X$ への写像をいう。$(x_n)$ と書き、$x_n$ を第 $n$ 項と呼ぶ。$X$ が数の集合のときは、数列とも呼ぶ。
 :::
 
 ::: definition {name="点列の収束" en="convergence of a sequence" aliases="収束"}

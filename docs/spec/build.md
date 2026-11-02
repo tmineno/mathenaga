@@ -152,10 +152,10 @@ dist/
 
 基準原稿を入力にした結合テストで確かめる。数式と式番号の個数、定義の ID の一覧は期待値を手で書かず、テストがビルドとは別の数え方で基準原稿から数える。
 
-1. 表示番号:reading-symbols = Z01、metric-space = M02、continuous-map = M04、cauchy-sequence = A01、banach = A04、picard-lindelof = A05、hilbert-space = A08、torus = G06、manifold = G07。
-2. 乗換駅は reading-proofs、metric-space、continuous-map の3つだけ。
+1. 表示番号:reading-symbols = Z01、sets-maps = Z03、metric-space = M02、continuous-map = M04、cauchy-sequence = A01、banach = A04、picard-lindelof = A05、hilbert-space = A08、torus = G06、manifold = G07。
+2. 乗換駅は reading-proofs、sets-maps、metric-space、continuous-map の4つだけ。
 3. 第3章の前提は第1章だけ。
-4. 情報科学の範囲は8駅(reading-symbols、reading-proofs、convergence、metric-space、cauchy-sequence、completeness、contraction、banach)で、章の順序は 0, 1, 3。第3章の次の章はなし(終着)。第4章は範囲外の章で、次の章はなし。
+4. 情報科学の範囲は9駅(reading-symbols、reading-proofs、sets-maps、convergence、metric-space、cauchy-sequence、completeness、contraction、banach)で、章の順序は 0, 1, 3。第3章の次の章はなし(終着)。第4章は範囲外の章で、次の章はなし。
 5. 理論物理の範囲に compact-connected は入らず、章の順序は 0, 1, 2, 3, 4, 5, 6, 8, 9。第3章の次の章は第4章。第7章は範囲外の章で、次の章は第8章。
 6. 分野を選んでいないとき、第3章の次の章は第4章、第9章の次の章はなし。
 7. 乗換案内:理論物理の第3章は幾何線の1項目(分岐駅 continuous-map は第2章、最初の駅 topological-space は第6章)。理論物理の第1章は2項目(解析線:分岐駅 metric-space はこの章、最初の駅は第3章。幾何線:分岐駅は第2章、最初の駅は第6章)。情報科学の第3章は0項目。

@@ -48,7 +48,7 @@
     - chapter: 16
       title: 無限集合の大きさ
       stations: [濃度, 可算集合, 対角線論法]
-      requires: [reading-proofs]
+      requires: [sets-maps]
     - chapter: 17
       title: 選択公理
       stations: [順序集合, 選択公理, ツォルンの補題]
