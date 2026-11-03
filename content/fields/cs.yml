@@ -17,6 +17,6 @@ goals:
   - station: hausdorff
     kind: partial
     label: 異なる入力を有限の観察で見分ける
-  - station: compact-connected
+  - station: compact
     kind: final
-    label: 止まるプログラムが読む桁数の上限
+    label: 止まるプログラムが読むビット数の上限
