@@ -32,7 +32,7 @@ npx playwright install chromium   # npm test の閲覧テストに使う
 環境変数:
 
 - `MATHENAGA_BASE_PATH`:サイトを置くパス。既定は `/`。`/` で始まり `/` で終わる(例:`/mathenaga/`)
-- `MATHENAGA_REPO_URL`:改善案を起票する GitHub のリポジトリ(`https://github.com/<owner>/<repo>`)。渡すと各駅に Issue 起票のアイコンが出る。公開のワークフローはリポジトリの URL を渡す
+- `MATHENAGA_REPO_URL`:改善案を起票する GitHub のリポジトリ(`https://github.com/<owner>/<repo>`)。渡すと各駅に Issue 起票のアイコンが出て、本文を選んだときのメニューに「起票」と「編集」(GitHub で原稿の該当行を開く)が出る。公開のワークフローはリポジトリの URL を渡す
 - `PORT`:`npm run dev` のポート。既定は 8000
 
 ビルドのエラーは `E05 chapters/03-completeness-fixed-point/index.md:12 …` のように、コードとファイルと行で出る。コードの意味は [content-format.md の Failure modes](docs/spec/content-format.md#failure-modes) にある。

@@ -21,7 +21,7 @@
 
 - `content/` の原稿([content-format.md](content-format.md))。文献の一覧(`references.yml`)と確認の記録(`references.verified.json`)を含む。ビルドは確認の記録を読むだけで、問い合わせはしない([reference-check.md](reference-check.md))。
 - 環境変数 `MATHENAGA_BASE_PATH`:ベースパス。既定は `/`。`/` で始まり `/` で終わる。
-- 環境変数 `MATHENAGA_REPO_URL`:改善案を起票する GitHub のリポジトリの URL(`https://github.com/<owner>/<repo>`)。任意。渡せば章ページの各駅に起票のアイコンを出す([site.md](site.md) の P-07)。
+- 環境変数 `MATHENAGA_REPO_URL`:改善案を起票する GitHub のリポジトリの URL(`https://github.com/<owner>/<repo>`)。任意。渡せば章ページの各駅に起票のアイコンを出し、本文を選んだときの選択メニューに「起票」と「編集」を出す([site.md](site.md) の P-07・P-12)。そのために、章ページの段落ごとに、原稿のファイルの中の行の範囲を書き込む。
 
 ### ビルドの流れ
 
@@ -121,7 +121,7 @@ dist/
 | `npm test` | 依存と、Playwright が使うブラウザをインストール済み | 単体テスト、テスト用原稿を使った結合テスト、Playwright でブラウザを動かす閲覧テスト([site.md](site.md))を実行し、すべて通れば終了コード 0 | 失敗したテストを出し、終了コードは 0 以外 | テストの出力は一時ディレクトリに書き、`dist/` には触れない |
 | `npm run refs:verify` | ネットワークにつながる | 文献の実在を検索 API で確かめ、確認の記録を書く([reference-check.md](reference-check.md)) | 同左 | `content/references.verified.json` を書き換える |
 | `MATHENAGA_BASE_PATH` | `/` で始まり `/` で終わる | すべてのリンクと読み込みに付く | 形式が違えば E13 で止まる | なし |
-| `MATHENAGA_REPO_URL` | 空か、`https://github.com/<owner>/<repo>` の形 | 空でなければ、章ページの各駅に、そのリポジトリの Issue 作成画面へのリンクを置く | 形式が違えば E13 で止まる | なし |
+| `MATHENAGA_REPO_URL` | 空か、`https://github.com/<owner>/<repo>` の形 | 空でなければ、章ページの各駅に、そのリポジトリの Issue 作成画面へのリンクを置く。段落ごとに原稿の行の範囲を書き込み、選択メニューから Issue 作成画面と原稿の行を開けるようにする | 形式が違えば E13 で止まる | なし |
 
 ### CI と公開
 
