@@ -11,12 +11,14 @@ import { normalizeNewlines } from '../core/source.js';
  * @property {{ file: string, text: string } | null} lines
  * @property {Array<{ id: string, file: string, text: string }>} fields
  * @property {Array<{ dir: string, file: string, dirPath: string, text: string | null, figures: string[] }>} chapters
+ * @property {{ file: string, text: string } | null} references  文献の一覧(なければ null)
+ * @property {{ file: string, text: string } | null} verified    文献の確認の記録(なければ null)
  */
 
 /**
  * content/ の下のファイルを読む。並びはいつも名前の順にする。
  * Preconditions: contentDir は読めるディレクトリ。
- * Postconditions: 路線ファイル・分野ファイル・章フォルダの中身を返す。改行は LF にそろえる。
+ * Postconditions: 路線ファイル・分野ファイル・章フォルダ・文献の一覧・確認の記録の中身を返す。改行は LF にそろえる。
  * Failure modes: contentDir がなければ例外。個々のファイルがないときは null や空の配列にする。
  * Side effects: ファイルを読む。
  * @param {string} contentDir
@@ -51,7 +53,15 @@ export async function readContent(contentDir) {
     const figures = (await listFiles(path.join(dirPath, 'figures'))).map((f) => `figures/${f}`).sort();
     chapters.push({ dir, file: `chapters/${dir}/index.md`, dirPath, text, figures });
   }
-  return { lines, fields, chapters };
+  const references = await readOptional(contentDir, 'references.yml');
+  const verified = await readOptional(contentDir, 'references.verified.json');
+  return { lines, fields, chapters, references, verified };
+}
+
+/** @param {string} contentDir @param {string} name */
+async function readOptional(contentDir, name) {
+  const full = path.join(contentDir, name);
+  return (await exists(full)) ? { file: name, text: normalizeNewlines(await fs.readFile(full, 'utf8')) } : null;
 }
 
 /**

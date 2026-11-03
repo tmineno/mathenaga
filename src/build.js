@@ -7,7 +7,15 @@ import { buildSite } from './core/graph.js';
 import { idProblem } from './core/ids.js';
 import { formatIssue, issue, sortIssues } from './core/issues.js';
 import { checkMaps } from './core/navigation.js';
-import { numberApplications, numberEquations, numberFigures, numberStatements } from './core/order.js';
+import {
+  numberApplications,
+  numberCitations,
+  numberEquations,
+  numberFigures,
+  numberNotes,
+  numberStatements,
+} from './core/order.js';
+import { checkReferences, checkVerified } from './core/references.js';
 import { resolveRefs } from './core/resolve.js';
 import { checkField, checkFrontMatter, checkLines } from './core/schema.js';
 import { parseChapterDir, splitFrontMatter } from './core/source.js';
@@ -78,6 +86,40 @@ export async function analyze({ contentDir, basePath, repoUrl = '' }) {
     if (r.field) fields.push(r.field);
   }
 
+  // 文献の一覧と確認の記録(content-format.md「参考文献」、reference-check.md)
+  /** @type {import('./core/references.js').Reference[]} */
+  let references = [];
+  const referencesFile = 'references.yml';
+  if (raw.references) {
+    const parsed = parseYaml(raw.references.text, referencesFile);
+    if (parsed.error) errors.push(parsed.error);
+    else {
+      const r = checkReferences(parsed.value, referencesFile);
+      errors.push(...r.errors);
+      references = r.references;
+    }
+  }
+  const verifiedFile = 'references.verified.json';
+  /** @type {unknown} */
+  let verified;
+  let verifiedReadable = true;
+  if (raw.verified) {
+    try {
+      verified = JSON.parse(raw.verified.text);
+    } catch (e) {
+      verifiedReadable = false;
+      errors.push(
+        issue(
+          'E15',
+          verifiedFile,
+          null,
+          `確認の記録が JSON として読めない(${String(/** @type {any} */ (e)?.message ?? e)})`,
+        ),
+      );
+    }
+  }
+  if (verifiedReadable) errors.push(...checkVerified(verified, references, verifiedFile));
+
   const chapters = [];
   /** @type {Map<string, { dirPath: string, figures: string[] }>} */
   const chapterFiles = new Map();
@@ -127,7 +169,7 @@ export async function analyze({ contentDir, basePath, repoUrl = '' }) {
     chapterFiles.set(dir.id, { dirPath: c.dirPath, figures: c.figures });
   }
 
-  const g = buildSite({ lines, fields, chapters, linesFile });
+  const g = buildSite({ lines, fields, chapters, linesFile, references, referencesFile });
   errors.push(...g.errors);
   notices.push(...g.notices);
   const site = g.site;
@@ -136,8 +178,14 @@ export async function analyze({ contentDir, basePath, repoUrl = '' }) {
   const statements = numberStatements(site.chapters);
   const figures = numberFigures(site.chapters, site.fieldOrder);
   const applications = numberApplications(site.chapters, site.fieldOrder);
-  const refs = resolveRefs(site, equations.byId, statements.byId, figures.byId, applications.byId);
+  const notes = numberNotes(site.chapters, site.fieldOrder);
+  const citations = numberCitations(site.chapters, site.fieldOrder, site.kinds);
+  const refs = resolveRefs(site, equations.byId, statements.byId, figures.byId, applications.byId, citations);
   errors.push(...refs.errors);
+  const cited = new Set([...citations.values()].flatMap((m) => [...m.keys()]));
+  for (const id of site.references.keys()) {
+    if (!cited.has(id)) notices.push(issue('N04', referencesFile, null, `文献 ${id} はどの章からも引かれていない`));
+  }
 
   /** @type {Map<any, string>} */
   const mathHtml = new Map();
@@ -178,6 +226,8 @@ export async function analyze({ contentDir, basePath, repoUrl = '' }) {
     statements,
     figures,
     applications,
+    notes,
+    citations,
     resolved: refs.resolved,
     mathHtml,
     basePath,

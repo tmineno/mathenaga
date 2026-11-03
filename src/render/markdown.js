@@ -17,6 +17,7 @@ export const BLOCK_CLOSE = `container_${BLOCK}_close`;
  * @property {(token: any) => string} mathInline
  * @property {(token: any) => string} mathBlock
  * @property {(token: any) => string} ref
+ * @property {(token: any) => string} [note]  注の印(note のトークン)を描く
  * @property {(src: string) => string} imageSrc
  * @property {(token: any) => number | undefined} [paragraphNo]  段落の番号(data-p)。番号がなければ undefined
  * @property {(token: any) => { label: string, id: string | null, images: any[], captions: TitlePart[][] } | undefined} [figure]
@@ -36,7 +37,8 @@ const NUMBERED = ['paragraph_open', 'list_item_open', 'heading_open', 'table_ope
  * MathEnaga の記法を読める markdown-it を作る。
  * Preconditions: なし。
  * Postconditions: html を解釈しない(タグは文字のまま)markdown-it を返す。
- *   次のトークンが加わる:math_inline、math_block、math_error、wikiref、ブロックの開閉。
+ *   次のトークンが加わる:math_inline、math_block、math_error、wikiref、note、note_error、ブロックの開閉。
+ *   note は注 `^[…]` で、children に注の本文を行内として解析したトークン列を持つ。
  *   2段目の見出しの末尾の {…} は取り除いて heading_open.meta.attrsSrc に入れる。
  *   タイトルのある画像は、タイトルを文字と行内の数式に切り分けて image.meta.titleParts に入れる。
  *   env.paragraphNo が番号を返すブロックには data-p 属性を付ける。
@@ -52,6 +54,7 @@ export function createMarkdown() {
   });
   md.inline.ruler.before('escape', 'math_inline', mathInlineRule);
   md.inline.ruler.before('link', 'wikiref', wikiRefRule);
+  md.inline.ruler.before('link', 'note', noteRule);
   keepImageTitleParts(md);
   md.core.ruler.after('block', 'station_heading_attrs', stationHeadingAttrs);
 
@@ -59,6 +62,8 @@ export function createMarkdown() {
   md.renderer.rules.math_block = (tokens, idx, _o, env) => env.mathBlock(tokens[idx]);
   md.renderer.rules.math_error = () => '';
   md.renderer.rules.wikiref = (tokens, idx, _o, env) => env.ref(tokens[idx]);
+  md.renderer.rules.note = (tokens, idx, _o, env) => (env.note ? env.note(tokens[idx]) : '');
+  md.renderer.rules.note_error = () => '';
   const defaultImage = md.renderer.rules.image;
   const esc = md.utils.escapeHtml;
   /** 並べた画像の札:(a)、(b)、… @param {number} i */
@@ -374,6 +379,96 @@ function wikiRefRule(state, silent) {
   }
   state.pos = close + 2;
   return true;
+}
+
+/**
+ * 注 `^[注の本文]`(content-format.md「注」)。本文は、`[` と `]` の入れ子を数えて、最初の対応する `]` で閉じる。
+ * 行内の数式・コード・`[[…]]` の中の括弧と、`\]` は数えない。本文は行内として解析し、children に入れる。
+ * 閉じていない注と空の注は note_error にする(検査はコアが行う)。`\^[` は escape の規則が文字にする。
+ */
+function noteRule(state, silent) {
+  const src = state.src;
+  const pos = state.pos;
+  if (src[pos] !== '^' || src[pos + 1] !== '[') return false;
+  const max = state.posMax;
+  let depth = 1;
+  let display = false;
+  let i = pos + 2;
+  let close = -1;
+  while (i < max) {
+    const ch = src[i];
+    if (ch === '\\') {
+      i += 2;
+      continue;
+    }
+    if (ch === '$') {
+      if (src[i + 1] === '$') {
+        display = true;
+        i += 2;
+        continue;
+      }
+      const end = closingDollar(src, i + 1, max);
+      i = end < 0 ? i + 1 : end + 1;
+      continue;
+    }
+    if (ch === '`') {
+      let n = 1;
+      while (src[i + n] === '`') n++;
+      const fence = '`'.repeat(n);
+      const end = src.indexOf(fence, i + n);
+      i = end < 0 || end >= max ? i + n : end + n;
+      continue;
+    }
+    if (ch === '[' && src[i + 1] === '[') {
+      const end = src.indexOf(']]', i + 2);
+      if (end >= 0 && end + 2 <= max) {
+        i = end + 2;
+        continue;
+      }
+    }
+    if (ch === '[') depth++;
+    else if (ch === ']' && --depth === 0) {
+      close = i;
+      break;
+    }
+    i++;
+  }
+  if (close < 0) {
+    if (!silent) {
+      const token = state.push('note_error', '', 0);
+      token.meta = { kind: 'unclosed' };
+      token.content = src.slice(pos, Math.min(max, pos + 20));
+    }
+    state.pos = pos + 2;
+    return true;
+  }
+  const content = src.slice(pos + 2, close);
+  if (!silent) {
+    if (content.trim() === '') {
+      const token = state.push('note_error', '', 0);
+      token.meta = { kind: 'empty' };
+      token.content = '';
+    } else {
+      const token = state.push('note', '', 0);
+      token.content = content;
+      token.meta = { display };
+      /** @type {any[]} */
+      const children = [];
+      state.md.inline.parse(content, state.md, state.env, children);
+      token.children = children;
+    }
+  }
+  state.pos = close + 1;
+  return true;
+}
+
+/** `from` から、行内の数式を閉じる `$` を探す。`\$` は飛ばす。見つからなければ -1。 @param {string} src @param {number} from @param {number} max */
+function closingDollar(src, from, max) {
+  for (let i = from; i < max; i++) {
+    if (src[i] === '\\') i++;
+    else if (src[i] === '$') return i;
+  }
+  return -1;
 }
 
 /** 2段目の見出しの末尾の {…} を、インラインの解析の前に取り除く。 */

@@ -291,7 +291,7 @@ describe('build: 受け入れテスト', () => {
     );
     assert.equal(errors.length, 1);
     assert.equal(errors[0].code, 'E05');
-    assert.match(errors[0].message, /路線の ID なので番号を差し込めない\(駅・章・式・定理・定義・図・応用だけ\)/);
+    assert.match(errors[0].message, /路線の ID なので番号を差し込めない\(駅・章・式・定理・定義・図・応用・文献だけ\)/);
   });
 
   test('23. 図番号とキャプション、[[@ID]] による図の参照', async () => {
@@ -629,3 +629,155 @@ async function snapshot(dir) {
   for (const f of await listFiles(dir)) map.set(f, await fs.readFile(path.join(dir, f)));
   return map;
 }
+
+// docs/spec/build.md 受け入れテスト 29〜31(注番号、文献番号、文献の確認の記録とネットワーク)
+describe('build: 注と参考文献', () => {
+  const CH4 = 'chapters/04-norm-inner-product/index.md';
+  const START = 'この章では、1 を防ぐ条件として';
+  const SUMMARY = '完備な空間の縮小写像がただ一つもつ不動点';
+  const PROOF = '**1.** 帰納法により';
+  const APP = 'から、ベルマン作用素 $T$ は完備な空間 $B(S)$ 上の縮小写像です。';
+  const PROSE = '何回反復すれば';
+  /** 注の印の番号を、ページに出る順に集める。 @param {string} html */
+  const markers = (html) => [...html.matchAll(/<sup class="note-ref" id="_note-(\d+)">/g)].map((m) => Number(m[1]));
+  /** 注の本文 → 注番号。 @param {any} ctx @param {number} chapterNo */
+  const noteNumbers = (ctx, chapterNo) => {
+    const ch = ctx.site.chapters.find((/** @type {any} */ c) => c.number === chapterNo);
+    return new Map(ch.notes.map((/** @type {any} */ n) => [n.token.content, ctx.notes.labels.get(n.token)]));
+  };
+
+  test('29. 注番号は章ページに並ぶ順。application の中の注は駅の末尾の位置で数える', async () => {
+    const root = await tempRoot();
+    roots.push(root);
+    await edit(root, CH3, (t) => {
+      let s = replaceOnce(t, START, `この章では^[出発点の注。]、1 を防ぐ条件として`);
+      s = replaceOnce(s, SUMMARY, `完備な空間の縮小写像^[駅の注。]がただ一つもつ不動点`);
+      s = replaceOnce(s, PROOF, '**1.** 帰納法^[証明の注。]により');
+      return replaceOnce(s, APP, `${APP.slice(0, -1)}^[応用の注。]。`);
+    });
+    const a = await analyzeIn(root);
+    assert.deepEqual(a.errors, []);
+    assert.deepEqual(
+      [...noteNumbers(a.ctx, 3)].sort((x, y) => x[1] - y[1]),
+      [
+        ['出発点の注。', 1],
+        ['駅の注。', 2],
+        ['証明の注。', 3],
+        ['応用の注。', 4],
+      ],
+    );
+    const b = await buildIn(root);
+    assert.deepEqual(b.errors, []);
+    const html = await readDist(path.join(root, 'dist'), 'chapters/completeness-fixed-point/index.html');
+    // 印の並び(ページの順)は 1, 2, 3, 4。番号は分野の選択によらない(ビルドで振る)
+    assert.deepEqual(markers(html), [1, 2, 3, 4]);
+    // 注の一覧は、出発点の節の最後と、banach 駅の最後(application の後)にある
+    const start = capture(/(<section class="start[\s\S]*?<\/section>)/, html);
+    assert.match(start, /<aside class="notes"[^>]*>[\s\S]*id="_note-1-text"/);
+    const banach = capture(/(<section class="station flow" id="banach"[\s\S]*?<\/section>)/, html);
+    assert.match(banach, /class="vgroup" data-kind="application"[\s\S]*<aside class="notes"/);
+    assert.deepEqual(
+      [...banach.matchAll(/id="_note-(\d+)-text"/g)].map((m) => Number(m[1])),
+      [2, 3, 4],
+    );
+  });
+
+  test('30. 文献番号は章ごとに、初めて引いた順。注の中の引用は注の印の位置で数える', async () => {
+    const root = await tempRoot();
+    roots.push(root);
+    await edit(root, CH3, (t) => {
+      let s = replaceOnce(t, START, `[[@kreyszig-fa]] ${START}`);
+      s = replaceOnce(s, SUMMARY, `[[@lecun-deep-learning]] ${SUMMARY}`);
+      return replaceOnce(s, PROSE, `[[@kreyszig-fa]] ${PROSE}`);
+    });
+    await edit(root, CH4, (t) =>
+      replaceOnce(t, 'の三角不等式もここで証明します。', 'の三角不等式もここで証明します [[@lecun-deep-learning]]。'),
+    );
+    const b = await buildIn(root);
+    assert.deepEqual(b.errors, []);
+    const ch3 = await readDist(path.join(root, 'dist'), 'chapters/completeness-fixed-point/index.html');
+    assert.deepEqual(
+      [...ch3.matchAll(/<a class="cite" href="#([a-z-]+)"[^>]*>(\[\d+\])<\/a>/g)].map((m) => `${m[1]} ${m[2]}`),
+      ['kreyszig-fa [1]', 'lecun-deep-learning [2]', 'kreyszig-fa [1]'],
+    );
+    const refs = capture(/(<section class="refs-sec"[\s\S]*?<\/section>)/, ch3);
+    assert.deepEqual(
+      [...refs.matchAll(/<li id="([a-z-]+)"/g)].map((m) => m[1]),
+      ['kreyszig-fa', 'lecun-deep-learning'],
+    );
+    const ch4 = await readDist(path.join(root, 'dist'), 'chapters/norm-inner-product/index.html');
+    assert.deepEqual(
+      [
+        ...new Set(
+          [...ch4.matchAll(/<a class="cite" href="#([a-z-]+)"[^>]*>(\[\d+\])<\/a>/g)].map((m) => `${m[1]} ${m[2]}`),
+        ),
+      ],
+      ['lecun-deep-learning [1]'],
+    );
+
+    // 注の中の引用は、注の印の位置で数える
+    const root2 = await tempRoot();
+    roots.push(root2);
+    await edit(root2, CH3, (t) => {
+      const s = replaceOnce(t, SUMMARY, `${SUMMARY}^[総説 [[@lecun-deep-learning]] も参照。]`);
+      return replaceOnce(s, PROSE, `[[@kreyszig-fa]] ${PROSE}`);
+    });
+    const a2 = await analyzeIn(root2);
+    assert.deepEqual(a2.errors, []);
+    assert.deepEqual(
+      [...a2.ctx.citations.get('completeness-fixed-point')],
+      [
+        ['lecun-deep-learning', 1],
+        ['kreyszig-fa', 2],
+      ],
+    );
+  });
+
+  test('31. 確認の記録のない文献は E15 の1件で止まり、ビルドはネットワークに接続しない', async () => {
+    const root = await tempRoot();
+    roots.push(root);
+    const dist = path.join(root, 'dist');
+    await fs.mkdir(dist, { recursive: true });
+    await fs.writeFile(path.join(dist, 'keep.txt'), 'before');
+    await edit(
+      root,
+      'references.yml',
+      (t) =>
+        `${t}- id: extra-book\n  type: book\n  authors: [Someone]\n  title: Extra\n  publisher: Nowhere\n  year: 2000\n  isbn: 978-0-471-50731-4\n`,
+    );
+    const r = await buildIn(root);
+    assert.deepEqual(
+      r.errors.map((e) => e.code),
+      ['E15'],
+    );
+    assert.match(r.errors[0].message, /extra-book/);
+    assert.equal(r.written, false);
+    assert.equal(await fs.readFile(path.join(dist, 'keep.txt'), 'utf8'), 'before');
+
+    // ネットワークへの接続を失敗させても、テスト用原稿はビルドできる
+    // 名前空間は書き換えられないので、CommonJS のオブジェクト(default)の側を差し替える
+    const net = (await import('node:net')).default;
+    const http = (await import('node:http')).default;
+    const https = (await import('node:https')).default;
+    const saved = { fetch: globalThis.fetch, connect: net.connect, hr: http.request, hsr: https.request };
+    const refuse = () => {
+      throw new Error('ビルドがネットワークに接続した');
+    };
+    globalThis.fetch = /** @type {any} */ (refuse);
+    /** @type {any} */ (net).connect = refuse;
+    /** @type {any} */ (http).request = refuse;
+    /** @type {any} */ (https).request = refuse;
+    try {
+      const root2 = await tempRoot();
+      roots.push(root2);
+      const ok = await buildIn(root2);
+      assert.deepEqual(ok.errors, []);
+      assert.equal(ok.written, true);
+    } finally {
+      globalThis.fetch = saved.fetch;
+      /** @type {any} */ (net).connect = saved.connect;
+      /** @type {any} */ (http).request = saved.hr;
+      /** @type {any} */ (https).request = saved.hsr;
+    }
+  });
+});

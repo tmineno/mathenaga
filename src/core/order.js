@@ -174,3 +174,78 @@ export function numberEquations(chapters, fieldOrder) {
   }
   return { labels, byId };
 }
+
+/**
+ * 範囲の中の行内のトークンを、章ページに並ぶ順にたどる。注(note)の中身は、注の印の位置でたどる。
+ * Preconditions: ranges は displayRanges の結果か、その一部。
+ * Postconditions: 行内の子のトークンごとに visit を呼ぶ。
+ * Failure modes: なし。
+ * Side effects: visit が起こすものだけ。
+ * @param {import('./chapter.js').ChapterModel} chapter
+ * @param {Array<{ start: number, end: number }>} ranges
+ * @param {(token: any) => void} visit
+ */
+export function walkInline(chapter, ranges, visit) {
+  /** @param {any[]} children */
+  const walk = (children) => {
+    for (const c of children) {
+      visit(c);
+      if (c.type === 'note' && c.children) walk(c.children);
+    }
+  };
+  for (const r of ranges) {
+    for (let i = r.start; i <= r.end; i++) {
+      const t = chapter.tokens[i];
+      if (t.type === 'inline' && t.children) walk(t.children);
+    }
+  }
+}
+
+/**
+ * 注に、章ページに並ぶ順で注番号を振る(docs/spec/build.md「導出する値」)。ほかの番号とは別に数える。
+ * Preconditions: chapters は章グラフの章。注は chapter.notes に集めてある。
+ * Postconditions: 注のトークン → 番号(章ごとに 1 から)を返す。入れ子の注(エラー)には振らない。
+ * Failure modes: なし。
+ * Side effects: なし。
+ * @param {import('./chapter.js').ChapterModel[]} chapters
+ * @param {Map<string, number>} fieldOrder
+ */
+export function numberNotes(chapters, fieldOrder) {
+  /** @type {Map<any, number>} */
+  const labels = new Map();
+  for (const chapter of chapters) {
+    const notes = new Set(chapter.notes.map((n) => n.token));
+    let k = 0;
+    walkInline(chapter, displayRanges(chapter, fieldOrder), (t) => {
+      if (notes.has(t) && !labels.has(t)) labels.set(t, ++k);
+    });
+  }
+  return { labels };
+}
+
+/**
+ * 章で引いた文献に、章ごとの文献番号を振る(docs/spec/build.md「導出する値」)。
+ * その文献を章で初めて引いた位置が、章ページに並ぶ順に 1 から数える。注の中の引用は注の印の位置で数える。
+ * Preconditions: chapters は章グラフの章。kinds は ID → 種類(文献は 'reference')。
+ * Postconditions: 章の ID → (文献の ID → 番号)を返す。並びは番号の順。
+ * Failure modes: なし。
+ * Side effects: なし。
+ * @param {import('./chapter.js').ChapterModel[]} chapters
+ * @param {Map<string, number>} fieldOrder
+ * @param {Map<string, string>} kinds
+ */
+export function numberCitations(chapters, fieldOrder, kinds) {
+  /** @type {Map<string, Map<string, number>>} */
+  const byChapter = new Map();
+  for (const chapter of chapters) {
+    /** @type {Map<string, number>} */
+    const numbers = new Map();
+    walkInline(chapter, displayRanges(chapter, fieldOrder), (t) => {
+      if (t.type !== 'wikiref' || !t.meta?.at || t.meta.label !== null) return;
+      const key = t.meta.key;
+      if (kinds.get(key) === 'reference' && !numbers.has(key)) numbers.set(key, numbers.size + 1);
+    });
+    byChapter.set(chapter.id, numbers);
+  }
+  return byChapter;
+}

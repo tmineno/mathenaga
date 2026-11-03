@@ -629,6 +629,57 @@ details.fold.proof > summary > .tag {
   color: var(--warn);
   border-color: transparent;
 }
+/* 補足(remark)。読み飛ばしてよいので、ほかの枠より控えめにする(site.md「駅の表示」) */
+.box.remark {
+  border-style: dashed;
+}
+/* 注の一覧(site.md「注と参考文献の表示」) */
+.notes {
+  border-top: 1px solid var(--rule);
+  padding-top: 8px;
+  font-size: 0.875em;
+}
+.notes-h {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+.note-list,
+.refs {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 4px;
+}
+.note-item,
+.ref-item {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.note-no,
+.ref-no {
+  color: var(--muted);
+  font-weight: 700;
+  margin-right: 8px;
+}
+.note-back {
+  margin-left: 6px;
+  text-decoration: none;
+}
+.note-ref {
+  font-size: 0.7em;
+  line-height: 0;
+  margin: 0 1px;
+}
+.note-ref a,
+a.cite {
+  text-decoration: none;
+}
+.note-ref a:hover,
+a.cite:hover {
+  text-decoration: underline;
+}
 /* 定理の枠の中の証明の骨格。定理の本文と線で区切る(site.md「駅の表示」) */
 .thm-part {
   display: grid;
