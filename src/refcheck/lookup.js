@@ -102,6 +102,7 @@ export async function lookupDoi(doi, http) {
           authors,
           family: String(first?.family ?? first?.name ?? ''),
           year: Number.isInteger(year) ? year : null,
+          volume: null,
         },
       ],
     };
@@ -177,6 +178,7 @@ export async function lookupIsbn(isbn, http) {
         authors: name ? [name] : [],
         family: familyFromName(name),
         year: firstYear(String(rec.publish_date ?? '')),
+        volume: null,
       },
     ],
   };
@@ -213,6 +215,7 @@ export function parseNdl(xml, isbn13) {
       authors,
       family: familyFromName(authors[0] ?? ''),
       year: firstYear(allTags(item, 'dcterms:issued')[0]?.text ?? ''),
+      volume: allTags(item, 'dcndl:volume')[0]?.text ?? '',
     });
   }
   return out;

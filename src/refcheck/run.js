@@ -14,7 +14,7 @@ import { matchRecord } from './match.js';
  * @typedef {object} Check
  * @property {string} identifier  `doi:<DOI>` か `isbn:<ISBN-13>`
  * @property {string} source
- * @property {{ type: string, title: string, authors: string[], year: number | null }} record
+ * @property {{ type: string, title: string, authors: string[], year: number | null, volume?: string }} record
  */
 
 /**
@@ -205,7 +205,14 @@ export async function verifyReference(ref, http) {
       checks.push({
         identifier,
         source: found.source,
-        record: { type: matched.type, title: matched.title, authors: matched.authors, year: matched.year },
+        // NDL サーチの記録に dcndl:volume があれば、そのままの文字列を残す(reference-check.md「確認の記録」)
+        record: {
+          type: matched.type,
+          title: matched.title,
+          authors: matched.authors,
+          year: matched.year,
+          ...(matched.volume ? { volume: matched.volume } : {}),
+        },
       });
     } else if (best) {
       const lines = best.diffs.map(

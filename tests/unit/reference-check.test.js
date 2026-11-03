@@ -8,7 +8,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { fingerprint } from '../../src/core/references.js';
-import { firstYear, familyFromName, normalize } from '../../src/refcheck/match.js';
+import { firstYear, familyFromName, normalize, volumeKey } from '../../src/refcheck/match.js';
 import { runRefsVerify } from '../../src/refcheck/run.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -45,6 +45,16 @@ const matsu = (year = 2018) => `- id: matsuzaka-sets
   publisher: 岩波書店
   year: ${year}
   isbn: 978-4-00-029871-1
+`;
+
+/** 杉浦光夫『解析入門』の第2巻。NDL サーチの記録の dcndl:volume は `2` */
+const sugiura = (volume = '') => `- id: sugiura-analysis
+  type: book
+  authors: [杉浦光夫]
+  title: 解析入門
+${volume ? `  volume: "${volume}"\n` : ''}  publisher: 東京大学出版会
+  year: 1985
+  isbn: 978-4-13-062006-2
 `;
 
 /**
@@ -175,7 +185,13 @@ test('6: 和書は NDL サーチの記録と一致し、source が ndl になる
   const c = r.verified['matsuzaka-sets'].checks[0];
   assert.equal(c.identifier, 'isbn:9784000298711');
   assert.equal(c.source, 'ndl');
-  assert.deepEqual(c.record, { type: 'book', title: '集合・位相入門', authors: ['松坂, 和夫'], year: 2018 });
+  assert.deepEqual(c.record, {
+    type: 'book',
+    title: '集合・位相入門',
+    authors: ['松坂, 和夫'],
+    year: 2018,
+    volume: ': 新装版',
+  });
 });
 
 test('7: 年を1つ変えると、年が一致しない', async () => {
@@ -192,6 +208,71 @@ test('Kreyszig は実物の ISBN で NDL サーチの記録と一致する(ビ�
   assert.equal(c.identifier, 'isbn:9780471507314');
   assert.equal(c.source, 'ndl');
   assert.equal(c.record.year, 1978);
+});
+
+test('11: 多巻本は巻 II が記録の巻 2 と一致し、巻を記録に残す。巻 I や巻なしは巻が一致しない', async () => {
+  const ok = await run(sugiura('II'));
+  assert.equal(ok.code, 0);
+  const c = ok.verified['sugiura-analysis'].checks[0];
+  assert.equal(c.identifier, 'isbn:9784130620062');
+  assert.deepEqual(c.record, {
+    type: 'book',
+    title: '解析入門',
+    authors: ['杉浦, 光夫, 1928-2008'],
+    year: 1985,
+    volume: '2',
+  });
+
+  const wrong = await run(sugiura('I'));
+  assert.equal(wrong.code, 1);
+  assert.match(wrong.lines.join('\n'), /巻が一致しない。項目「I」、記録「2」/);
+  assert.equal(wrong.text, null);
+
+  const none = await run(sugiura());
+  assert.equal(none.code, 1);
+  assert.match(none.lines.join('\n'), /巻が一致しない。項目「\(なし\)」、記録「2」/);
+  assert.equal(none.text, null);
+});
+
+test('12: 記録の巻が「1 : 軽装版」でも、項目の巻 I と一致する', async () => {
+  const yml = `- id: kodaira-analysis
+  type: book
+  authors: [小平邦彦]
+  title: 解析入門
+  volume: "I"
+  edition: 軽装版
+  publisher: 岩波書店
+  year: 2003
+  isbn: 978-4-00-005192-7
+`;
+  // 記録した応答には巻が「1」の記録と「1 : 軽装版」の記録があり、「1」が先に一致する。
+  // 「1 : 軽装版」の記録だけで照合させるため、もう一方を応答から除く。
+  const body = recorded[`${NDL}9784000051927`].body;
+  const items = [...body.matchAll(/<item>[\s\S]*?<\/item>/g)].map((m) => m[0]);
+  const plain = items.filter((it) => it.includes('<dcndl:volume>1</dcndl:volume>'));
+  assert.equal(plain.length, 1);
+  const f = fakeFetch({ [`${NDL}9784000051927`]: { status: 200, body: body.replace(plain[0], '') } });
+  const r = await run(yml, [], { fetch: f });
+  assert.equal(r.code, 0);
+  assert.equal(r.verified['kodaira-analysis'].checks[0].record.volume, '1 : 軽装版');
+});
+
+test('13: 記録の巻が「: pbk」(製本の区別)なら、巻を書かなくても一致する', async () => {
+  // 記録した応答には巻のない記録と「: pbk」の記録があり、巻のない記録が先に一致する。
+  // 「: pbk」の記録だけで照合させるため、巻のない記録を応答から除く。
+  const body = recorded[`${NDL}9780471507314`].body;
+  const items = [...body.matchAll(/<item>[\s\S]*?<\/item>/g)].map((m) => m[0]);
+  const noVolume = items.filter((it) => !it.includes('<dcndl:volume>'));
+  assert.equal(noVolume.length, 1);
+  const pbkOnly = fakeFetch({ [`${NDL}9780471507314`]: { status: 200, body: body.replace(noVolume[0], '') } });
+  const r = await run(KREYSZIG, [], { fetch: pbkOnly });
+  assert.equal(r.code, 0);
+  assert.equal(r.verified['kreyszig-fa'].checks[0].record.volume, ': pbk');
+  // 巻を比べない OpenLibrary の記録には volume を残さない
+  const f = fakeFetch({ [`${NDL}9780471507314`]: { status: 200, body: NDL_EMPTY } });
+  const ol = await run(KREYSZIG.replace('publisher', 'volume: "I"\n  publisher'), [], { fetch: f });
+  assert.equal(ol.code, 0);
+  assert.equal(ol.verified['kreyszig-fa'].checks[0].record.volume, undefined);
 });
 
 test('NDL サーチに記録がなければ OpenLibrary(著者の記録をたどる)の記録で一致する', async () => {
@@ -338,4 +419,19 @@ test('正規化・年・姓の取り出し', () => {
   // 区切りのない欧文の名前は最後の語を姓とする(最初の語を取ると、名の一致で通ってしまう)
   assert.equal(familyFromName('Erwin Kreyszig'), 'Kreyszig');
   assert.equal(familyFromName('杉浦光夫'), '杉浦光夫');
+});
+
+test('巻のそろえ方(2026-11-03 に NDL サーチで見た形)', () => {
+  for (const v of ['１', '第１', '[第1]', 'volume1', '1 : 軽装版', 'I', 'Ⅰ', 'Vol. 1', 'Pt. 1']) {
+    assert.equal(volumeKey(v), '1', v);
+  }
+  for (const v of ['第2巻', 'II', 'Ⅱ', 'pt. 2']) assert.equal(volumeKey(v), '2', v);
+  for (const v of [': pbk', ': paperback', ': 新装']) assert.equal(volumeKey(v), '', v);
+  assert.equal(volumeKey('上巻'), '上');
+  assert.equal(volumeKey('4A'), '4a');
+  assert.equal(volumeKey('IV'), '4');
+  // ローマ数字として正しく読めないものは、そのまま
+  assert.equal(volumeKey('iiii'), 'iiii');
+  // 範囲の「-」は残す(1-2 を 12 にしない)
+  assert.equal(volumeKey('１－２'), '1-2');
 });

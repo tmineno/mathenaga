@@ -296,11 +296,12 @@ goals:
 | id | 文献の ID | 必須 |
 | type | `book`(本)か `article`(雑誌の論文) | 必須 |
 | authors | 著者の配列。原典の表記で書く(「杉浦光夫」「Erwin Kreyszig」) | 必須 |
-| title | 書名か論文の題名。原典の表記で書き、副題があれば「主題: 副題」とする | 必須 |
+| title | 書名か論文の題名。原典の表記で書き、副題があれば「主題: 副題」とする。多巻本の巻は title に含めず、volume に書く(確かめる記録が巻を書名の中にだけ持つときは、title に含めて volume を書かない。[reference-check.md](reference-check.md)「照合」) | 必須 |
 | edition | 版(「第2版」「3rd ed.」) | 任意 |
 | publisher | 出版社 | book で必須 |
 | journal | 雑誌名 | article で必須 |
-| volume・issue・pages | 巻・号・ページ(文字列) | 任意(article だけ) |
+| volume | 巻(文字列)。article では雑誌の巻(「521」)、book では多巻本の巻(「I」「上」。原典の表記で書く) | 任意 |
+| issue・pages | 号・ページ(文字列) | 任意(article だけ) |
 | year | 発行年。4桁の整数で、isbn・doi の指す版の年 | 必須 |
 | isbn | ISBN-10 か ISBN-13(ハイフンは任意)。book だけ | doi と isbn の少なくとも一方が必須 |
 | doi | DOI(`10.` で始まる。`https://doi.org/` は付けない) | doi と isbn の少なくとも一方が必須 |
@@ -401,7 +402,7 @@ $$\forall \varepsilon > 0,\ \exists N,\ \forall m, n \ge N: d(x_m, x_n) < \varep
 |---|---|---|
 | E01 | 読み取りの失敗 | YAML・front matter が解釈できない。章フォルダに index.md がない |
 | E02 | 知らない名前 | 表にないブロック名・属性・YAML の項目(planned の中と文献の一覧を含む)。kind・layout・style・文献の type の値の誤り |
-| E03 | 値の形式 | ID の形式、`def-` で始まる ID、「章番号-章の ID」の形でない章フォルダ名、color・color_dark・code の形式、planned の形(配列でない、chapter が 0 以上の整数でない、stations・requires が文字列の配列でない、stations が空)、文献の形(year が4桁の整数でない、isbn の桁数かチェックディジットの誤り、`10.` で始まらない doi、authors が空、book でない文献の isbn、article でない文献の journal・volume・issue・pages) |
+| E03 | 値の形式 | ID の形式、`def-` で始まる ID、「章番号-章の ID」の形でない章フォルダ名、color・color_dark・code の形式、planned の形(配列でない、chapter が 0 以上の整数でない、stations・requires が文字列の配列でない、stations が空)、文献の形(year が4桁の整数でない、isbn の桁数かチェックディジットの誤り、`10.` で始まらない doi、authors が空、book でない文献の isbn、article でない文献の journal・issue・pages) |
 | E04 | 重複 | 名前空間での ID の重複、章番号の重複(planned の章番号を含む)、路線記号の重複、同じ分野の goals での駅の重複、駅と ID を共有する定義が2つ以上 |
 | E05 | 参照先の誤り | 存在しない ID や種類の違う ID を指している。requires(planned の requires を含む)、line、goals の station、field 属性、`[[ID]]`、`[[@ID]]` が対象 |
 | E06 | 前提の順序 | requires が、読む順で後ろの駅か自分自身を指している。planned の requires が、その章より章番号の大きい章の駅を指している。循環があれば循環の一覧も出す |
@@ -476,6 +477,8 @@ $$\forall \varepsilon > 0,\ \exists N,\ \forall m, n \ge N: d(x_m, x_n) < \varep
    31. 確認の記録から lecun-deep-learning の項目を消す(E15)。
    32. 第3章に `[[kreyszig-fa]]`(`@` なし)と書く(E05)。
    33. 文献の一覧の項目に `url: https://example.com/` を書く(E02)。
+   34. 文献の一覧の kreyszig-fa に `volume: "I"` を書く(book の巻は書けるので E03 にはならない。fingerprint が記録と合わないので E15 だけ)。
+   35. 文献の一覧の kreyszig-fa に `issue: "1"` を書く(article でない文献の issue なので E03。fingerprint が記録と合わないので E15)。
 5. 4 の誤りのうち、別々のファイルにある2つを同時に入れると、1回のビルドで両方が出る。
 6. 本文に `<script>alert(1)</script>` と書いた章をビルドすると、ページにはその文字列が文字として出て、script 要素はできない。
 7. テスト用原稿の文献の一覧には kreyszig-fa と lecun-deep-learning があり、どちらにも確認の記録がある。テスト用原稿の章から lecun-deep-learning の引用をすべて消してビルドすると、エラーはなく、N04 で lecun-deep-learning が出る。

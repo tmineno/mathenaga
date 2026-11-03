@@ -880,7 +880,9 @@ export function bibliography(r) {
   /** @type {string[]} */
   const parts = [authors];
   if (r.type === 'book') {
-    parts.push(ja ? `『${h(r.title)}』` : `<i>${h(r.title)}</i>`);
+    // 多巻本の巻は、書名の後に空白を挟んで書名と一緒に囲む(『解析入門 II』)
+    const title = r.volume ? `${h(r.title)} ${h(r.volume)}` : h(r.title);
+    parts.push(ja ? `『${title}』` : `<i>${title}</i>`);
     if (r.edition) parts.push(h(r.edition));
     if (r.publisher) parts.push(h(r.publisher));
   } else {
