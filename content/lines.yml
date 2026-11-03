@@ -10,6 +10,29 @@
   code: M
   name: 本線
   color: "#8790A1"
+# 測度線は開集合から分かれる(ボレル集合を開集合から作り、可測関数を開集合の逆像で定める)。
+# 解析線の作用素の章より前に読み、そこで L2(R) の位置演算子・運動量演算子と、
+# ユニタリ作用素としてのフーリエ変換を例に使えるようにする。
+# フーリエ級数は第5章(hilbert-space)で、区分的に連続な関数の内積空間で扱う。
+# この路線は、その空間を完備にしたものが L2 であること(完備性)を受け持つ。
+# 上の段は路線ファイルの順に幹線に近い段から埋まるので、解析線より前に置いて、幹線と解析線の間の段に描く。
+- id: measure
+  code: L
+  name: 測度線
+  color: "#2563A8"
+  color_dark: "#7FB2EE"
+  layout: up
+  planned:
+    - chapter: 10
+      title: 測度と積分
+      stations: [測度, ルベーグ積分, 収束定理]
+      requires: [open-set]
+    - chapter: 11
+      title: Lp 空間
+      stations: [Lp 空間, リース・フィッシャーの定理]
+    - chapter: 12
+      title: フーリエ変換
+      stations: [フーリエ変換, プランシュレルの定理]
 - id: analysis
   code: A
   name: 解析線
@@ -17,10 +40,10 @@
   color_dark: "#AA98F2"
   layout: up
   planned:
-    - chapter: 10
+    - chapter: 13
       title: 有界作用素
       stations: [有界作用素, 双対空間, 随伴作用素]
-    - chapter: 11
+    - chapter: 14
       title: スペクトル理論
       stations: [スペクトル, コンパクト作用素, スペクトル分解]
 - id: geometry
@@ -30,10 +53,10 @@
   color_dark: "#4DC1B3"
   layout: down
   planned:
-    - chapter: 12
+    - chapter: 15
       title: 接空間とベクトル場
       stations: [接空間, ベクトル場, リー微分]
-    - chapter: 13
+    - chapter: 16
       title: 微分形式
       stations: [微分形式, 外微分, ストークスの定理]
 # 集合線は 0番線から分かれる。既存の駅はどれもこの路線の駅を前提にしないので、章番号は後ろに置く。
@@ -44,16 +67,16 @@
   color_dark: "#E9A15C"
   layout: up
   planned:
-    - chapter: 14
+    - chapter: 17
       title: 無限集合の大きさ
       stations: [濃度, 可算集合, 対角線論法]
       requires: [sets-maps]
       # 第0章の sets-maps から外した、この章で使う材料:正の整数全体から正の偶数全体への全単射
       # (全体と等しくない部分集合との全単射)と、X の冪集合から X → {0, 1} の写像の全体への全単射
       # (部分集合 A を、A の要素を 1 に、それ以外を 0 に写す写像に対応させる。X の要素が n 個なら、どちらも 2^n 個)。
-    - chapter: 15
+    - chapter: 18
       title: 選択公理
       stations: [順序集合, 公理的集合論, 選択公理, ツォルンの補題]
       # 公理的集合論は、選択公理を足す相手(ほかの公理)を示すために、選択公理の前に置く。
-      # 第14章の対角線論法で使う集合 {x ∈ X | x ∉ f(x)} が、ラッセルのパラドックスと同じ形であることから入る。
+      # 前の章(無限集合の大きさ)の対角線論法で使う集合 {x ∈ X | x ∉ f(x)} が、ラッセルのパラドックスと同じ形であることから入る。
       # 第0章の sets-maps の補足(remark)は、分出公理までしか書いていない。この駅を書いたら、補足からこの駅へ [[@ID]] でつなぐ。
