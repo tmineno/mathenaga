@@ -2,7 +2,7 @@
 
 > **Status:** Draft · Spec-driven kickoff · 2026-11-01
 > **Owner:** Taiki Mineno
-> **Related:** [content-format.md](content-format.md)、[route-map.md](route-map.md)、[site.md](site.md)、[ADR-001](../adr/ADR-001-handmade-build-tool.md)、[ADR-002](../adr/ADR-002-definition-index.md)
+> **Related:** [content-format.md](content-format.md)、[route-map.md](route-map.md)、[site.md](site.md)、[reference-check.md](reference-check.md)、[ADR-001](../adr/ADR-001-handmade-build-tool.md)、[ADR-002](../adr/ADR-002-definition-index.md)、[ADR-005](../adr/ADR-005-notes-and-references.md)
 
 ## Goal
 
@@ -19,7 +19,7 @@
 
 ### 入力
 
-- `content/` の原稿([content-format.md](content-format.md))。
+- `content/` の原稿([content-format.md](content-format.md))。文献の一覧(`references.yml`)と確認の記録(`references.verified.json`)を含む。ビルドは確認の記録を読むだけで、問い合わせはしない([reference-check.md](reference-check.md))。
 - 環境変数 `MATHENAGA_BASE_PATH`:ベースパス。既定は `/`。`/` で始まり `/` で終わる。
 - 環境変数 `MATHENAGA_REPO_URL`:改善案を起票する GitHub のリポジトリの URL(`https://github.com/<owner>/<repo>`)。任意。渡せば章ページの各駅に起票のアイコンを出す([site.md](site.md) の P-07)。
 
@@ -48,6 +48,9 @@
 | 定義と定理の番号 | 定義(definition)と定理(theorem)ごとに「章番号.通し番号」(3.2)。通し番号は章ごとに 1 から、定義と定理をまとめて原稿に書いた順に振る。式番号とは別に数え、分野の選択では変わらない |
 | 図番号 | 図(画像だけの段落、[content-format.md](content-format.md)「図」)ごとに「図 章番号.通し番号」。通し番号は章ごとに 1 から、章ページに並ぶ順に振る(式番号と同じ順。式番号とは別に数える)。分野の選択では変わらない |
 | 応用番号 | application ごとに「応用 章番号.通し番号」。通し番号は章ごとに 1 から、全分野をまとめて章ページに並ぶ順(駅の順 → 分野の並び → 書いた順)に振る。分野の選択では変わらない。定義・定理・式・図とは別に数える |
+| 注番号 | 注(`^[…]`)ごとに「注N」。N は章ごとに 1 から、注の印が章ページに並ぶ順(式番号と同じ順)に振る。分野の選択では変わらない。ほかの番号とは別に数える |
+| 文献番号 | 章で引いた文献ごとに「[N]」。N は章ごとに 1 から、その文献を章で初めて引いた位置が章ページに並ぶ順(式番号と同じ順)に振る。同じ文献は、章の中では何度引いても同じ番号になる。注の本文の中の引用は、その注の印の位置にあるものとして数える。章が違えば、同じ文献でも別に数える |
+| 章の参考文献 | 章で引いた文献を、文献番号の順に並べたもの |
 | 乗換駅 | 別の路線の駅の requires に含まれる駅 |
 | 分野の範囲 | 分野の目標駅と、そこから requires をさかのぼって集めた駅 |
 | 分野内の章の順序 | 分野の範囲の駅を1つでも含む章を、章番号の順に並べたもの |
@@ -116,6 +119,7 @@ dist/
 | `npm run build` | Node.js 22 以上。依存をインストール済み | 終了コード 0。`dist/` にサイト全体があり、通知を標準出力に出す | エラーの一覧を標準エラー出力に出し、終了コード 1。`dist/` は変えない | `dist/` を消して書き直す |
 | `npm run dev` | `npm run build` と同じ | `127.0.0.1` で `dist/` をベースパスの下に配信する(ポートの既定は 8000、環境変数 `PORT` で変える)。`content/` と `src/` の変更のたびに全体を作り直し、開いているブラウザを再読み込みする | ビルドのエラーは端末に出し、ブラウザは前回成功した出力のまま。サーバーは止めない | `dist/` を書き換える |
 | `npm test` | 依存と、Playwright が使うブラウザをインストール済み | 単体テスト、テスト用原稿を使った結合テスト、Playwright でブラウザを動かす閲覧テスト([site.md](site.md))を実行し、すべて通れば終了コード 0 | 失敗したテストを出し、終了コードは 0 以外 | テストの出力は一時ディレクトリに書き、`dist/` には触れない |
+| `npm run refs:verify` | ネットワークにつながる | 文献の実在を検索 API で確かめ、確認の記録を書く([reference-check.md](reference-check.md)) | 同左 | `content/references.verified.json` を書き換える |
 | `MATHENAGA_BASE_PATH` | `/` で始まり `/` で終わる | すべてのリンクと読み込みに付く | 形式が違えば E13 で止まる | なし |
 | `MATHENAGA_REPO_URL` | 空か、`https://github.com/<owner>/<repo>` の形 | 空でなければ、章ページの各駅に、そのリポジトリの Issue 作成画面へのリンクを置く | 形式が違えば E13 で止まる | なし |
 
@@ -123,13 +127,15 @@ dist/
 
 - CI(GitHub Actions)は format → lint → typecheck → test の順に実行し、どれかが失敗したらマージできないようにする。型は JSDoc で書き、typecheck で検査する。使う道具は CI を作るときに決め、バージョンを固定する。
 - CI の test では閲覧テストも実行する。そのためにブラウザをインストールする手順を CI に入れる。
+- 文献の一覧(`references.yml`)か確認の記録(`references.verified.json`)を変えた PR では、今の原稿とテスト用原稿のそれぞれについて、変えた側に `npm run refs:verify -- --check --content <原稿の場所>` も実行し、失敗したらマージできないようにする。CI でネットワークを使うのはこの手順だけで、ほかの PR では実行しない([reference-check.md](reference-check.md))。
 - 公開は、main への push で `npm run build` を実行し、`dist/` を GitHub Pages のプロジェクトサイトに置く。ベースパスは `/<リポジトリ名>/` で、公開のワークフローがリポジトリ名から作って `MATHENAGA_BASE_PATH` に渡す。リポジトリの URL も `MATHENAGA_REPO_URL` に渡し、改善案の起票のアイコンを出す。手元のビルドとプレビューの既定は、ベースパスが `/`、`MATHENAGA_REPO_URL` は空(アイコンなし)のまま。
 
 ## Failure modes
 
 | きっかけ | 検出 | 外から見える振る舞い | 直し方 |
 |---|---|---|---|
-| 原稿の誤り | 1段目の検査([content-format.md](content-format.md) の E01〜E11、[route-map.md](route-map.md) の E12) | エラーの一覧、終了コード 1、`dist/` は変わらない | 原稿を直して再実行する |
+| 原稿の誤り | 1段目の検査([content-format.md](content-format.md) の E01〜E11・E14・E15、[route-map.md](route-map.md) の E12) | エラーの一覧、終了コード 1、`dist/` は変わらない | 原稿を直して再実行する |
+| 文献を足した・書き換えたが、実在を確かめていない | 1段目の検査(E15) | 同上 | `npm run refs:verify` を実行し、確認の記録をコミットする |
 | `MATHENAGA_BASE_PATH` の形式が違う(`mathenaga` など) | 1段目の前の設定の読み取り(E13) | 同上 | 値を直す |
 | `MATHENAGA_REPO_URL` の形式が違う(`github.com/example/mathenaga` など) | 1段目の前の設定の読み取り(E13) | 同上 | 値を直すか、空にする |
 | 依存がインストールされていない | Node のモジュール解決 | Node のエラーで止まり、終了コードは 0 以外 | `npm ci` を実行する |
@@ -144,6 +150,7 @@ dist/
 
 - 再現性:同じ原稿と同じベースパスからは、バイト単位で同じ `dist/` ができる。
 - 速度:`npm run dev` は、原稿を保存してからブラウザの表示が変わるまでを 5 秒以内にする。テスト用原稿で測った値は 0.5 秒前後である(2026-11-01、2 回の実行で 470 ms と 508 ms)。`npm run build` には制約を置かない。
+- ビルドとテストはネットワークを使わない。文献の実在の確認は `npm run refs:verify` が別に行い、ビルドはその記録を読むだけにする([ADR-005](../adr/ADR-005-notes-and-references.md))。
 - 削除するのはリポジトリの `dist/` だけで、出力先は設定で変えられない。
 - `npm run dev` のサーバーは `127.0.0.1` だけで待ち受ける。
 - 依存のバージョンは完全に固定し(`^` と `~` を付けない)、lock ファイルをコミットする。
@@ -182,6 +189,9 @@ dist/
 26. テスト用原稿をビルドすると、全ページの CSS・スクリプト・favicon・KaTeX の CSS・図の URL と、`data-defs` の `defs.json` の URL に `?v=` が付き、その値は `dist/` のそのファイルの中身の SHA-256 の先頭 10 文字と一致する。第3章に図を置いてビルドし、その図のファイルだけを変えてビルドし直すと、変わる印はその図の印だけである。
 27. テスト用原稿の各章で、application の札は「応用 章番号.k(〈分野名〉) · 〈title〉」で、k は章ページに並ぶ順(駅の順 → 分野の並び → 書いた順)に 1 から振られる(期待する並びは、テストが原稿から集める)。第3章の完備性の駅の理論物理の application に `#app-function-space` を付け、第4章に `[[@app-function-space]]` を書いてビルドすると、第4章のその参照は「応用 3.N」(N はその応用の番号)と表示され、`/chapters/completeness-fixed-point/#app-function-space` へのリンクになり、第3章のその応用の `<details>` の id は `app-function-space` である。`[[app-function-space]]`(`@` なし)と書くと E05 で止まり、メッセージに `[[@app-function-space]]` で指すことが書かれる。
 28. [route-map.md](route-map.md) の受け入れテスト 27 の路線を足し、その最後の駅を理論物理の目標(終着駅)にすると、理論物理の第5章の乗換案内にその路線の項目が1つでき、分岐駅は A08(この章にある)と G07(第9章、この章にない)の順に並び、最初の駅は第14章にある。
+29. テスト用原稿の第3章で、出発点の地の文に注を1つ、banach 駅の地の文に注を1つ、banach 駅の証明の詳細の中に注を1つ、この順に書いてビルドすると、注番号は書いた順に「注1」「注2」「注3」になる。banach 駅の情報科学の application の中に注を足すと、application は駅の末尾に並ぶので、その注は「注4」になる。`?field=physics` と `?field=cs` のどちらで開いても、番号は変わらない。
+30. テスト用原稿の第3章で、kreyszig-fa、lecun-deep-learning、kreyszig-fa の順に引くと、表示は「[1]」「[2]」「[1]」になり、章の参考文献は kreyszig-fa、lecun-deep-learning の順に並ぶ。第4章で lecun-deep-learning だけを引くと、第4章での表示は「[1]」になる。別の書き方として、第3章で引用を banach 駅の2か所だけにし、駅の最初の段落に置いた注の本文で lecun-deep-learning を、その後の段落の地の文で kreyszig-fa を引く。注の本文は章ページでは駅の末尾(kreyszig-fa の引用より後)に並ぶが、注の中の引用は注の印の位置で数えるので、lecun-deep-learning が「[1]」、kreyszig-fa が「[2]」になる。
+31. 文献の一覧に項目を足し、確認の記録を取らずにビルドすると、E15 の1件だけで止まり、`dist/` は変わらない。ビルドはネットワークに接続しない(テストでは、ネットワークへの接続を失敗させた状態でテスト用原稿をビルドし、終了コード 0 になることで確かめる)。
 
 ## Open questions
 
