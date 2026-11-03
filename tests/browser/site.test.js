@@ -38,10 +38,16 @@ after(async () => {
 
 /**
  * Google Fonts への通信は遮断する(テストを外部に依存させない。site.md 16 もこれで確かめる)。
+ * 「動きを減らす」設定で開く。なめらかなスクロールは終わるまでに 1 回 1.5 秒ほどかかり、テストがそれを待つため。
+ * 設定がないときになめらかになることは site.md 46 で確かめる。
  * @param {import('playwright').BrowserContextOptions} [options]
  */
 async function open(options = {}) {
-  const context = await browser.newContext({ viewport: { width: 1200, height: 900 }, ...options });
+  const context = await browser.newContext({
+    viewport: { width: 1200, height: 900 },
+    reducedMotion: 'reduce',
+    ...options,
+  });
   await context.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
   const page = await context.newPage();
   /** @type {string[]} */
