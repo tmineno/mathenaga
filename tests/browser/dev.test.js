@@ -1,4 +1,8 @@
 // docs/spec/build.md「Acceptance tests」19:npm run dev のプレビュー
+//
+// 保存から表示が変わるまでの時間を測るので、ほかのテストと同時には動かさない。ほかのテストと CPU を取り合うと、
+// 再ビルドが上限の 5 秒を超えることがある。package.json の test は、このファイルを除いたテストが終わってから
+// このファイルだけを動かす。
 
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
