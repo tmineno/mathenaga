@@ -12,6 +12,9 @@ goals:
   - station: picard-lindelof
     kind: partial
     label: 微分方程式の解の存在が目的ならここまで
+  - station: fourier-series
+    kind: partial
+    label: 波を振動数ごとの成分に分けるのが目的ならここまで
   - station: torus
     kind: partial
     label: 結晶のブリルアンゾーンはトーラス
