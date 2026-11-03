@@ -39,7 +39,8 @@ const KEYS = [
   'isbn',
   'doi',
 ];
-const ARTICLE_ONLY = ['journal', 'volume', 'issue', 'pages'];
+// volume は book にも書ける(多巻本の巻)。docs/spec/content-format.md「参考文献」
+const ARTICLE_ONLY = ['journal', 'issue', 'pages'];
 const DOI_PATTERN = /^10\.\d{4,9}\/\S+$/;
 
 /**

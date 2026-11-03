@@ -347,7 +347,7 @@ function pick(r) {
   return { kind: r.kind, id: r.id };
 }
 
-// docs/spec/content-format.md「注」「参考文献」の受け入れテスト(4 の 26〜33、7、8)
+// docs/spec/content-format.md「注」「参考文献」の受け入れテスト(4 の 26〜35、7、8)
 describe('content-format: 注と参考文献', () => {
   const CH4 = 'chapters/04-norm-inner-product/index.md';
   const PROSE = '何回反復すれば';
@@ -410,6 +410,22 @@ describe('content-format: 注と参考文献', () => {
       edit(r, 'references.yml', (t) => replaceOnce(t, '  year: 1978\n', '  year: 1978\n  url: https://example.com/\n')),
     );
     expectError(errors, 'E02', 'references.yml');
+  });
+  test('4.34 book の volume(多巻本の巻)は書ける → E15 だけ', async () => {
+    const errors = await errorsAfter((r) =>
+      edit(r, 'references.yml', (t) => replaceOnce(t, '  year: 1978\n', '  year: 1978\n  volume: "I"\n')),
+    );
+    assert.deepEqual(
+      errors.map((e) => e.code),
+      ['E15'],
+    );
+  });
+  test('4.35 book の issue → E03 と E15', async () => {
+    const errors = await errorsAfter((r) =>
+      edit(r, 'references.yml', (t) => replaceOnce(t, '  year: 1978\n', '  year: 1978\n  issue: "1"\n')),
+    );
+    expectError(errors, 'E03', 'references.yml');
+    expectError(errors, 'E15');
   });
   test('文献の一覧を書き換えたら、確認の記録の fingerprint が合わず E15(年を変える)', async () => {
     const errors = await errorsAfter((r) =>

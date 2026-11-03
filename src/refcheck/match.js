@@ -8,11 +8,12 @@
  * @property {string[]} authors
  * @property {string} family   第1著者の姓(照合に使う)
  * @property {number | null} year
+ * @property {string | null} volume  巻(NDL サーチの dcndl:volume。なければ '')。巻を比べない記録(CrossRef・OpenLibrary)は null
  */
 
 /**
  * @typedef {object} Diff  項目と記録の食い違い
- * @property {'種類' | '書名' | '第1著者' | '年'} field
+ * @property {'種類' | '書名' | '第1著者' | '年' | '巻'} field
  * @property {string} entry
  * @property {string} record
  */
@@ -68,9 +69,51 @@ export function familyFromName(name) {
 }
 
 /**
+ * 巻の表記をそろえる(docs/spec/reference-check.md「照合」の巻のそろえ方)。
+ * Preconditions: なし。
+ * Postconditions: `１`・`第2巻`・`[第1]`・`volume1`・`1 : 軽装版`・`I`・`Vol. 1` は数の文字列、`上巻` は「上」、
+ *   `: pbk`・`: 新装` は空文字列を返す。
+ * Failure modes: なし。
+ * Side effects: なし。
+ * @param {string} s
+ */
+export function volumeKey(s) {
+  // コロンから後ろは製本や版の区別(`1 : 軽装版`、`: pbk`)
+  const head = s.normalize('NFKC').toLowerCase().split(':')[0];
+  const t = head.replace(/(^|[\s[(])(volume|vol|part|pt)\.?/gu, '$1').replace(/[第巻\s[\]()]/gu, '');
+  return /^[ivx]+$/.test(t) ? romanToArabic(t) : t;
+}
+
+/**
+ * i・v・x だけのローマ数字をアラビア数字にする。正しく読めなければ、そのまま返す。
+ * @param {string} t
+ */
+function romanToArabic(t) {
+  /** @type {Record<string, number>} */
+  const v = { i: 1, v: 5, x: 10 };
+  let n = 0;
+  for (let k = 0; k < t.length; k++) {
+    const cur = v[t[k]];
+    const next = v[t[k + 1]] ?? 0;
+    n += cur < next ? -cur : cur;
+  }
+  return toRoman(n) === t ? String(n) : t;
+}
+
+/** @param {number} n 1〜39 */
+function toRoman(n) {
+  const tens = ['', 'x', 'xx', 'xxx'];
+  const ones = ['', 'i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix'];
+  return n >= 1 && n <= 39 ? tens[Math.floor(n / 10)] + ones[n % 10] : '';
+}
+
+/** 項目に volume がないとき、記録のこの巻があれば一致しない(多巻本のどの巻かを書誌に書かせる) */
+const NUMBERED_VOLUME = /^(\d+[a-z]?|上|中|下)$/u;
+
+/**
  * 項目と記録を照合する。
  * Preconditions: entry は checkReferences を通った文献。
- * Postconditions: 食い違いの配列を返す。空なら一致(種類・書名・第1著者・年のすべてをみたす)。
+ * Postconditions: 食い違いの配列を返す。空なら一致(種類・書名・第1著者・年と、記録が巻を持てば巻のすべてをみたす)。
  * Failure modes: なし。
  * Side effects: なし。
  * @param {import('../core/references.js').Reference} entry
@@ -93,5 +136,10 @@ export function matchRecord(entry, rec) {
     diffs.push({ field: '第1著者', entry: entry.authors[0] ?? '', record: rec.family });
   }
   if (rec.year !== entry.year) diffs.push({ field: '年', entry: String(entry.year), record: String(rec.year) });
+  if (rec.volume !== null) {
+    const r = volumeKey(rec.volume);
+    const bad = entry.volume ? volumeKey(entry.volume) !== r : NUMBERED_VOLUME.test(r);
+    if (bad) diffs.push({ field: '巻', entry: entry.volume ?? '(なし)', record: rec.volume || '(なし)' });
+  }
   return diffs;
 }
