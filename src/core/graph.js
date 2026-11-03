@@ -13,6 +13,7 @@ export const KIND_NAMES = {
   equation: '式',
   figure: '図',
   application: '応用',
+  reference: '文献',
 };
 
 /**
@@ -51,7 +52,8 @@ export const KIND_NAMES = {
  * @property {Map<string, StationInfo>} stationById
  * @property {Map<string, DefinitionInfo>} definitions
  * @property {Map<string, { id: string, name: string, station: StationInfo }>} theorems
- * @property {Map<string, string>} kinds   ID → 種類(line、field、chapter、station、definition、theorem、equation、figure、application)
+ * @property {Map<string, string>} kinds   ID → 種類(line、field、chapter、station、definition、theorem、equation、figure、application、reference)
+ * @property {Map<string, import('./references.js').Reference>} references  文献の ID → 文献(文献の一覧の順)
  * @property {Set<string>} transfers   乗換駅
  * @property {Map<string, Set<string>>} scope   分野 → 分野の範囲
  * @property {Map<string, import('./chapter.js').ChapterModel[]>} fieldChapters  分野 → 分野内の章の順序
@@ -65,7 +67,7 @@ export const KIND_NAMES = {
  *   誤りがあっても、正しく読めた部分で Site を作る。
  * Failure modes: 例外は投げない。
  * Side effects: なし。
- * @param {{ lines: import('./schema.js').Line[], fields: import('./schema.js').Field[], chapters: import('./chapter.js').ChapterModel[], linesFile: string }} input
+ * @param {{ lines: import('./schema.js').Line[], fields: import('./schema.js').Field[], chapters: import('./chapter.js').ChapterModel[], linesFile: string, references?: import('./references.js').Reference[], referencesFile?: string }} input
  * @returns {{ site: Site, errors: import('./issues.js').Issue[], notices: import('./issues.js').Issue[] }}
  */
 export function buildSite(input) {
@@ -102,6 +104,11 @@ export function buildSite(input) {
     return true;
   };
   for (const l of lines) register(l.id, 'line', input.linesFile, null);
+  /** @type {Map<string, import('./references.js').Reference>} */
+  const references = new Map();
+  for (const r of input.references ?? []) {
+    if (register(r.id, 'reference', input.referencesFile ?? 'references.yml', null)) references.set(r.id, r);
+  }
   for (const f of fields) register(f.id, 'field', f.file, null);
   const chapterById = new Map();
   const numbers = new Map();
@@ -313,6 +320,7 @@ export function buildSite(input) {
     definitions,
     theorems,
     kinds,
+    references,
     transfers,
     scope: new Map(),
     fieldChapters: new Map(),

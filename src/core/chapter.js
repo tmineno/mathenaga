@@ -20,6 +20,7 @@ export const STATION_BLOCKS = new Set([
   'examples',
   'drop-assumption',
   'pitfall',
+  'remark',
   'application',
 ]);
 export const END_BLOCKS = new Set(['review', 'question', 'answer']);
@@ -72,7 +73,9 @@ const FORBIDDEN_TEX = /\\(tag\*?|label|ref|eqref|notag|nonumber)(?![A-Za-z])/;
  * @property {Station[]} stations
  * @property {{ reviews: Block[], questions: Array<{ question: Block, answer: Block | null }> }} end
  * @property {Array<{ token: any, id: string | null, line: number | null }>} equations
- * @property {Array<{ token: any, line: number | null }>} refs
+ * @property {Array<{ token: any, line: number | null, inDefinition: boolean }>} refs
+ *   inDefinition は definition の本文の中の参照(文献の引用は E14 にする。content-format.md「注」)
+ * @property {Array<{ token: any, line: number | null }>} notes  注(`^[…]`)。入れ子の注は含めない
  * @property {Array<{ token: any, src: string, line: number | null }>} images
  * @property {Array<{ token: any, id: string | null, images: any[], captions: any[][], line: number | null }>} figures
  *   captions は画像ごとのキャプション(タイトルを文字と行内の数式に切り分けたもの、image.meta.titleParts)
@@ -108,6 +111,7 @@ export function analyzeChapter(input) {
     end: { reviews: [], questions: [] },
     equations: [],
     refs: [],
+    notes: [],
     images: [],
     figures: [],
     maths: [],
@@ -262,8 +266,8 @@ function makeStation(tokens, start, fail, lineOf) {
   }
   if (st.name === '') fail('E08', open, '駅名がない');
   for (const c of inline.children || []) {
-    if (c.type === 'math_inline' || c.type === 'math_error' || c.type === 'wikiref') {
-      fail('E09', open, `駅の見出し「${st.name}」に数式や参照は書けない`);
+    if (['math_inline', 'math_error', 'wikiref', 'note', 'note_error'].includes(c.type)) {
+      fail('E09', open, `駅の見出し「${st.name}」に数式・参照・注は書けない`);
       break;
     }
   }
@@ -403,12 +407,17 @@ function checkEnd(chapter, tokens, fail, notices, file) {
 }
 
 /**
- * 数式・参照・図をすべて集め、数式の形を検査する。
+ * 数式・参照・注・図をすべて集め、数式と注の形を検査する。
  * @param {ChapterModel} chapter
  * @param {(tok: any) => number | null} lineOf
  * @param {(code: string, tok: any, msg: string) => void} fail
  */
 function collectInline(chapter, lineOf, fail) {
+  /** definition の本文のトークンの位置 */
+  const inDefinition = new Set();
+  for (const st of chapter.stations) {
+    for (const d of st.definitions) for (let i = d.start; i <= d.end; i++) inDefinition.add(i);
+  }
   for (let i = 0; i < chapter.tokens.length; i++) {
     const tok = chapter.tokens[i];
     const open = chapter.tokens[i - 1];
@@ -447,23 +456,53 @@ function collectInline(chapter, lineOf, fail) {
       fail('E10', tok, '閉じていない $$ がある');
     }
     if (tok.type !== 'inline' || !tok.children) continue;
-    for (const c of tok.children) {
-      if (c.type === 'math_inline') {
-        chapter.maths.push({ token: c, line: lineOf(tok), display: false });
-        checkTex(c, fail, tok);
-      } else if (c.type === 'math_error') {
-        fail(
-          'E10',
-          tok,
-          c.meta.kind === 'inline-display'
-            ? '別行立ての $$ は行頭から書く(文中に $$ がある)'
-            : `閉じていない $ がある(「${c.content}」)。$ そのものは \\$ と書く`,
-        );
-      } else if (c.type === 'wikiref') {
-        chapter.refs.push({ token: c, line: lineOf(tok) });
-      } else if (c.type === 'image') {
-        chapter.images.push({ token: c, src: c.attrGet('src') ?? '', line: lineOf(tok) });
-      }
+    collectChildren(chapter, tok, tok.children, inDefinition.has(i), false, lineOf, fail);
+  }
+}
+
+/**
+ * 行内のトークンの子を集める。注の中身も、注の位置で同じように集める。
+ * @param {ChapterModel} chapter
+ * @param {any} tok  子を持つ inline のトークン(行番号に使う)
+ * @param {any[]} children
+ * @param {boolean} inDefinition  definition の本文の中か
+ * @param {boolean} inNote  注の本文の中か
+ * @param {(tok: any) => number | null} lineOf
+ * @param {(code: string, tok: any, msg: string) => void} fail
+ */
+function collectChildren(chapter, tok, children, inDefinition, inNote, lineOf, fail) {
+  for (const c of children) {
+    if (c.type === 'math_inline') {
+      chapter.maths.push({ token: c, line: lineOf(tok), display: false });
+      checkTex(c, fail, tok);
+    } else if (c.type === 'math_error') {
+      if (inNote && c.meta.kind === 'inline-display') continue; // 注の側で E14 にする
+      fail(
+        'E10',
+        tok,
+        c.meta.kind === 'inline-display'
+          ? '別行立ての $$ は行頭から書く(文中に $$ がある)'
+          : `閉じていない $ がある(「${c.content}」)。$ そのものは \\$ と書く`,
+      );
+    } else if (c.type === 'wikiref') {
+      chapter.refs.push({ token: c, line: lineOf(tok), inDefinition });
+    } else if (c.type === 'image') {
+      chapter.images.push({ token: c, src: c.attrGet('src') ?? '', line: lineOf(tok) });
+    } else if (c.type === 'note_error') {
+      fail(
+        'E14',
+        tok,
+        c.meta.kind === 'empty'
+          ? '空の注(^[])がある'
+          : `閉じていない注がある(「${c.content}」)。^[ そのものは \\^[ と書く`,
+      );
+    } else if (c.type === 'note') {
+      if (inNote) fail('E14', tok, '注の中に注は書けない');
+      else if (inDefinition)
+        fail('E14', tok, 'definition の本文には注を書けない(定義はほかの章のポップアップにも出る)');
+      else chapter.notes.push({ token: c, line: lineOf(tok) });
+      if (c.meta?.display) fail('E14', tok, '注の中に別行立ての数式($$)は書けない');
+      collectChildren(chapter, tok, c.children ?? [], inDefinition, true, lineOf, fail);
     }
   }
 }

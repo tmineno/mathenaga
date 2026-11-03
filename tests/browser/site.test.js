@@ -67,6 +67,33 @@ const isOpen = (page, sel) =>
 /** @param {import('playwright').Page} page @param {string} sel */
 const text = (page, sel) => page.locator(sel).first().innerText();
 
+/**
+ * 注・補足・引用を入れた第3章の版を作ってビルドする(site.md 47〜51。build.md 29・30 の原稿)。
+ * 注は出発点・banach 駅の summary・banach 駅の証明の詳細の3つ、引用は kreyszig-fa・lecun-deep-learning・kreyszig-fa の順。
+ * @returns {Promise<{ root: string, dist: string }>}
+ */
+async function buildNotesVariant() {
+  const root = await tempRoot();
+  await edit(root, CH3_SOURCE, (t) => {
+    let x = replaceOnce(
+      t,
+      'この章では、1 を防ぐ条件として',
+      '[[@kreyszig-fa]] この章では^[出発点の注。]、1 を防ぐ条件として',
+    );
+    x = replaceOnce(
+      x,
+      '完備な空間の縮小写像がただ一つもつ不動点',
+      '[[@lecun-deep-learning]] 完備な空間の縮小写像^[駅の注。]がただ一つもつ不動点',
+    );
+    x = replaceOnce(x, '**1.** 帰納法により', '**1.** 帰納法^[証明の注。]により');
+    x = replaceOnce(x, '主張 3 の誤差評価は', '::: remark\n補足の本文です。\n:::\n\n主張 3 の誤差評価は');
+    return replaceOnce(x, '何回反復すれば', '[[@kreyszig-fa]] 何回反復すれば');
+  });
+  const r = await buildIn(root);
+  assert.deepEqual(r.errors, []);
+  return { root, dist: path.join(root, 'dist') };
+}
+
 // テストを並列に動かす。node:test はファイル直下の describe を順に動かすので、全体をこの describe にまとめて
 // 指定する。中の describe とテストはこの設定を受け継ぐ。
 describe('ブラウザでの受け入れテスト', { concurrency: true }, () => {
@@ -911,6 +938,52 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
       await page.locator('.copy-menu .copy-status', { hasText: 'コピーできませんでした' }).waitFor();
       await context.close();
     });
+    test('49. 注の印は選んだ文に入らず、文字の位置にも数えない。注の一覧と参考文献の段落の番号', async () => {
+      const v = await buildNotesVariant();
+      const s = await serve(v.dist);
+      try {
+        const { context, page } = await openCopy();
+        await page.goto(`${s.url}${CH3}`);
+        const SUMMARY = '#banach .summary p';
+        const para = await page.locator(SUMMARY).first().getAttribute('data-p');
+        // 印より後ろから選び始めると、位置の文字は印を数えない
+        const plain = await page
+          .locator(SUMMARY)
+          .first()
+          .evaluate((p) => {
+            const c = /** @type {HTMLElement} */ (p.cloneNode(true));
+            c.querySelectorAll('.note-ref, .katex').forEach((x) => x.remove());
+            return c.textContent ?? '';
+          });
+        const at = Array.from(plain.slice(0, plain.indexOf('ただ一つ'))).length + 1;
+        await selectText(page, SUMMARY, '縮小写像', 'ただ一つ');
+        assert.equal(await copyWith(page, PLAIN), '縮小写像がただ一つ');
+        await page.keyboard.press('Escape');
+        await menu(page).waitFor({ state: 'hidden' });
+        await selectText(page, SUMMARY, 'ただ一つ', 'ただ一つ');
+        assert.equal(await copyWith(page, LOC), `[3:A04:${para}:${at}]\nただ一つ`);
+        await page.keyboard.press('Escape');
+        await menu(page).waitFor({ state: 'hidden' });
+        // 注の一覧の項目は、駅のほかのすべての段落の後に数える。項目の先頭の「注2 」は文字として数える
+        // (参考文献の項目の「[2] 」と同じ)
+        const others = await page
+          .locator('#banach [data-p]')
+          .evaluateAll((els) =>
+            Math.max(...els.filter((e) => !e.closest('aside.notes')).map((e) => Number(e.getAttribute('data-p')))),
+          );
+        await selectText(page, '#_note-2-text', '駅の注', '駅の注');
+        assert.equal(await copyWith(page, LOC), `[3:A04:${others + 1}:4]\n駅の注`);
+        await page.keyboard.press('Escape');
+        await menu(page).waitFor({ state: 'hidden' });
+        // 参考文献の [2] の項目の先頭
+        await selectText(page, '#lecun-deep-learning', '[2]', '[2]');
+        assert.equal(await copyWith(page, LOC), '[3:参考文献:2:1]\n[2]');
+        await context.close();
+      } finally {
+        await s.close();
+        await fs.rm(v.root, { recursive: true, force: true });
+      }
+    });
   });
 
   describe('route-map: 14. 章の帯を押すと章のページの先頭へ移る(ブラウザ)', () => {
@@ -1585,6 +1658,123 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
       } finally {
         await fs.rm(root, { recursive: true, force: true });
       }
+    });
+  });
+
+  describe('site: 47〜51. 注・補足・参考文献', () => {
+    /** @type {{ root: string, dist: string }} */
+    let v;
+    /** @type {{ url: string, close: () => Promise<unknown> }} */
+    let s;
+    before(async () => {
+      v = await buildNotesVariant();
+      s = await serve(v.dist);
+    });
+    after(async () => {
+      await s?.close();
+      if (v) await fs.rm(v.root, { recursive: true, force: true });
+    });
+
+    test('47. 注の印・注の一覧・ポップアップ・戻るリンク', async () => {
+      const { context, page, errors } = await open();
+      await page.goto(`${s.url}${CH3}`);
+      assert.equal(await text(page, '#_start .note-ref'), '注1');
+      assert.equal(await text(page, '#banach .summary .note-ref'), '注2');
+      const ids = (/** @type {string} */ sel) =>
+        page.locator(`${sel} > aside.notes li`).evaluateAll((els) => els.map((e) => e.id));
+      assert.deepEqual(await ids('#_start'), ['_note-1-text']);
+      assert.deepEqual(await ids('#banach'), ['_note-2-text', '_note-3-text']);
+      // 駅の注の一覧は application の後
+      assert.equal(
+        await page
+          .locator('#banach > aside.notes')
+          .evaluate((a) => a.previousElementSibling?.getAttribute('data-kind') ?? ''),
+        'application',
+      );
+      const pop = page.locator('#_pop');
+      await page.locator('#_note-2 a').focus();
+      await pop.locator('.pop-h').waitFor();
+      assert.equal(await text(page, '#_pop .pop-h'), '注2');
+      assert.match(await text(page, '#_pop .pop-body'), /駅の注。/);
+      await page.keyboard.press('Escape');
+      assert.ok(await pop.isHidden());
+      assert.equal(await page.evaluate(() => document.activeElement?.closest('sup')?.id), '_note-2');
+      // 注3 の「↩」で、閉じていた証明の詳細が開き、注3 の印へ移る
+      assert.equal(await isOpen(page, '#banach details.fold.proof'), false);
+      await page.locator('#_note-3-text a.note-back').click();
+      await page.waitForFunction(() => window.location.hash === '#_note-3');
+      await page.waitForFunction(
+        () => /** @type {HTMLDetailsElement} */ (document.querySelector('#banach details.fold.proof')).open,
+      );
+      assert.deepEqual(errors, []);
+      await context.close();
+      // スクリプトを止めると、印は注の一覧へのリンクとして動く
+      const off = await open({ javaScriptEnabled: false });
+      await off.page.goto(`${s.url}${CH3}`);
+      await off.page.locator('#_note-2 a').click();
+      await off.page.waitForURL(/#_note-2-text$/);
+      await off.context.close();
+    });
+
+    test('48. 章末の参考文献と、文献のポップアップ', async () => {
+      const { context, page, errors } = await open();
+      await page.goto(`${s.url}${CH3}`);
+      assert.deepEqual(
+        await page.locator('#_references').evaluate((el) => [el.previousElementSibling?.id, el.nextElementSibling?.id]),
+        ['_quiz', '_ahead'],
+      );
+      assert.deepEqual(await page.locator('#_references li').allInnerTexts(), [
+        '[1] Erwin Kreyszig、Introductory Functional Analysis with Applications、Wiley、1978。 ISBN 978-0-471-50731-4',
+        '[2] Yann LeCun、Yoshua Bengio、Geoffrey Hinton、“Deep learning”、Nature、521、436–444、2015。 https://doi.org/10.1038/nature14539',
+      ]);
+      assert.deepEqual(await page.locator('#_references li i').allInnerTexts(), [
+        'Introductory Functional Analysis with Applications',
+        'Nature',
+      ]);
+      assert.equal(
+        await page.locator('#lecun-deep-learning a').getAttribute('href'),
+        'https://doi.org/10.1038/nature14539',
+      );
+      const pop = page.locator('#_pop');
+      await page.locator('a.cite').first().hover();
+      await pop.locator('.pop-h').waitFor();
+      assert.equal(await text(page, '#_pop .pop-h'), '[1]');
+      assert.match(await text(page, '#_pop .pop-body'), /Kreyszig/);
+      assert.equal(await text(page, '#_pop .pop-go'), '参考文献へ移動');
+      assert.deepEqual(errors, []);
+      await page.goto(`${s.url}chapters/convergence-metric/`);
+      assert.equal(await page.locator('#_references').count(), 0);
+      await context.close();
+    });
+
+    test('50. 「押したときだけ出す」は注と文献のポップアップにも効く', async () => {
+      const { context, page } = await open();
+      await context.addInitScript(() => localStorage.setItem('mathenaga-settings', JSON.stringify({ popup: 'click' })));
+      await page.goto(`${s.url}${CH3}`);
+      const pop = page.locator('#_pop');
+      for (const sel of ['#_note-2 a', 'a.cite']) {
+        const el = page.locator(sel).first();
+        await el.hover();
+        await el.focus();
+        await page.waitForTimeout(300);
+        assert.ok(await pop.isHidden(), `${sel} に重ねただけ・フォーカスしただけで出た`);
+        const before = await page.evaluate(() => window.location.hash);
+        await el.click();
+        await pop.locator('.pop-h').waitFor();
+        assert.equal(await page.evaluate(() => window.location.hash), before, `${sel} を押すとページ内を移った`);
+        await page.keyboard.press('Escape');
+        assert.ok(await pop.isHidden());
+      }
+      await context.close();
+    });
+
+    test('51. 補足は「補足」の札の枠で、折りたたまない', async () => {
+      const { context, page } = await open();
+      await page.goto(`${s.url}${CH3}`);
+      assert.equal(await text(page, '#banach .box.remark > .tag'), '補足');
+      assert.match(await text(page, '#banach .box.remark .flow'), /補足の本文です。/);
+      assert.equal(await page.locator('#banach .box.remark').evaluate((b) => !!b.closest('details')), false);
+      await context.close();
     });
   });
 

@@ -13,7 +13,7 @@ import {
   prerequisiteChapters,
   transferGuide,
 } from '../core/navigation.js';
-import { byFieldOrder, stationItems } from '../core/order.js';
+import { byFieldOrder, stationItems, walkInline } from '../core/order.js';
 import { escapeHtml as h } from '../core/text.js';
 import { birdSvg, blocks, FAVICON_SIZE, faviconPng, faviconSvg, logoSvg, parseBitmap, trim } from './logo.js';
 
@@ -37,6 +37,7 @@ const BLOCK_LABELS = {
   examples: '例と反例',
   'drop-assumption': '仮定を外すと',
   pitfall: '落とし穴',
+  remark: '補足',
 };
 const FONTS =
   '<link rel="preconnect" href="https://fonts.googleapis.com">' +
@@ -166,6 +167,8 @@ class Renderer {
     for (const c of this.site.chapters) for (const f of c.figures) this.figs.set(f.token, f);
     /** @type {Map<any, Map<any, number>>} 章 → (トークン → 段落の番号) */
     this.paragraphs = new Map();
+    /** @type {Map<any, number>} 注のトークン → 注の一覧の項目の段落の番号 */
+    this.noteParagraphs = new Map();
     /** @type {Map<string, string>} 出力の相対パス → 版の印(generateSite が入れる) */
     this.versions = new Map();
   }
@@ -200,6 +203,8 @@ class Renderer {
         const target = numberedToken(tokens, i);
         if (target && !map.has(target)) map.set(target, ++n);
       }
+      // 注の一覧の項目は、区画のほかのすべての段落の後に、注番号の順に数える(site.md「位置情報つきのコピー」)
+      for (const t of this.notesIn(c, ranges)) this.noteParagraphs.set(t, ++n);
     };
     number(c.head.goals);
     number([...c.head.motivations, ...c.head.prose]);
@@ -244,6 +249,7 @@ class Renderer {
           : undefined;
       },
       ref: (/** @type {any} */ t) => this.refHtml(t, chapter, plain),
+      note: (/** @type {any} */ t) => (plain ? '' : this.noteMarker(t)),
       imageSrc: (/** @type {string} */ src) =>
         /^[a-z][a-z0-9+.-]*:/i.test(src) ? src : this.asset(`chapters/${chapter.id}/${path.posix.normalize(src)}`),
     };
@@ -258,6 +264,9 @@ class Renderer {
     if (plain) return text;
     if (t.meta.at) {
       if (r.kind === 'chapter') return `<a class="num" href="${this.chapterUrl(r.id)}">${text}</a>`;
+      if (r.kind === 'reference') {
+        return `<a class="cite" href="#${h(r.id)}" data-cite="${h(r.id)}" aria-haspopup="dialog" aria-expanded="false">${text}</a>`;
+      }
       const cls = r.kind === 'equation' ? 'eqref' : 'num';
       const anchor = r.kind === 'definition' ? `def-${r.id}` : r.id;
       return `<a class="${cls}" href="${this.anchorUrl(r.chapterId, anchor, chapter)}">${text}</a>`;
@@ -266,6 +275,64 @@ class Renderer {
       return `<button type="button" class="term" data-def="${h(r.id)}" aria-haspopup="dialog" aria-expanded="false">${text}</button>`;
     }
     return `<a class="st-ref" href="${this.anchorUrl(r.chapterId, r.id, chapter)}">${text}</a>`;
+  }
+
+  /**
+   * 注の印(site.md「注と参考文献の表示」)。注の一覧の項目へのリンクで、スクリプトが動くときはポップアップを出す。
+   * @param {any} t  note のトークン
+   */
+  noteMarker(t) {
+    const n = this.ctx.notes.labels.get(t);
+    if (n === undefined) return '';
+    return `<sup class="note-ref" id="_note-${n}"><a href="#_note-${n}-text" data-note="${n}" aria-haspopup="dialog" aria-expanded="false">注${n}</a></sup>`;
+  }
+
+  /**
+   * 範囲の中の注を、注番号の順に返す。
+   * @param {any} c @param {Array<{ start: number, end: number }>} ranges
+   * @returns {any[]}
+   */
+  notesIn(c, ranges) {
+    const labels = this.ctx.notes.labels;
+    /** @type {any[]} */
+    const found = [];
+    walkInline(c, ranges, (t) => {
+      if (t.type === 'note' && labels.has(t)) found.push(t);
+    });
+    return found.sort((a, b) => labels.get(a) - labels.get(b));
+  }
+
+  /**
+   * 駅か節の最後に置く注の一覧。注がなければ空。
+   * @param {any} c @param {Array<{ start: number, end: number }>} ranges  その駅か節のトークンの範囲
+   */
+  notesList(c, ranges) {
+    this.paragraphMap(c);
+    const notes = this.notesIn(c, ranges);
+    if (notes.length === 0) return '';
+    const env = this.env(c, false);
+    const items = notes.map((t) => {
+      const n = this.ctx.notes.labels.get(t);
+      const p = this.noteParagraphs.get(t);
+      const body = this.md.renderer.renderInline(t.children ?? [], this.md.options, env);
+      return `<li id="_note-${n}-text" class="note-item"${p === undefined ? '' : ` data-p="${p}"`}><span class="note-no">注${n}</span> <span class="note-body">${body}</span><a class="note-back" href="#_note-${n}" aria-label="本文へ戻る">↩</a></li>`;
+    });
+    return `<aside class="notes" aria-label="注"><p class="notes-h">注</p><ol class="note-list">${items.join('')}</ol></aside>`;
+  }
+
+  /**
+   * 章末の参考文献の節(site.md「注と参考文献の表示」)。文献を引いていない章では空。
+   * @param {any} c
+   */
+  referencesSection(c) {
+    /** @type {Map<string, number>} */
+    const numbers = this.ctx.citations.get(c.id) ?? new Map();
+    if (numbers.size === 0) return '';
+    const items = [...numbers].map(([id, n]) => {
+      const r = this.site.references.get(id);
+      return `<li id="${h(id)}" class="ref-item" data-p="${n}"><span class="ref-no">[${n}]</span> <span class="ref-body">${r ? bibliography(r) : h(id)}</span></li>`;
+    });
+    return `<section class="refs-sec" id="_references" data-loc="参考文献"><h2 class="sec-h" data-p="0">参考文献</h2><ol class="refs">${items.join('')}</ol></section>`;
   }
 
   /** トークンの範囲 [start, end] を描画する。 @param {any} chapter @param {number} start @param {number} end @param {boolean} [plain] */
@@ -320,8 +387,9 @@ class Renderer {
    * 出発点は節の見出し「出発点」の下に置くので、共通版に札を付けず、分野版の札を「〈分野名〉では」にする(site.md)。
    * @param {any} chapter @param {import('../core/chapter.js').Block[]} blocks @param {string} kind @param {string} label
    * @param {string} [loc] 位置情報つきのコピーで使う区画の名前(data-loc)。区画でなければ空
+   * @param {string} [tail] 組の最後に足す HTML(注の一覧など)
    */
-  versionGroup(chapter, blocks, kind, label, loc = '') {
+  versionGroup(chapter, blocks, kind, label, loc = '', tail = '') {
     const out = [`<div class="vgroup" data-kind="${kind}"${loc ? ` data-loc="${h(loc)}"` : ''}>`];
     for (const b of byFieldOrder(blocks, this.site.fieldOrder)) {
       if (!b.field) {
@@ -340,7 +408,7 @@ class Renderer {
         );
       }
     }
-    out.push('</div>');
+    out.push(`${tail}</div>`);
     return out.join('');
   }
 
@@ -589,14 +657,15 @@ ${c.subtitle ? `<p class="ch-sub">${h(c.subtitle)}</p>` : ''}
 
     // 出発点
     const prose = c.head.prose.map((r) => this.range(c, r.start, r.end)).join('');
-    const motivation = `<section class="start flow" id="_start" data-loc="出発点"><h2 class="sec-h" data-p="0">出発点</h2>${this.versionGroup(c, c.head.motivations, 'motivation', '出発点')}${prose}</section>`;
+    const startNotes = this.notesList(c, [...c.head.motivations, ...c.head.prose]);
+    const motivation = `<section class="start flow" id="_start" data-loc="出発点"><h2 class="sec-h" data-p="0">出発点</h2>${this.versionGroup(c, c.head.motivations, 'motivation', '出発点')}${prose}${startNotes}</section>`;
 
     // 駅
     const stationHtml = stations.map((st) => this.stationSection(c, st)).join('\n');
 
     // 章末
     const review = c.end.reviews[0]
-      ? `<section class="review" id="_review" data-loc="ふりかえり"><h2 class="sec-h" data-p="0">ふりかえり</h2><div class="box review"><div class="flow">${this.inner(c, c.end.reviews[0])}</div></div></section>`
+      ? `<section class="review" id="_review" data-loc="ふりかえり"><h2 class="sec-h" data-p="0">ふりかえり</h2><div class="box review"><div class="flow">${this.inner(c, c.end.reviews[0])}</div></div>${this.notesList(c, c.end.reviews)}</section>`
       : '';
     const questions = c.end.questions.length
       ? `<section class="quiz" id="_quiz" data-loc="確認問題"><h2 class="sec-h" data-p="0">確認問題</h2><ol class="qs">${c.end.questions
@@ -608,7 +677,10 @@ ${c.subtitle ? `<p class="ch-sub">${h(c.subtitle)}</p>` : ''}
                   : ''
               }</li>`,
           )
-          .join('')}</ol></section>`
+          .join('')}</ol>${this.notesList(
+          c,
+          c.end.questions.flatMap((/** @type {any} */ q) => (q.answer ? [q.question, q.answer] : [q.question])),
+        )}</section>`
       : '';
     const ahead = [
       ...fields.map((f) => `<ul class="next" data-for="${h(f.id)}" hidden>${this.aheadItems(c, f)}</ul>`),
@@ -619,12 +691,13 @@ ${c.subtitle ? `<p class="ch-sub">${h(c.subtitle)}</p>` : ''}
     const main = `<article class="chapter" data-chapter="${c.number}" data-id="${h(c.id)}">
 ${head}
 ${chooser}
-${this.versionGroup(c, c.head.goals, 'goal', 'この章のゴール', 'この章のゴール')}
+${this.versionGroup(c, c.head.goals, 'goal', 'この章のゴール', 'この章のゴール', this.notesList(c, c.head.goals))}
 ${mapSec}
 ${motivation}
 ${stationHtml}
 ${review}
 ${questions}
+${this.referencesSection(c)}
 ${aheadSec}
 </article>`;
     return this.page({ title: `第${c.number}章 ${c.title} | ${SITE_NAME}`, bodyClass: 'page-chapter', bar, main });
@@ -673,7 +746,10 @@ ${aheadSec}
     const appHtml = apps.length ? this.versionGroup(c, apps, 'application', '分野での応用') : '';
     return `<section class="station flow" id="${h(st.id)}" data-station="${h(st.id)}" data-loc="${h(st.code)}" data-out="${out.join(' ')}">
 <h2 data-p="0">${this.badge(st)}<span class="st-name">${heading}</span>${shared ? `<span class="en">${h(shared.en)}</span>` : ''}<span class="out-label" hidden>${OUT_OF_SCOPE}</span></h2>
-${notes}${items.join('')}${appHtml}${this.stationTools(c, st)}
+${notes}${items.join('')}${appHtml}${this.notesList(
+      c,
+      st.model.items.map((/** @type {any} */ it) => (it.kind === 'block' ? it.block : it)),
+    )}${this.stationTools(c, st)}
 </section>`;
   }
 
@@ -791,4 +867,34 @@ ${notes}${items.join('')}${appHtml}${this.stationTools(c, st)}
     }
     return `${JSON.stringify(out)}\n`;
   }
+}
+
+/**
+ * 参考文献の項目の書誌(site.md「注と参考文献の表示」)。要素を「、」で区切って「。」で終え、
+ * その後に ISBN と DOI のリンクを空白で区切って置く。書名・題名に仮名か漢字があれば和文として扱う。
+ * @param {import('../core/references.js').Reference} r
+ */
+export function bibliography(r) {
+  const ja = /[\u3040-\u30ff\u3400-\u9fff]/.test(r.title);
+  const authors = r.authors.length >= 4 ? `${h(r.authors[0])}ほか` : r.authors.map(h).join('、');
+  /** @type {string[]} */
+  const parts = [authors];
+  if (r.type === 'book') {
+    parts.push(ja ? `『${h(r.title)}』` : `<i>${h(r.title)}</i>`);
+    if (r.edition) parts.push(h(r.edition));
+    if (r.publisher) parts.push(h(r.publisher));
+  } else {
+    parts.push(ja ? `「${h(r.title)}」` : `“${h(r.title)}”`);
+    if (r.journal) parts.push(ja ? h(r.journal) : `<i>${h(r.journal)}</i>`);
+    if (r.volume) parts.push(`${h(r.volume)}${r.issue ? `(${h(r.issue)})` : ''}`);
+    if (r.pages) parts.push(h(r.pages));
+  }
+  parts.push(String(r.year));
+  let out = `${parts.join('、')}。`;
+  if (r.isbn) out += ` ISBN ${h(r.isbn)}`;
+  if (r.doi) {
+    const url = `https://doi.org/${r.doi}`;
+    out += ` <a href="${h(url)}">${h(url)}</a>`;
+  }
+  return out;
 }

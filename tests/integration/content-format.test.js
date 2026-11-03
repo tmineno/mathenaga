@@ -346,3 +346,119 @@ describe('content-format: 受け入れテスト', () => {
 function pick(r) {
   return { kind: r.kind, id: r.id };
 }
+
+// docs/spec/content-format.md「注」「参考文献」の受け入れテスト(4 の 26〜33、7、8)
+describe('content-format: 注と参考文献', () => {
+  const CH4 = 'chapters/04-norm-inner-product/index.md';
+  const PROSE = '何回反復すれば';
+  /** 確認の記録の JSON を書き換える。 @param {string} root @param {(v: any) => void} fn */
+  const editVerified = (root, fn) =>
+    edit(root, 'references.verified.json', (t) => {
+      const v = JSON.parse(t);
+      fn(v);
+      return `${JSON.stringify(v, null, 2)}\n`;
+    });
+  /** @param {any[]} errors @param {string} code */
+  const count = (errors, code) => errors.filter((e) => e.code === code).length;
+
+  test('4.26 閉じていない ^[ → E14', async () => {
+    const errors = await errorsAfter((r) => edit(r, CH3, (t) => replaceOnce(t, PROSE, `${PROSE}^[閉じない注`)));
+    expectError(errors, 'E14', CH3);
+  });
+  test('4.27 definition の本文の注と文献の引用 → E14 が2件', async () => {
+    const errors = await errorsAfter((r) =>
+      edit(r, CH3, (t) =>
+        replaceOnce(t, 'のすべての[[コーシー列]]が', 'のすべての[[コーシー列]]^[注] [[@kreyszig-fa]] が'),
+      ),
+    );
+    assert.equal(count(errors, 'E14'), 2, errors.map((e) => `${e.code} ${e.message}`).join('\n'));
+  });
+  test('4.28 注の中の注 → E14', async () => {
+    const errors = await errorsAfter((r) => edit(r, CH3, (t) => replaceOnce(t, PROSE, `${PROSE}^[外 ^[中] 外]`)));
+    expectError(errors, 'E14', CH3);
+  });
+  test('4.29 isbn のチェックディジットの誤り → E03 と E15', async () => {
+    const errors = await errorsAfter((r) =>
+      edit(r, 'references.yml', (t) => replaceOnce(t, '978-0-471-50731-4', '978-0-471-50731-5')),
+    );
+    expectError(errors, 'E03', 'references.yml');
+    expectError(errors, 'E15');
+  });
+  test('4.30 isbn を消す → E08 と E15', async () => {
+    const errors = await errorsAfter((r) =>
+      edit(r, 'references.yml', (t) => replaceOnce(t, '  isbn: 978-0-471-50731-4\n', '')),
+    );
+    expectError(errors, 'E08', 'references.yml');
+    expectError(errors, 'E15');
+  });
+  test('4.31 確認の記録から1件消す → E15', async () => {
+    const errors = await errorsAfter((r) =>
+      editVerified(r, (v) => {
+        delete v['lecun-deep-learning'];
+      }),
+    );
+    const e = expectError(errors, 'E15');
+    assert.match(e.message, /lecun-deep-learning/);
+  });
+  test('4.32 [[文献ID]](@ なし)→ E05', async () => {
+    const errors = await errorsAfter((r) => edit(r, CH3, (t) => replaceOnce(t, PROSE, `[[kreyszig-fa]]${PROSE}`)));
+    const e = expectError(errors, 'E05', CH3);
+    assert.match(e.message, /\[\[@kreyszig-fa\]\]/);
+  });
+  test('4.33 文献の一覧の知らない項目 url → E02', async () => {
+    const errors = await errorsAfter((r) =>
+      edit(r, 'references.yml', (t) => replaceOnce(t, '  year: 1978\n', '  year: 1978\n  url: https://example.com/\n')),
+    );
+    expectError(errors, 'E02', 'references.yml');
+  });
+  test('文献の一覧を書き換えたら、確認の記録の fingerprint が合わず E15(年を変える)', async () => {
+    const errors = await errorsAfter((r) =>
+      edit(r, 'references.yml', (t) => replaceOnce(t, 'year: 2015', 'year: 2016')),
+    );
+    assert.deepEqual(
+      errors.map((e) => e.code),
+      ['E15'],
+    );
+  });
+
+  test('7. 引かれていない文献は N04', async () => {
+    const root = await tempRoot();
+    roots.push(root);
+    await edit(root, CH4, (t) =>
+      replaceOnce(t, '^[深層学習の全体像は、総説 [[@lecun-deep-learning]] にまとまっています。]', ''),
+    );
+    const r = await analyzeIn(root);
+    assert.deepEqual(r.errors, []);
+    const n04 = r.notices.filter((n) => n.code === 'N04');
+    assert.equal(n04.length, 1);
+    assert.match(n04[0].message, /lecun-deep-learning/);
+  });
+
+  test('8. 注の本文の数式・文字の ]・用語。\\^[ は文字のまま', async () => {
+    const root = await tempRoot();
+    roots.push(root);
+    await edit(root, CH3, (t) =>
+      replaceOnce(t, PROSE, `\\^[文字。${PROSE}^[区間 $[0, 1]$ と、文字の \\] と、[[距離空間]]。]`),
+    );
+    const r = await analyzeIn(root);
+    assert.deepEqual(r.errors, []);
+    const ch = r.ctx.site.chapters.find((/** @type {any} */ c) => c.number === 3);
+    assert.equal(ch.notes.length, 1);
+    const kids = ch.notes[0].token.children.filter((/** @type {any} */ c) => c.type !== 'text');
+    assert.deepEqual(
+      kids.map((/** @type {any} */ c) => [c.type, c.content]),
+      [
+        ['math_inline', '[0, 1]'],
+        ['text_special', ']'],
+        ['wikiref', '距離空間'],
+      ],
+    );
+    assert.equal(r.ctx.resolved.get(kids[2]).id, 'metric-space');
+    const html = await (async () => {
+      const b = await buildIn(root);
+      assert.deepEqual(b.errors, []);
+      return readDist(path.join(root, 'dist'), 'chapters/completeness-fixed-point/index.html');
+    })();
+    assert.ok(html.includes('^[文字。'), '\\^[ が文字の ^[ になっていない');
+  });
+});

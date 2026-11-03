@@ -13,6 +13,7 @@
     "format:check": "prettier --check .",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json",
+    "refs:verify": "node src/refcheck/cli.js",
     "banner": "node scripts/banner.js"
   },
   "dependencies": {

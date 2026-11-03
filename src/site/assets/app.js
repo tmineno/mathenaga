@@ -1,6 +1,6 @@
 // 閲覧時のスクリプト(docs/spec/site.md「閲覧時の機能」)。
 // 分野の切り替え(P-05)、用語ポップアップ(P-01)、現在地バー(P-02)、路線図の章の帯の強調(P-03)、
-// 位置情報つきのコピー(P-08)、表示の設定(P-09)、しおり(P-10)。
+// 位置情報つきのコピー(P-08)、表示の設定(P-09)、しおり(P-10)、注と文献のポップアップ(P-11)。
 // スクリプトが動かなくても、ページは未選択の表示のまま読める。
 (function () {
   'use strict';
@@ -187,7 +187,10 @@
     }
   }
 
-  /** アンカーの指す先が折りたたみ(ID を付けた応用など)なら開く */
+  /**
+   * アンカーの指す先が折りたたみ(ID を付けた応用など)か、折りたたみの中にあれば、開いて表示する
+   * (site.md「ページと URL」。注の一覧から、証明の詳細の中の注の印へ戻るときなど)。
+   */
   function openTarget() {
     var id = window.location.hash.slice(1);
     if (!id) return;
@@ -197,7 +200,18 @@
       return; // `#%` のような壊れたアンカーは無視する(ほかの機能の初期化を止めない)
     }
     var el = document.getElementById(id);
-    if (el && el.tagName === 'DETAILS') /** @type {HTMLDetailsElement} */ (el).open = true;
+    if (!el) return;
+    if (el.tagName === 'DETAILS') /** @type {HTMLDetailsElement} */ (el).open = true;
+    var opened = false;
+    for (var d = el.parentElement ? el.parentElement.closest('details') : null; d;) {
+      if (!(/** @type {HTMLDetailsElement} */ (d).open)) {
+        /** @type {HTMLDetailsElement} */ (d).open = true;
+        opened = true;
+      }
+      d = d.parentElement ? d.parentElement.closest('details') : null;
+    }
+    // 閉じた折りたたみの中の要素には、ブラウザが移動できないので、開いてから移る
+    if (opened) el.scrollIntoView();
   }
 
   var isChapter = document.body.classList.contains('page-chapter');
@@ -220,7 +234,10 @@
     if (s) e.preventDefault();
   });
 
-  // ---------- 用語ポップアップ ----------
+  // ---------- 用語ポップアップ(P-01)と、注と文献のポップアップ(P-11) ----------
+  // 注の印(.note-ref a)と文献の印(a.cite)は、注の一覧・参考文献の項目へのリンク。スクリプトが動くときは、
+  // 押しても移らずにポップアップを出す。中身はページの中の一覧から写す(site.md「注と参考文献の表示」)。
+  var POP_TRIGGERS = '.term, .note-ref a, a.cite';
 
   var pop = document.getElementById('_pop');
   var defsPromise = null;
@@ -299,6 +316,45 @@
     place(el);
   }
 
+  /**
+   * 注か文献のポップアップの中身を、ページの中の一覧の項目から作る。用語はボタンにせず文字だけにする。
+   * @param {Element} el  注の印か文献の印
+   */
+  function renderLocal(el) {
+    var note = el.getAttribute('data-note');
+    var cite = el.getAttribute('data-cite');
+    var src = note
+      ? document.querySelector('#_note-' + note + '-text .note-body')
+      : document.querySelector('#' + CSS.escape(cite || '') + ' .ref-body');
+    pop.textContent = '';
+    pop.setAttribute('aria-label', note ? '注' : '文献');
+    var head = document.createElement('p');
+    head.className = 'pop-h';
+    head.textContent = note ? '注' + note : el.textContent;
+    var body = document.createElement('div');
+    body.className = 'pop-body flow';
+    if (src) body.innerHTML = src.innerHTML;
+    all('.term', body).forEach(function (t) {
+      t.replaceWith(document.createTextNode(t.textContent || ''));
+    });
+    all('[id]', body).forEach(function (t) {
+      t.removeAttribute('id');
+    });
+    pop.appendChild(head);
+    pop.appendChild(body);
+    if (cite) {
+      var foot = document.createElement('p');
+      foot.className = 'pop-s';
+      var go = document.createElement('a');
+      go.className = 'pop-go';
+      go.href = '#' + cite;
+      go.textContent = '参考文献へ移動';
+      foot.appendChild(go);
+      pop.appendChild(foot);
+    }
+    place(el);
+  }
+
   function show(el, focusPop) {
     if (!pop) return;
     window.clearTimeout(timer);
@@ -306,6 +362,13 @@
     current = el;
     el.setAttribute('aria-expanded', 'true');
     shownAt = Date.now();
+    if (!el.classList.contains('term')) {
+      pop.hidden = false;
+      renderLocal(el);
+      if (focusPop) pop.focus();
+      return;
+    }
+    pop.setAttribute('aria-label', '用語の定義');
     var id = el.getAttribute('data-def');
     pop.textContent = '読み込み中…';
     pop.hidden = false;
@@ -356,7 +419,7 @@
     }, 200);
   }
 
-  all('.term').forEach(function (el) {
+  all(POP_TRIGGERS).forEach(function (el) {
     el.addEventListener('mouseenter', function () {
       if (!clickOnly()) show(el, false);
     });
@@ -364,7 +427,9 @@
     el.addEventListener('focus', function () {
       if (!clickOnly() && !refocusing) show(el, false);
     });
-    el.addEventListener('click', function () {
+    el.addEventListener('click', function (e) {
+      // 注と文献の印はリンクだが、スクリプトが動くときは移らずにポップアップを出す
+      if (el.tagName === 'A') e.preventDefault();
       if (current === el && Date.now() - shownAt > 400) hide(false);
       else show(el, true);
     });
@@ -390,7 +455,7 @@
   document.addEventListener('pointerdown', function (e) {
     if (!current || !pop) return;
     var t = e.target instanceof Element ? e.target : null;
-    if (t && (pop.contains(t) || t.closest('.term'))) return;
+    if (t && (pop.contains(t) || t.closest(POP_TRIGGERS))) return;
     hide(false);
   });
 
@@ -736,6 +801,8 @@
     /** コピーに含めない要素。 @param {HTMLElement} el */
     function skipped(el) {
       if (el.hidden || el.classList.contains('eq-num') || el.classList.contains('st-tools')) return true;
+      // 注の印と、注の一覧の「↩」は含めず、文字の位置にも数えない(site.md「位置情報つきのコピー」)
+      if (el.classList.contains('note-ref') || el.classList.contains('note-back')) return true;
       var p = el.parentElement;
       if (p && p.tagName === 'DETAILS' && !(/** @type {HTMLDetailsElement} */ (p).open) && el.tagName !== 'SUMMARY') {
         return true;

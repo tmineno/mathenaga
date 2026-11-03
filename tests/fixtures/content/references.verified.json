@@ -1,0 +1,40 @@
+{
+  "kreyszig-fa": {
+    "fingerprint": "28c7a0704a6e024fd9fd32ee36da5b5c23e0d70d1ddc1098490b5c2574633feb",
+    "checks": [
+      {
+        "identifier": "isbn:9780471507314",
+        "source": "ndl",
+        "record": {
+          "type": "book",
+          "title": "Introductory functional analysis with applications",
+          "authors": [
+            "Kreyszig, Erwin"
+          ],
+          "year": 1978
+        }
+      }
+    ],
+    "checked": "2026-11-03"
+  },
+  "lecun-deep-learning": {
+    "fingerprint": "88f6072b7fb81101e611e320d966914a4cb0876c520264a89923872d916969d7",
+    "checks": [
+      {
+        "identifier": "doi:10.1038/nature14539",
+        "source": "crossref",
+        "record": {
+          "type": "journal-article",
+          "title": "Deep learning",
+          "authors": [
+            "Yann LeCun",
+            "Yoshua Bengio",
+            "Geoffrey Hinton"
+          ],
+          "year": 2015
+        }
+      }
+    ],
+    "checked": "2026-11-03"
+  }
+}
