@@ -17,6 +17,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # pull_request ではマージコミットを取り出す。その1つ目の親(base)と比べて、変えたファイルを調べる
+          fetch-depth: 2
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
@@ -29,3 +31,14 @@ jobs:
       - name: Install the browser for the viewing tests
         run: npx playwright install --with-deps --only-shell chromium
       - run: npm test
+      # 文献の一覧か確認の記録を変えた PR でだけ、検索 API で確認をやり直す。CI でネットワークを使うのは
+      # この手順だけ。手で書いた確認の記録はここで見つかる(docs/spec/reference-check.md、ADR-005)。
+      - name: Re-check the references changed in the pull request
+        if: github.event_name == 'pull_request'
+        run: |
+          changed=$(git diff --name-only HEAD^1 HEAD)
+          for dir in content tests/fixtures/content; do
+            if printf '%s\n' "$changed" | grep -qxE "$dir/references(\.yml|\.verified\.json)"; then
+              npm run refs:verify -- --check --content "$dir"
+            fi
+          done
