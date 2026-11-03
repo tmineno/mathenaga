@@ -777,7 +777,9 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
     async function copyWith(page, button) {
       await menu(page).waitFor({ state: 'visible' });
       await menu(page).locator(button).click();
-      await page.locator('.copy-menu .copy-status', { hasText: /コピー/ }).waitFor();
+      // 「コピーしました」が出るのを待つことで、コピーできたことを確かめる。この表示は 1.2 秒後に
+      // ボタンごと消えるので、クリップボードを読んだ後に文字を読むと、遅い環境では消えた後になる。
+      await page.locator('.copy-menu .copy-status', { hasText: 'コピーしました' }).waitFor();
       return clip(page);
     }
 
@@ -790,8 +792,8 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
         'そのままコピー',
         'この文章の位置情報を含んでコピー',
       ]);
+      // copyWith が「コピーしました」の表示を待つ
       assert.equal(await copyWith(page, LOC), '[3:A04:18:30]\n何回反復すれば');
-      assert.equal(await page.locator('.copy-menu .copy-status').innerText(), 'コピーしました');
       // Esc でボタンを閉じてから選び直す。閉じずに同じ範囲を選び直すと、コピーの後の「1.2 秒後に閉じる」が
       // 残り、2回目のコピーが遅れたときにその途中で閉じる。
       await page.keyboard.press('Escape');
