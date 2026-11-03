@@ -1575,4 +1575,20 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
       }
     });
   });
+
+  describe('site: 46. 動きを減らす設定のときだけ、スクロールをなめらかにしない', () => {
+    test('「動きを減らす」でなければ smooth、「動きを減らす」なら auto', async () => {
+      const cases = /** @type {const} */ ([
+        ['no-preference', 'smooth'],
+        ['reduce', 'auto'],
+      ]);
+      for (const [reducedMotion, expected] of cases) {
+        const { context, page } = await open({ reducedMotion });
+        await page.goto(`${server.url}${CH3}`);
+        const behavior = await page.evaluate(() => getComputedStyle(document.documentElement).scrollBehavior);
+        assert.equal(behavior, expected, reducedMotion);
+        await context.close();
+      }
+    });
+  });
 });
