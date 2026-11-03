@@ -61,7 +61,9 @@ const isOpen = (page, sel) =>
 /** @param {import('playwright').Page} page @param {string} sel */
 const text = (page, sel) => page.locator(sel).first().innerText();
 
-describe('ブラウザでの受け入れテスト', () => {
+// テストを並列に動かす。node:test はファイル直下の describe を順に動かすので、全体をこの describe にまとめて
+// 指定する。中の describe とテストはこの設定を受け継ぐ。
+describe('ブラウザでの受け入れテスト', { concurrency: true }, () => {
   describe('site: 受け入れテスト', () => {
     test('1. 第3章を ?field=physics で開く', async () => {
       const { context, page } = await open();
@@ -663,7 +665,8 @@ describe('ブラウザでの受け入れテスト', () => {
     });
   });
 
-  describe('site: 位置情報つきのコピー(P-08)', () => {
+  // クリップボードはブラウザのコンテキストを分けても共有されるので、コピーを確かめるテストは順に動かす。
+  describe('site: 位置情報つきのコピー(P-08)', { concurrency: false }, () => {
     const BANACH_PROSE = '#banach > p';
     const BANACH_THM = '#banach .box.thm .flow > p';
     const PLAIN = 'button[data-copy=plain]';
