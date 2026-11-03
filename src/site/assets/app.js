@@ -1,6 +1,7 @@
 // 閲覧時のスクリプト(docs/spec/site.md「閲覧時の機能」)。
 // 分野の切り替え(P-05)、用語ポップアップ(P-01)、現在地バー(P-02)、路線図の章の帯の強調(P-03)、
-// 位置情報つきのコピー(P-08)、表示の設定(P-09)、しおり(P-10)、注と文献のポップアップ(P-11)。
+// 位置情報つきのコピー(P-08)、表示の設定(P-09)、しおり(P-10)、注と文献のポップアップ(P-11)、
+// 選んだ文章からの起票と原稿の表示(P-12)。
 // スクリプトが動かなくても、ページは未選択の表示のまま読める。
 (function () {
   'use strict';
@@ -728,8 +729,9 @@
     init();
   });
 
-  // ---------- 位置情報つきのコピー(P-08) ----------
+  // ---------- 位置情報つきのコピー(P-08)と、選んだ文章からの起票と原稿の表示(P-12) ----------
   // 区画(data-loc)と段落の番号(data-p)はビルドが振る。ここでは選んだ範囲から文と位置を作ってコピーする。
+  // リポジトリの URL を渡したビルドでは、区画の起票の URL(data-issue)と段落の原稿の行(data-l)もビルドが書く。
 
   var chapterEl = document.querySelector('article.chapter[data-chapter]');
   if (chapterEl) setupCopy(chapterEl);
@@ -743,23 +745,70 @@
     var BLOCK =
       /^(block|flex|grid|flow-root|list-item|table|table-row|table-row-group|table-header-group|table-footer-group|table-caption)$/;
     var coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    /** 原稿のファイルの GitHub の URL。MATHENAGA_REPO_URL を渡したビルドだけにある(site.md P-12) */
+    var source = article.getAttribute('data-source');
+    /** 「起票」の該当箇所に入れる、選んだ文の文字数の上限(Issue 作成画面の URL を長くしすぎない) */
+    var EXCERPT_MAX = 500;
+    /** 選択メニューのアイコン(24 の格子に描いた線) */
+    var ICONS = {
+      copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="1.5"/><path d="M15.5 8.5v-3a1 1 0 0 0-1-1h-9a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h3"/>',
+      loc: '<path d="M12 20.5s-6-5.3-6-10.5a6 6 0 0 1 12 0c0 5.2-6 10.5-6 10.5z"/><circle cx="12" cy="10" r="2.2"/>',
+      issue:
+        '<path d="M4 4.5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H10l-5 4v-4H4a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1z"/><path d="M8 9.5h8M8 12.5h5"/>',
+      edit: '<path d="M4.5 19.5h4l10-10-4-4-10 10z"/><path d="M13 7l4 4"/>',
+    };
 
     var menu = document.createElement('div');
     menu.className = 'copy-menu';
     menu.setAttribute('role', 'group');
-    menu.setAttribute('aria-label', '選んだ文章のコピー');
+    menu.setAttribute('aria-label', '選んだ文章の操作');
     menu.hidden = true;
+    /**
+     * アイコンと短い文言を付けて選択メニューに足す。重ねたときの文と読み上げは tip(site.md「位置情報つきのコピー」)。
+     * @template {HTMLElement} T @param {T} el @param {string} icon @param {string} label @param {string} tip @returns {T}
+     */
+    function addItem(el, icon, label, tip) {
+      el.innerHTML =
+        '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">' +
+        ICONS[icon] +
+        '</svg>';
+      var text = document.createElement('span');
+      text.textContent = label;
+      el.appendChild(text);
+      el.setAttribute('aria-label', tip);
+      el.setAttribute('data-tip', tip);
+      menu.appendChild(el);
+      return el;
+    }
     var buttons = [
-      { mode: 'plain', label: 'そのままコピー' },
-      { mode: 'loc', label: 'この文章の位置情報を含んでコピー' },
+      { mode: 'plain', label: 'コピー', tip: 'そのままコピー' },
+      { mode: 'loc', label: '位置つき', tip: '位置つきでコピー(1行目に位置情報を付ける)' },
     ].map(function (b) {
       var el = document.createElement('button');
       el.type = 'button';
       el.setAttribute('data-copy', b.mode);
-      el.textContent = b.label;
-      menu.appendChild(el);
-      return el;
+      return addItem(el, b.mode === 'plain' ? 'copy' : 'loc', b.label, b.tip);
     });
+    /** @param {string} act @param {string} label @param {string} tip */
+    function addLink(act, label, tip) {
+      var a = document.createElement('a');
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.setAttribute('data-act', act);
+      return addItem(a, act === 'issue' ? 'issue' : 'edit', label, tip);
+    }
+    /** @type {HTMLAnchorElement | null} 「起票」(site.md「選んだ文章からの起票と原稿の表示」) */
+    var issueLink = null;
+    /** @type {HTMLAnchorElement | null} 「編集」 */
+    var sourceLink = null;
+    if (source) {
+      var sep = document.createElement('span');
+      sep.className = 'copy-sep';
+      sep.setAttribute('aria-hidden', 'true');
+      menu.appendChild(sep);
+      issueLink = addLink('issue', '起票', 'この記述についてGitHub Issueに起票する');
+      sourceLink = addLink('source', '編集', 'この段落の原稿をGitHubで開いて編集する');
+    }
     var status = document.createElement('span');
     status.className = 'copy-status';
     status.setAttribute('role', 'status');
@@ -860,8 +909,9 @@
     }
 
     /**
-     * 範囲の位置 [章番号, 駅番号, 段落, 文字]。区画の段落に1つもかからなければ null。
+     * 範囲の位置。sec は区画、at は [章番号, 駅番号, 段落, 文字]。区画の段落に1つもかからなければ null。
      * @param {Range} range 数式に合わせて広げた範囲
+     * @returns {{ sec: Element, at: Array<string | number | null> } | null}
      */
     function locate(range) {
       var el = elementOf(range.startContainer);
@@ -871,21 +921,86 @@
         var head = document.createRange();
         head.setStart(p, 0);
         head.setEnd(range.startContainer, range.startOffset);
-        return [
-          chapterNo,
-          sec.getAttribute('data-loc'),
-          p.getAttribute('data-p'),
-          Array.from(textOf(head, true)).length + 1,
-        ];
+        return {
+          sec: sec,
+          at: [
+            chapterNo,
+            sec.getAttribute('data-loc'),
+            p.getAttribute('data-p'),
+            Array.from(textOf(head, true)).length + 1,
+          ],
+        };
       }
       // 段落の外(札など)から選び始めたときは、範囲にかかる最初の段落の 1 文字目
       var list = all('[data-loc] [data-p], [data-loc][data-p]', article);
       for (var i = 0; i < list.length; i++) {
         var q = list[i];
         if (!range.intersectsNode(q) || !q.getClientRects().length) continue;
-        return [chapterNo, q.closest('[data-loc]').getAttribute('data-loc'), q.getAttribute('data-p'), 1];
+        var s = /** @type {Element} */ (q.closest('[data-loc]'));
+        return { sec: s, at: [chapterNo, s.getAttribute('data-loc'), q.getAttribute('data-p'), 1] };
       }
       return null;
+    }
+
+    /** 「位置つき」でコピーする文。 @param {Range} r 数式に合わせて広げた範囲 @param {string} text 選んだ文 */
+    function withLocation(r, text) {
+      var where = locate(r);
+      return where ? '[' + where.at.join(':') + ']\n' + text : text;
+    }
+
+    /**
+     * 範囲にかかる段落の原稿の行 [始め, 終わり](site.md「選んだ文章からの起票と原稿の表示」)。行はビルドが data-l に書く。
+     * 文字を1つも選んでいない段落(3回押して段落を選んだときの、次の段落の頭など)は数えない。行のある段落がなければ null。
+     * @param {Range} r
+     */
+    function linesOf(r) {
+      var root = elementOf(r.commonAncestorContainer);
+      if (!root) return null;
+      var list = all('[data-l]', root);
+      var up = root.closest('[data-l]');
+      if (up) list.push(up);
+      var lo = Infinity;
+      var hi = -Infinity;
+      list.forEach(function (el) {
+        if (!article.contains(el) || !r.intersectsNode(el) || !el.getClientRects().length) return;
+        var part = document.createRange();
+        part.selectNodeContents(el);
+        if (r.compareBoundaryPoints(Range.START_TO_START, part) > 0) part.setStart(r.startContainer, r.startOffset);
+        if (r.compareBoundaryPoints(Range.END_TO_END, part) < 0) part.setEnd(r.endContainer, r.endOffset);
+        if (!part.toString().trim()) return;
+        var m = /^(\d+)(?:-(\d+))?$/.exec(el.getAttribute('data-l') || '');
+        if (!m) return;
+        lo = Math.min(lo, Number(m[1]));
+        hi = Math.max(hi, Number(m[2] || m[1]));
+      });
+      return lo === Infinity ? null : [lo, hi];
+    }
+
+    /** 「起票」と「編集」のリンクを、選んだ範囲に合わせる。 @param {Range} range */
+    function linkTo(range) {
+      if (!issueLink || !sourceLink) return;
+      var r = snapped(range);
+      var where = locate(r);
+      var base = where ? where.sec.getAttribute('data-issue') : null;
+      issueLink.hidden = !base;
+      if (where && base) {
+        var chars = Array.from(textOf(r, false));
+        var text = chars.length > EXCERPT_MAX ? chars.slice(0, EXCERPT_MAX).join('') + '…' : chars.join('');
+        var excerpt = '[' + where.at.join(':') + ']\n' + text;
+        try {
+          var url = new URL(base, window.location.href);
+          var page = url.searchParams.get('page');
+          if (page) url.searchParams.set('page', window.location.origin + page);
+          url.searchParams.set('excerpt', excerpt);
+          issueLink.href = url.toString().replace(/\+/g, '%20');
+        } catch {
+          // URL が扱えない環境では、ページの欄はパスのまま
+          issueLink.href = base + '&excerpt=' + encodeURIComponent(excerpt);
+        }
+      }
+      var lines = linesOf(r);
+      sourceLink.hidden = !lines;
+      if (lines) sourceLink.href = source + '?plain=1#L' + lines[0] + (lines[1] > lines[0] ? '-L' + lines[1] : '');
     }
 
     function place() {
@@ -908,6 +1023,7 @@
       window.clearTimeout(closeTimer);
       saved = range;
       status.textContent = '';
+      linkTo(range);
       menu.hidden = false;
       place();
     }
@@ -990,10 +1106,7 @@
         status.textContent = '';
         var r = snapped(saved);
         var text = textOf(r, false);
-        if (b.getAttribute('data-copy') === 'loc') {
-          var loc = locate(r);
-          if (loc) text = '[' + loc.join(':') + ']\n' + text;
-        }
+        if (b.getAttribute('data-copy') === 'loc') text = withLocation(r, text);
         writeText(text).then(
           function () {
             done('コピーしました', true);
@@ -1002,6 +1115,13 @@
             done('コピーできませんでした', false);
           },
         );
+      });
+    });
+    // 「起票」「編集」は新しいタブで開き、選択メニューを閉じる(閉じるのは開く動作の後)
+    [issueLink, sourceLink].forEach(function (a) {
+      if (!a) return;
+      a.addEventListener('click', function () {
+        window.setTimeout(hide, 0);
       });
     });
     // ボタンを押しても選択が外れないようにする

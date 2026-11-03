@@ -609,16 +609,42 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
       await context.close();
     });
 
-    test('21. MATHENAGA_REPO_URL を渡さなければ起票のリンクはない', async () => {
+    test('21. MATHENAGA_REPO_URL を渡さなければ起票のリンクはなく、選択メニューは2つだけ', async () => {
       const root = await tempRoot();
       try {
         const r = await buildIn(root, '/', '');
         assert.deepEqual(r.errors, []);
         const html = await fs.readFile(path.join(root, 'dist/chapters/completeness-fixed-point/index.html'), 'utf8');
         assert.ok(!html.includes('class="issue'));
+        // 選択メニューの「起票」「編集」に使う属性も書かない
+        for (const attr of ['data-issue=', 'data-source=', 'data-l=']) assert.ok(!html.includes(attr), attr);
         const stations = (html.match(/<section class="station/g) ?? []).length;
         assert.ok(stations > 0);
         assert.equal((html.match(/<button type="button" class="bm" data-bm=/g) ?? []).length, stations);
+        const s = await serve(path.join(root, 'dist'));
+        try {
+          const { context, page, errors } = await open();
+          await page.goto(`${s.url}${CH3}`);
+          await page
+            .locator('#banach > p[data-p]')
+            .first()
+            .evaluate((el) => {
+              el.scrollIntoView({ block: 'center' });
+              const range = document.createRange();
+              range.selectNodeContents(el);
+              const sel = /** @type {Selection} */ (window.getSelection());
+              sel.removeAllRanges();
+              sel.addRange(range);
+            });
+          const menu = page.locator('.copy-menu');
+          await menu.waitFor({ state: 'visible' });
+          assert.deepEqual(await menu.locator('button, a').allInnerTexts(), ['コピー', '位置つき']);
+          assert.equal(await menu.locator('.copy-sep').count(), 0);
+          assert.deepEqual(errors, []);
+          await context.close();
+        } finally {
+          await s.close();
+        }
       } finally {
         await fs.rm(root, { recursive: true, force: true });
       }
@@ -773,6 +799,11 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
     const menu = (page) => page.locator('.copy-menu');
     /** @param {import('playwright').Page} page */
     const clip = (page) => page.evaluate(() => navigator.clipboard.readText());
+    /** 選択メニューの項目が並ぶ行の数。 @param {import('playwright').Page} page */
+    const rows = (page) =>
+      menu(page)
+        .locator('button, a')
+        .evaluateAll((els) => new Set(els.map((e) => Math.round(e.getBoundingClientRect().top))).size);
     /** @param {import('playwright').Page} page @param {string} button */
     async function copyWith(page, button) {
       await menu(page).waitFor({ state: 'visible' });
@@ -783,15 +814,13 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
       return clip(page);
     }
 
-    test('23. 地の文を選ぶと2つのボタンが出て、位置つき・そのままでコピーできる', async () => {
+    test('23. 地の文を選ぶと選択メニューが1行で出て、位置つき・そのままでコピーできる', async () => {
       const { context, page, errors } = await openCopy();
       await page.goto(`${server.url}${CH3}`);
       await selectText(page, BANACH_PROSE, '何回反復すれば', '何回反復すれば');
       await menu(page).waitFor({ state: 'visible' });
-      assert.deepEqual(await menu(page).locator('button').allInnerTexts(), [
-        'そのままコピー',
-        'この文章の位置情報を含んでコピー',
-      ]);
+      assert.deepEqual(await menu(page).locator('button, a').allInnerTexts(), ['コピー', '位置つき', '起票', '編集']);
+      assert.equal(await rows(page), 1);
       // copyWith が「コピーしました」の表示を待つ
       assert.equal(await copyWith(page, LOC), '[3:A04:18:30]\n何回反復すれば');
       // Esc でボタンを閉じてから選び直す。閉じずに同じ範囲を選び直すと、コピーの後の「1.2 秒後に閉じる」が
@@ -802,6 +831,18 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
       assert.equal(await copyWith(page, PLAIN), '何回反復すれば');
       assert.deepEqual(errors, []);
       await context.close();
+      // 幅 400px の画面でも1行に収まり、画面からはみ出さない
+      const narrow = await open({ viewport: { width: 400, height: 800 } });
+      await narrow.page.goto(`${server.url}${CH3}`);
+      await selectText(narrow.page, BANACH_PROSE, '何回反復すれば', '何回反復すれば');
+      await menu(narrow.page).waitFor({ state: 'visible' });
+      assert.equal(await rows(narrow.page), 1);
+      const box = await menu(narrow.page).boundingBox();
+      assert.ok(
+        box && box.x >= 0 && box.x + box.width <= 400,
+        `選択メニューが画面からはみ出す: ${JSON.stringify(box)}`,
+      );
+      await narrow.context.close();
     });
 
     test('24. 行内の数式は TeX に戻し、数式の途中から選んでも数式全体を含める', async () => {
@@ -871,8 +912,17 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
       }
       await selectText(page, BANACH_PROSE, '何回反復すれば', '何回反復すれば');
       await menu(page).waitFor({ state: 'visible' });
+      // 「位置つき」に重ねると、文言を含む文が出る。読み上げる名前も同じ文
+      const loc = menu(page).locator(LOC);
+      await loc.hover();
+      assert.equal(
+        await loc.evaluate((el) => getComputedStyle(el, '::after').content),
+        '"位置つきでコピー(1行目に位置情報を付ける)"',
+      );
+      assert.equal(await loc.evaluate((el) => getComputedStyle(el, '::after').opacity), '1');
+      assert.equal(await loc.getAttribute('aria-label'), '位置つきでコピー(1行目に位置情報を付ける)');
       await page.keyboard.press('Tab');
-      assert.equal(await page.evaluate(() => document.activeElement?.textContent), 'そのままコピー');
+      assert.equal(await page.evaluate(() => document.activeElement?.textContent), 'コピー');
       await page.keyboard.press('Enter');
       await page.locator('.copy-menu .copy-status', { hasText: 'コピーしました' }).waitFor();
       assert.equal(await clip(page), '何回反復すれば');
@@ -983,6 +1033,165 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
         await s.close();
         await fs.rm(v.root, { recursive: true, force: true });
       }
+    });
+
+    // ---------- 選んだ文章からの起票と原稿の表示(P-12) ----------
+    const BLOB = 'https://github.com/example/mathenaga/blob/main/content/chapters/03-completeness-fixed-point/index.md';
+
+    /**
+     * 原稿で needle を書いた行(1 から、front matter も数える)と、その行から始まる段落の最後の行
+     * (空行か、ブロックを閉じる `:::` の前の行)。
+     * @param {string} text 章の Markdown @param {string} needle
+     */
+    function sourceLine(text, needle) {
+      const lines = text.split('\n');
+      const i = lines.findIndex((l) => l.includes(needle));
+      assert.ok(i >= 0, `原稿に ${needle} がない`);
+      let j = i;
+      while (j + 1 < lines.length && lines[j + 1].trim() !== '' && !lines[j + 1].startsWith(':::')) j++;
+      return { first: i + 1, last: j + 1 };
+    }
+    const fixtureSource = () => fs.readFile(path.join(CONTENT, CH3_SOURCE), 'utf8');
+    /** 選択メニューのリンクの URL。 @param {import('playwright').Page} page @param {string} act */
+    async function linkUrl(page, act) {
+      return new URL(/** @type {string} */ (await menu(page).locator(`a[data-act=${act}]`).getAttribute('href')));
+    }
+
+    test('53. 「起票」は駅の起票の欄に選んだ文を足し、「編集」は原稿のその行を開く', async () => {
+      const { context, page, errors } = await open();
+      // GitHub へは出ていかない
+      await context.route(/^https:\/\/github\.com\//, (r) => r.fulfill({ status: 200, body: 'ok' }));
+      await page.goto(`${server.url}${CH3}`);
+      await selectText(page, BANACH_PROSE, '何回反復すれば', '何回反復すれば');
+      await menu(page).waitFor({ state: 'visible' });
+      const url = await linkUrl(page, 'issue');
+      const station = new URL(
+        /** @type {string} */ (await page.locator('section.station#banach a.issue').getAttribute('href')),
+      );
+      assert.equal(`${url.origin}${url.pathname}`, 'https://github.com/example/mathenaga/issues/new');
+      for (const k of ['template', 'title', 'station', 'page']) {
+        assert.equal(url.searchParams.get(k), station.searchParams.get(k), k);
+      }
+      assert.equal(
+        url.searchParams.get('page'),
+        `${new URL(server.url).origin}/chapters/completeness-fixed-point/#banach`,
+      );
+      assert.equal(url.searchParams.get('excerpt'), '[3:A04:18:30]\n何回反復すれば');
+      const { first } = sourceLine(await fixtureSource(), '何回反復すれば必要な精度');
+      assert.equal((await linkUrl(page, 'source')).toString(), `${BLOB}?plain=1#L${first}`);
+      for (const act of ['issue', 'source']) {
+        const a = menu(page).locator(`a[data-act=${act}]`);
+        assert.equal(await a.getAttribute('target'), '_blank', act);
+        assert.equal(await a.getAttribute('rel'), 'noopener', act);
+      }
+      const issue = menu(page).locator('a[data-act=issue]');
+      await issue.hover();
+      assert.equal(
+        await issue.evaluate((el) => getComputedStyle(el, '::after').content),
+        '"この記述についてGitHub Issueに起票する"',
+      );
+      assert.equal(await issue.getAttribute('aria-label'), 'この記述についてGitHub Issueに起票する');
+      // 押すと新しいタブで開き、選択メニューを閉じる
+      const [tab] = await Promise.all([context.waitForEvent('page'), issue.click()]);
+      await tab.waitForLoadState();
+      assert.equal(new URL(tab.url()).searchParams.get('excerpt'), '[3:A04:18:30]\n何回反復すれば');
+      await menu(page).waitFor({ state: 'hidden' });
+      await selectText(page, BANACH_PROSE, '何回反復すれば', '何回反復すれば');
+      await menu(page).waitFor({ state: 'visible' });
+      const [tab2] = await Promise.all([
+        context.waitForEvent('page'),
+        menu(page).locator('a[data-act=source]').click(),
+      ]);
+      await tab2.waitForLoadState();
+      assert.equal(tab2.url(), `${BLOB}?plain=1#L${first}`);
+      await menu(page).waitFor({ state: 'hidden' });
+      assert.deepEqual(errors, []);
+      await context.close();
+    });
+
+    test('54. 2つの段落にまたがって選ぶと、「編集」は最初の段落の始めから最後の段落の終わりまでの行', async () => {
+      const { context, page } = await open();
+      await page.goto(`${server.url}${CH3}`);
+      await selectText(page, '#banach', '主張 3 の誤差評価は', '完備性を外す');
+      await menu(page).waitFor({ state: 'visible' });
+      const text = await fixtureSource();
+      const a = sourceLine(text, '主張 3 の誤差評価は').first;
+      const b = sourceLine(text, '**完備性を外す。**').last;
+      assert.ok(a < b);
+      assert.equal((await linkUrl(page, 'source')).hash, `#L${a}-L${b}`);
+      // 3回押して段落を選んだときのように、範囲の終わりが次の段落の頭にあっても、その段落の行は含めない
+      await page.keyboard.press('Escape');
+      await menu(page).waitFor({ state: 'hidden' });
+      await page.evaluate(() => {
+        const p = [...document.querySelectorAll('#banach > p')].find((el) =>
+          el.textContent?.includes('主張 3 の誤差評価は'),
+        );
+        const next = document.querySelector('#banach .box.drop-assumption [data-p]');
+        if (!p || !next) throw new Error('段落がない');
+        const r = document.createRange();
+        r.setStart(p, 0);
+        r.setEnd(next, 0);
+        const sel = /** @type {Selection} */ (window.getSelection());
+        sel.removeAllRanges();
+        sel.addRange(r);
+      });
+      await menu(page).waitFor({ state: 'visible' });
+      assert.equal((await linkUrl(page, 'source')).hash, `#L${a}`);
+      await context.close();
+    });
+
+    test('55. 駅の外の節では、タイトルと駅の欄に節の名前を書き、ページは節の URL', async () => {
+      const { context, page } = await open();
+      await page.goto(`${server.url}${CH3}`);
+      await selectText(page, '#_start', 'この章では', '導入します');
+      await menu(page).waitFor({ state: 'visible' });
+      const url = await linkUrl(page, 'issue');
+      assert.equal(url.searchParams.get('title'), '[改善案] 第3章 出発点');
+      assert.equal(url.searchParams.get('station'), '第3章 完備性と不動点 / 出発点');
+      assert.equal(
+        url.searchParams.get('page'),
+        `${new URL(server.url).origin}/chapters/completeness-fixed-point/#_start`,
+      );
+      await context.close();
+    });
+
+    test('56. 参考文献の項目だけなら「編集」は出ない。注の一覧の項目は、注を書いた段落の行', async () => {
+      const v = await buildNotesVariant();
+      const s = await serve(v.dist);
+      try {
+        const { context, page } = await open();
+        await page.goto(`${s.url}${CH3}`);
+        await selectText(page, '#lecun-deep-learning', 'Deep learning', 'Deep learning');
+        await menu(page).waitFor({ state: 'visible' });
+        assert.ok(await menu(page).locator('a[data-act=issue]').isVisible());
+        assert.ok(!(await menu(page).locator('a[data-act=source]').isVisible()));
+        await page.keyboard.press('Escape');
+        await menu(page).waitFor({ state: 'hidden' });
+        await selectText(page, '#_note-2-text', '駅の注', '駅の注');
+        await menu(page).waitFor({ state: 'visible' });
+        const text = await fs.readFile(path.join(v.root, 'content', CH3_SOURCE), 'utf8');
+        const { first, last } = sourceLine(text, '完備な空間の縮小写像^[駅の注。]');
+        assert.equal(first, last);
+        assert.equal((await linkUrl(page, 'source')).hash, `#L${first}`);
+        await context.close();
+      } finally {
+        await s.close();
+        await fs.rm(v.root, { recursive: true, force: true });
+      }
+    });
+
+    test('57. 選んだ文が 500 文字を超えると、該当箇所は先頭の 500 文字に「…」を付けて切る', async () => {
+      const { context, page } = await openCopy();
+      await page.goto(`${server.url}${CH3}`);
+      await selectText(page, '#banach', '完備な空間の縮小写像', '一定の割合');
+      await menu(page).waitFor({ state: 'visible' });
+      const excerpt = (await linkUrl(page, 'issue')).searchParams.get('excerpt');
+      const copied = await copyWith(page, LOC);
+      const [loc, ...rest] = copied.split('\n');
+      const chars = Array.from(rest.join('\n'));
+      assert.ok(chars.length > 500, `選んだ文が ${chars.length} 文字しかない`);
+      assert.equal(excerpt, `${loc}\n${chars.slice(0, 500).join('')}…`);
+      await context.close();
     });
   });
 
