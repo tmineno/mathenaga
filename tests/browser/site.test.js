@@ -759,6 +759,10 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
       ]);
       assert.equal(await copyWith(page, LOC), '[3:A04:18:30]\n何回反復すれば');
       assert.equal(await page.locator('.copy-menu .copy-status').innerText(), 'コピーしました');
+      // Esc でボタンを閉じてから選び直す。閉じずに同じ範囲を選び直すと、コピーの後の「1.2 秒後に閉じる」が
+      // 残り、2回目のコピーが遅れたときにその途中で閉じる。
+      await page.keyboard.press('Escape');
+      await menu(page).waitFor({ state: 'hidden' });
       await selectText(page, BANACH_PROSE, '何回反復すれば', '何回反復すれば');
       assert.equal(await copyWith(page, PLAIN), '何回反復すれば');
       assert.deepEqual(errors, []);
