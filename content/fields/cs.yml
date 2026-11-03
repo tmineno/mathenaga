@@ -1,8 +1,22 @@
 title: 情報科学
 description: >
-  強化学習の価値反復法をはじめ、同じ計算を繰り返して答えに近づく方法はいたるところにあります。
-  それが必ず答えにたどり着く理由を、距離空間と不動点定理で説明します。
+  強化学習の価値反復法のように、同じ計算を繰り返して答えに近づく方法が、
+  必ず答えにたどり着く理由を、距離空間と不動点定理で説明します。
+  一方で、実数が 0 に等しいかを判定するプログラムは書けません。
+  その理由を、計算できる関数は連続であるという、位相空間の定理で説明します。
 goals:
   - station: banach
     kind: final
     label: 価値反復法の収束
+  - station: inner-product
+    kind: partial
+    label: 文書の近さを測るコサイン類似度
+  - station: topological-space
+    kind: partial
+    label: 計算できる関数は連続
+  - station: hausdorff
+    kind: partial
+    label: 異なる入力を有限の観察で見分ける
+  - station: compact-connected
+    kind: final
+    label: 止まるプログラムが読む桁数の上限
