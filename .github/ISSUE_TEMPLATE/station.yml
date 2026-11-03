@@ -1,5 +1,6 @@
-# 駅への改善案(docs/spec/site.md「改善案の起票」)。
+# 駅への改善案(docs/spec/site.md「改善案の起票」「選んだ文章からの起票と原稿の表示」)。
 # サイトの各駅のアイコンから開くと、station と page の欄が入った状態になる。
+# 本文を選んで選択メニューの「起票」から開くと、excerpt の欄にも位置と選んだ文が入る。
 name: 駅への改善案
 description: サイトの駅(概念・定理の単位)について、誤りの指摘や改善案を送る
 title: '[改善案] '
@@ -9,7 +10,7 @@ body:
     id: station
     attributes:
       label: 駅
-      description: 章と駅。サイトの駅のアイコンから開くと入っている
+      description: 章と駅(駅の外の節では節の名前)。サイトから開くと入っている
       placeholder: 第3章 完備性と不動点 / A04 バナッハの不動点定理(banach)
     validations:
       required: true
@@ -18,6 +19,11 @@ body:
     attributes:
       label: ページ
       description: その駅の URL
+  - type: textarea
+    id: excerpt
+    attributes:
+      label: 該当箇所
+      description: 本文を選んで「起票」から開くと、位置 [章番号:駅番号:段落:文字] と選んだ文が入っている
   - type: dropdown
     id: kind
     attributes:
