@@ -10,13 +10,15 @@ MathEnaga は、大学数学を他分野の学生に届ける静的ウェブサ�
 
 | 文書 | 扱う範囲 |
 |---|---|
-| [content-format.md](content-format.md) | 執筆者が書く3種類のファイルの形式と、ビルドが検査する規則 |
+| [content-format.md](content-format.md) | 執筆者が書くファイル(路線ファイル・分野ファイル・章の md・文献の一覧)の形式と、ビルドが検査する規則 |
 | [build.md](build.md) | オーサリングツール:章グラフ、導出する値、定義索引、出力、コマンド |
 | [route-map.md](route-map.md) | 路線図の SVG:描く駅、配置、印、リンク、代替テキスト |
 | [site.md](site.md) | 生成するページ:構成、分野の切り替え、閲覧時の機能、非機能要件 |
+| [reference-check.md](reference-check.md) | 文献の実在確認:検索 API への問い合わせ、照合、確認の記録 |
 | [ADR-001](../adr/ADR-001-handmade-build-tool.md) | ビルドツールをフレームワークなしで自作する |
 | [ADR-002](../adr/ADR-002-definition-index.md) | 用語の定義を定義索引から一括で取得する |
 | [ADR-003](../adr/ADR-003-branch-and-merge-lines.md) | 支線が前の支線から分かれることと、複数の路線から合流することを許す |
+| [ADR-005](../adr/ADR-005-notes-and-references.md) | 注・補足・参考文献を足し、文献は検索 API で実在を確かめてから使う |
 
 ## 概要
 
@@ -65,5 +67,9 @@ MathEnaga は、大学数学を他分野の学生に届ける静的ウェブサ�
 | front matter | 章の md の冒頭にある YAML | — |
 | 見出し属性 | 見出しの末尾に付ける {…} | — |
 | 定義索引 | 全定義をまとめた1つの JSON | defs.json |
+| 注 | 文の中に書く短い補足。書いた位置に印「注N」を置き、本文は注を書いた駅か節の末尾に並べる | `^[…]` |
+| 補足 | 読み飛ばしてよい、段落単位の補足のブロック | remark |
+| 文献 | 本文から引く本や論文。文献の一覧に1か所で書き、実在を確かめてから使う | references.yml |
+| 確認の記録 | 文献ごとに、検索 API で実在と書誌を確かめた結果 | references.verified.json |
 | テスト用原稿 | 受け入れテストで値を確かめるときの入力。2026-11-02 の `content/` を写して固定したもの([ADR-004](../adr/ADR-004-frozen-test-manuscript.md))。原稿を書いても変わらず、変えるのはテストの意図を変えるときだけ。10章で、第0章(reading-basics)・第1章(convergence-metric)・第2章(open-sets-continuity)・第3章(completeness-fixed-point)・第4章(norm-inner-product)は完成稿、ほかの章は路線図と検証のための仮原稿。路線ファイルは [content-format.md](content-format.md) の例のとおり(0番線の `style: dotted`、解析線と幾何線の `color_dark`)である。路線ファイルには、未執筆の章として第10〜13章(解析線に2章、幾何線に2章)と第16・17章(集合線に2章)を planned で書いてある(各3駅) | `tests/fixtures/content/` |
 | 今の原稿 | 書き進めている原稿。受け入れテストでは、値を書かない不変条件だけを確かめる([ADR-004](../adr/ADR-004-frozen-test-manuscript.md)) | `content/` |
