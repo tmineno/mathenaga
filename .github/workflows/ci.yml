@@ -25,6 +25,7 @@ jobs:
       - run: npm run format:check
       - run: npm run lint
       - run: npm run typecheck
+      # テストはヘッドレスでだけ起動するので、ヘッドレス版の Chromium だけを入れる。
       - name: Install the browser for the viewing tests
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps --only-shell chromium
       - run: npm test
