@@ -178,25 +178,25 @@ export function numberEquations(chapters, fieldOrder) {
 /**
  * 範囲の中の行内のトークンを、章ページに並ぶ順にたどる。注(note)の中身は、注の印の位置でたどる。
  * Preconditions: ranges は displayRanges の結果か、その一部。
- * Postconditions: 行内の子のトークンごとに visit を呼ぶ。
+ * Postconditions: 行内の子のトークンごとに visit を呼ぶ。2つ目の引数は、その子を含む行内のトークン(inline)。
  * Failure modes: なし。
  * Side effects: visit が起こすものだけ。
  * @param {import('./chapter.js').ChapterModel} chapter
  * @param {Array<{ start: number, end: number }>} ranges
- * @param {(token: any) => void} visit
+ * @param {(token: any, inline: any) => void} visit
  */
 export function walkInline(chapter, ranges, visit) {
-  /** @param {any[]} children */
-  const walk = (children) => {
+  /** @param {any[]} children @param {any} inline */
+  const walk = (children, inline) => {
     for (const c of children) {
-      visit(c);
-      if (c.type === 'note' && c.children) walk(c.children);
+      visit(c, inline);
+      if (c.type === 'note' && c.children) walk(c.children, inline);
     }
   };
   for (const r of ranges) {
     for (let i = r.start; i <= r.end; i++) {
       const t = chapter.tokens[i];
-      if (t.type === 'inline' && t.children) walk(t.children);
+      if (t.type === 'inline' && t.children) walk(t.children, t);
     }
   }
 }

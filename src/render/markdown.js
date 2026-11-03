@@ -20,6 +20,8 @@ export const BLOCK_CLOSE = `container_${BLOCK}_close`;
  * @property {(token: any) => string} [note]  注の印(note のトークン)を描く
  * @property {(src: string) => string} imageSrc
  * @property {(token: any) => number | undefined} [paragraphNo]  段落の番号(data-p)。番号がなければ undefined
+ * @property {(token: any) => string | undefined} [sourceLines]
+ *   番号を付けた段落が原稿のファイルで占める行(data-l。「12」か「12-15」)。書かないなら undefined
  * @property {(token: any) => { label: string, id: string | null, images: any[], captions: TitlePart[][] } | undefined} [figure]
  *   段落(paragraph_open)が図なら、図番号・ID・画像と、画像ごとのキャプション。図でなければ undefined
  */
@@ -41,7 +43,7 @@ const NUMBERED = ['paragraph_open', 'list_item_open', 'heading_open', 'table_ope
  *   note は注 `^[…]` で、children に注の本文を行内として解析したトークン列を持つ。
  *   2段目の見出しの末尾の {…} は取り除いて heading_open.meta.attrsSrc に入れる。
  *   タイトルのある画像は、タイトルを文字と行内の数式に切り分けて image.meta.titleParts に入れる。
- *   env.paragraphNo が番号を返すブロックには data-p 属性を付ける。
+ *   env.paragraphNo が番号を返すブロックには data-p 属性を付け、env.sourceLines が行を返せば data-l 属性も付ける。
  *   env.figure が図を返す段落は <figure> にし、画像を並べ、図番号とキャプションを付ける。
  * Failure modes: なし。
  * Side effects: なし。
@@ -115,7 +117,8 @@ export function createMarkdown() {
       // 描画の間だけ属性を足す(トークンは共有なので、ほかの描画に残さない)
       const token = tokens[idx];
       const saved = token.attrs;
-      token.attrs = [...(saved ?? []), ['data-p', String(no)]];
+      const lines = env.sourceLines?.(token);
+      token.attrs = [...(saved ?? []), ['data-p', String(no)], ...(lines ? [['data-l', lines]] : [])];
       try {
         return render();
       } finally {

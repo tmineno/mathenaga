@@ -69,6 +69,7 @@ const FORBIDDEN_TEX = /\\(tag\*?|label|ref|eqref|notag|nonumber)(?![A-Za-z])/;
  * @property {string | null} subtitle
  * @property {string} lineId
  * @property {any[]} tokens
+ * @property {number} lineOffset  本文の1行目のファイル内の行番号 - 1(トークンの map をファイルの行にするのに使う)
  * @property {{ goals: Block[], motivations: Block[], prose: Array<{ start: number, end: number }> }} head
  * @property {Station[]} stations
  * @property {{ reviews: Block[], questions: Array<{ question: Block, answer: Block | null }> }} end

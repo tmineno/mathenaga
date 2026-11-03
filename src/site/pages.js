@@ -169,6 +169,8 @@ class Renderer {
     this.paragraphs = new Map();
     /** @type {Map<any, number>} 注のトークン → 注の一覧の項目の段落の番号 */
     this.noteParagraphs = new Map();
+    /** @type {Map<any, any>} 注のトークン → 注を書いた行内のトークン(注の一覧の項目の行に使う) */
+    this.noteHosts = new Map();
     /** @type {Map<string, string>} 出力の相対パス → 版の印(generateSite が入れる) */
     this.versions = new Map();
   }
@@ -239,9 +241,10 @@ class Renderer {
         const id = this.eqIds.get(t);
         const label = this.ctx.equations.labels.get(t);
         const no = paragraphs?.get(t);
-        return `<div class="eq"${id ? ` id="${h(id)}"` : ''}${no === undefined ? '' : ` data-p="${no}"`}><div class="eq-body">${this.ctx.mathHtml.get(t) ?? ''}</div><span class="eq-num">(${label})</span></div>\n`;
+        return `<div class="eq"${id ? ` id="${h(id)}"` : ''}${no === undefined ? '' : ` data-p="${no}"${this.linesAttr(chapter, t)}`}><div class="eq-body">${this.ctx.mathHtml.get(t) ?? ''}</div><span class="eq-num">(${label})</span></div>\n`;
       },
       paragraphNo: paragraphs ? (/** @type {any} */ t) => paragraphs.get(t) : undefined,
+      sourceLines: paragraphs ? (/** @type {any} */ t) => this.sourceLines(chapter, t) : undefined,
       figure: (/** @type {any} */ t) => {
         const f = this.figs.get(t);
         return f
@@ -296,8 +299,10 @@ class Renderer {
     const labels = this.ctx.notes.labels;
     /** @type {any[]} */
     const found = [];
-    walkInline(c, ranges, (t) => {
-      if (t.type === 'note' && labels.has(t)) found.push(t);
+    walkInline(c, ranges, (t, inline) => {
+      if (t.type !== 'note' || !labels.has(t)) return;
+      found.push(t);
+      this.noteHosts.set(t, inline);
     });
     return found.sort((a, b) => labels.get(a) - labels.get(b));
   }
@@ -315,7 +320,7 @@ class Renderer {
       const n = this.ctx.notes.labels.get(t);
       const p = this.noteParagraphs.get(t);
       const body = this.md.renderer.renderInline(t.children ?? [], this.md.options, env);
-      return `<li id="_note-${n}-text" class="note-item"${p === undefined ? '' : ` data-p="${p}"`}><span class="note-no">注${n}</span> <span class="note-body">${body}</span><a class="note-back" href="#_note-${n}" aria-label="本文へ戻る">↩</a></li>`;
+      return `<li id="_note-${n}-text" class="note-item"${p === undefined ? '' : ` data-p="${p}"${this.linesAttr(c, this.noteHosts.get(t))}`}><span class="note-no">注${n}</span> <span class="note-body">${body}</span><a class="note-back" href="#_note-${n}" aria-label="本文へ戻る">↩</a></li>`;
     });
     return `<aside class="notes" aria-label="注"><p class="notes-h">注</p><ol class="note-list">${items.join('')}</ol></aside>`;
   }
@@ -332,7 +337,7 @@ class Renderer {
       const r = this.site.references.get(id);
       return `<li id="${h(id)}" class="ref-item" data-p="${n}"><span class="ref-no">[${n}]</span> <span class="ref-body">${r ? bibliography(r) : h(id)}</span></li>`;
     });
-    return `<section class="refs-sec" id="_references" data-loc="参考文献"><h2 class="sec-h" data-p="0">参考文献</h2><ol class="refs">${items.join('')}</ol></section>`;
+    return `<section class="refs-sec" id="_references" data-loc="参考文献"${this.sectionIssue(c, '参考文献', '_references')}><h2 class="sec-h" data-p="0">参考文献</h2><ol class="refs">${items.join('')}</ol></section>`;
   }
 
   /** トークンの範囲 [start, end] を描画する。 @param {any} chapter @param {number} start @param {number} end @param {boolean} [plain] */
@@ -390,7 +395,9 @@ class Renderer {
    * @param {string} [tail] 組の最後に足す HTML(注の一覧など)
    */
   versionGroup(chapter, blocks, kind, label, loc = '', tail = '') {
-    const out = [`<div class="vgroup" data-kind="${kind}"${loc ? ` data-loc="${h(loc)}"` : ''}>`];
+    const out = [
+      `<div class="vgroup" data-kind="${kind}"${loc ? ` data-loc="${h(loc)}"${this.sectionIssue(chapter, loc, '')}` : ''}>`,
+    ];
     for (const b of byFieldOrder(blocks, this.site.fieldOrder)) {
       if (!b.field) {
         const tag = kind === 'motivation' ? '' : `<p class="tag tag-${kind}">${label}</p>`;
@@ -658,17 +665,17 @@ ${c.subtitle ? `<p class="ch-sub">${h(c.subtitle)}</p>` : ''}
     // 出発点
     const prose = c.head.prose.map((r) => this.range(c, r.start, r.end)).join('');
     const startNotes = this.notesList(c, [...c.head.motivations, ...c.head.prose]);
-    const motivation = `<section class="start flow" id="_start" data-loc="出発点"><h2 class="sec-h" data-p="0">出発点</h2>${this.versionGroup(c, c.head.motivations, 'motivation', '出発点')}${prose}${startNotes}</section>`;
+    const motivation = `<section class="start flow" id="_start" data-loc="出発点"${this.sectionIssue(c, '出発点', '_start')}><h2 class="sec-h" data-p="0">出発点</h2>${this.versionGroup(c, c.head.motivations, 'motivation', '出発点')}${prose}${startNotes}</section>`;
 
     // 駅
     const stationHtml = stations.map((st) => this.stationSection(c, st)).join('\n');
 
     // 章末
     const review = c.end.reviews[0]
-      ? `<section class="review" id="_review" data-loc="ふりかえり"><h2 class="sec-h" data-p="0">ふりかえり</h2><div class="box review"><div class="flow">${this.inner(c, c.end.reviews[0])}</div></div>${this.notesList(c, c.end.reviews)}</section>`
+      ? `<section class="review" id="_review" data-loc="ふりかえり"${this.sectionIssue(c, 'ふりかえり', '_review')}><h2 class="sec-h" data-p="0">ふりかえり</h2><div class="box review"><div class="flow">${this.inner(c, c.end.reviews[0])}</div></div>${this.notesList(c, c.end.reviews)}</section>`
       : '';
     const questions = c.end.questions.length
-      ? `<section class="quiz" id="_quiz" data-loc="確認問題"><h2 class="sec-h" data-p="0">確認問題</h2><ol class="qs">${c.end.questions
+      ? `<section class="quiz" id="_quiz" data-loc="確認問題"${this.sectionIssue(c, '確認問題', '_quiz')}><h2 class="sec-h" data-p="0">確認問題</h2><ol class="qs">${c.end.questions
           .map(
             (q) =>
               `<li><div class="q flow">${this.inner(c, q.question)}</div>${
@@ -688,7 +695,8 @@ ${c.subtitle ? `<p class="ch-sub">${h(c.subtitle)}</p>` : ''}
     ].join('');
     const aheadSec = `<section class="ahead" id="_ahead"><h2 class="sec-h">この先</h2>${ahead}</section>`;
 
-    const main = `<article class="chapter" data-chapter="${c.number}" data-id="${h(c.id)}">
+    const source = this.repoUrl ? ` data-source="${h(`${this.repoUrl}/blob/main/content/${c.file}`)}"` : '';
+    const main = `<article class="chapter" data-chapter="${c.number}" data-id="${h(c.id)}"${source}>
 ${head}
 ${chooser}
 ${this.versionGroup(c, c.head.goals, 'goal', 'この章のゴール', 'この章のゴール', this.notesList(c, c.head.goals))}
@@ -744,8 +752,8 @@ ${aheadSec}
     }
     flush();
     const appHtml = apps.length ? this.versionGroup(c, apps, 'application', '分野での応用') : '';
-    return `<section class="station flow" id="${h(st.id)}" data-station="${h(st.id)}" data-loc="${h(st.code)}" data-out="${out.join(' ')}">
-<h2 data-p="0">${this.badge(st)}<span class="st-name">${heading}</span>${shared ? `<span class="en">${h(shared.en)}</span>` : ''}<span class="out-label" hidden>${OUT_OF_SCOPE}</span></h2>
+    return `<section class="station flow" id="${h(st.id)}" data-station="${h(st.id)}" data-loc="${h(st.code)}"${this.repoUrl ? ` data-issue="${h(this.stationIssueHref(c, st))}"` : ''} data-out="${out.join(' ')}">
+<h2 data-p="0"${this.linesAttr(c, c.tokens[st.model.headingStart])}>${this.badge(st)}<span class="st-name">${heading}</span>${shared ? `<span class="en">${h(shared.en)}</span>` : ''}<span class="out-label" hidden>${OUT_OF_SCOPE}</span></h2>
 ${notes}${items.join('')}${appHtml}${this.notesList(
       c,
       st.model.items.map((/** @type {any} */ it) => (it.kind === 'block' ? it.block : it)),
@@ -771,16 +779,72 @@ ${notes}${items.join('')}${appHtml}${this.notesList(
   issueLink(c, st) {
     if (!this.repoUrl) return '';
     const page = `${this.chapterUrl(c.id)}#${st.id}`;
+    return `<a class="issue" href="${h(this.stationIssueHref(c, st))}" target="_blank" rel="noopener" aria-label="${ISSUE_TIP}" data-tip="${ISSUE_TIP}" data-page="${h(page)}">${ISSUE_ICON}</a>`;
+  }
+
+  /**
+   * Issue フォームの作成画面の URL(site.md「改善案の起票」)。ページの欄はパスのままで、オリジンはスクリプトが足す。
+   * @param {string} title  「[改善案] 」の後に続くタイトル @param {string} station @param {string} page
+   */
+  issueHref(title, station, page) {
     const params = [
       ['template', 'station.yml'],
-      ['title', `[改善案] 第${c.number}章 ${st.code} ${st.name}`],
-      ['station', `第${c.number}章 ${c.title} / ${st.code} ${st.name}(${st.id})`],
+      ['title', `[改善案] ${title}`],
+      ['station', station],
       ['page', page],
     ]
       .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
       .join('&');
-    const href = `${this.repoUrl}/issues/new?${params}`;
-    return `<a class="issue" href="${h(href)}" target="_blank" rel="noopener" aria-label="${ISSUE_TIP}" data-tip="${ISSUE_TIP}" data-page="${h(page)}">${ISSUE_ICON}</a>`;
+    return `${this.repoUrl}/issues/new?${params}`;
+  }
+
+  /** 駅の起票の URL。 @param {any} c @param {import('../core/graph.js').StationInfo} st */
+  stationIssueHref(c, st) {
+    return this.issueHref(
+      `第${c.number}章 ${st.code} ${st.name}`,
+      `第${c.number}章 ${c.title} / ${st.code} ${st.name}(${st.id})`,
+      `${this.chapterUrl(c.id)}#${st.id}`,
+    );
+  }
+
+  /**
+   * 駅の外の節(区画)の起票の URL を data-issue 属性にする(site.md「選んだ文章からの起票と原稿の表示」)。
+   * 選択メニューの「起票」が、選んだ文を足して使う。リポジトリの URL がなければ空。
+   * @param {any} c @param {string} name  節の名前 @param {string} anchor  節の ID。章ページの先頭なら空
+   */
+  sectionIssue(c, name, anchor) {
+    if (!this.repoUrl) return '';
+    const page = `${this.chapterUrl(c.id)}${anchor ? `#${anchor}` : ''}`;
+    return ` data-issue="${h(this.issueHref(`第${c.number}章 ${name}`, `第${c.number}章 ${c.title} / ${name}`, page))}"`;
+  }
+
+  /**
+   * 段落が原稿のファイルで占める行(site.md「選んだ文章からの起票と原稿の表示」)。「12」か「12-15」。
+   * 1 から数え、front matter の行も数える。リポジトリの URL がない(「編集」を出さない)か、行が分からなければ undefined。
+   * @param {any} c @param {any} token  map(本文の中の [始めの行, 終わりの次の行]、0 から)を持つトークン
+   */
+  sourceLines(c, token) {
+    if (!this.repoUrl || !token || !token.map) return undefined;
+    let end = token.map[1];
+    if (token.type === 'list_item_open') {
+      // 箇条書きの最後の項目の map は、後ろの空行まで含む。項目の中身(行内・コード・別行立ての数式)の行で終わりを決める
+      const tokens = c.tokens;
+      end = token.map[0] + 1;
+      for (let j = tokens.indexOf(token) + 1; j < tokens.length; j++) {
+        const t = tokens[j];
+        if (t.type === 'list_item_close' && t.level === token.level) break;
+        if (t.map && ['inline', 'fence', 'code_block', 'math_block'].includes(t.type)) end = Math.max(end, t.map[1]);
+      }
+    }
+    const first = token.map[0] + c.lineOffset + 1;
+    const last = Math.max(first, end + c.lineOffset);
+    return first === last ? `${first}` : `${first}-${last}`;
+  }
+
+  /** sourceLines を data-l 属性にする。行がなければ空。 @param {any} c @param {any} token */
+  linesAttr(c, token) {
+    const lines = this.sourceLines(c, token);
+    return lines ? ` data-l="${lines}"` : '';
   }
 
   /** 現在地の「次の章」。 @param {any} c @param {import('../core/schema.js').Field | null} f */
