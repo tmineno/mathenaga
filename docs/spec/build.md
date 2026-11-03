@@ -127,7 +127,7 @@ dist/
 
 - CI(GitHub Actions)は format → lint → typecheck → test の順に実行し、どれかが失敗したらマージできないようにする。型は JSDoc で書き、typecheck で検査する。使う道具は CI を作るときに決め、バージョンを固定する。
 - CI の test では閲覧テストも実行する。そのためにブラウザをインストールする手順を CI に入れる。
-- 文献の一覧(`content/references.yml`)か確認の記録(`content/references.verified.json`)を変えた PR では、`npm run refs:verify -- --check` も実行し、失敗したらマージできないようにする。CI でネットワークを使うのはこの手順だけで、ほかの PR では実行しない([reference-check.md](reference-check.md))。
+- 文献の一覧(`references.yml`)か確認の記録(`references.verified.json`)を変えた PR では、今の原稿とテスト用原稿のそれぞれについて、変えた側に `npm run refs:verify -- --check --content <原稿の場所>` も実行し、失敗したらマージできないようにする。CI でネットワークを使うのはこの手順だけで、ほかの PR では実行しない([reference-check.md](reference-check.md))。
 - 公開は、main への push で `npm run build` を実行し、`dist/` を GitHub Pages のプロジェクトサイトに置く。ベースパスは `/<リポジトリ名>/` で、公開のワークフローがリポジトリ名から作って `MATHENAGA_BASE_PATH` に渡す。リポジトリの URL も `MATHENAGA_REPO_URL` に渡し、改善案の起票のアイコンを出す。手元のビルドとプレビューの既定は、ベースパスが `/`、`MATHENAGA_REPO_URL` は空(アイコンなし)のまま。
 
 ## Failure modes
