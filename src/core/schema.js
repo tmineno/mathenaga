@@ -273,7 +273,7 @@ export function checkField(data, id, file) {
       }
     });
     if (!data.goals.some((g) => isObject(g) && g.kind === 'final')) {
-      errors.push(issue('E08', file, null, 'kind が final の目標(終着駅)がない'));
+      errors.push(issue('E08', file, null, 'kind が final の目標(最終目標)がない'));
     }
   }
   return {

@@ -1,24 +1,36 @@
-// 路線図の配置と SVG(docs/spec/route-map.md)。
+// 路線図の配置と SVG(docs/spec/route-map.md)。章ごとに1枚の札を格子に置き、路線の線・分岐の線・
+// 前提の矢印で札どうしをつなぐ。分岐の線と前提の矢印は、札のあいだの溝(列の溝と段の溝)だけを通る。
 
 import { escapeXml } from './text.js';
 
 /** 寸法(px)。路線図の見た目の調整はここで行う。 */
 export const GEOM = {
-  plateH: 24,
-  minPlateW: 40,
-  row: 100, // 段と段の間隔
-  labelGap: 6,
-  lineH: 17,
-  font: 13,
-  gap: 14, // 駅名どうしの最小のすき間
-  minDx: 64,
-  upDx: 50, // 上の段への斜線の横幅
-  downDx: 40, // 下の段への斜線の横幅
-  pillW: 84,
-  pillH: 20,
-  bandFont: 12,
-  margin: 16,
-  maxLabelWidth: 6 * 13, // これより長い駅名は2行に折り返す
+  cardW: 184, // 章の札の幅
+  pad: 10, // 札の内側の余白
+  headFont: 12, // 「第N章」の行
+  headH: 14,
+  headGap: 4,
+  titleFont: 14, // 章のタイトル
+  titleLineH: 19,
+  titleGap: 6,
+  stFont: 12, // 駅名
+  stLineH: 17,
+  codeFont: 11, // 表示番号
+  plateW: 34,
+  plateH: 15,
+  plateGap: 6,
+  rowGap: 4, // 駅の行どうしの間
+  pillFont: 11, // 「途中の目標」の札
+  pillH: 15,
+  colGap: 40, // 列の溝の幅(既定)
+  rowGap0: 44, // 段の溝の高さ(既定)
+  margin: 16, // 図の端の溝(既定)
+  gapPad: 10, // 溝の端から最初のトラックまで
+  track: 9, // トラックの間隔
+  labelFont: 11, // 前提の矢印と分岐の線のラベル
+  labelH: 13,
+  labelPad: 3, // ラベルと線のすき間
+  port: 12, // 札の辺の上で、矢印の出入りする点の間隔
 };
 
 /**
@@ -26,11 +38,14 @@ export const GEOM = {
  * @param {string} s
  * @param {number} [font]
  */
-export function textWidth(s, font = GEOM.font) {
+export function textWidth(s, font = GEOM.stFont) {
   let w = 0;
   for (const ch of s) w += /** @type {number} */ (ch.codePointAt(0)) >= 0x2e80 ? font : font * 0.58;
   return w;
 }
+
+/** 「途中の目標」の札の幅 */
+const PILL_W = Math.round(textWidth('途中の目標', GEOM.pillFont) + 12);
 
 /** @param {string} ch */
 function script(ch) {
@@ -42,32 +57,70 @@ function script(ch) {
 }
 
 /**
- * 駅名を2行までに折り返す。「の」「・」の後ろ、「と」「や」の後ろ、文字の種類の変わり目の順に優先する。
- * Preconditions: なし。
- * Postconditions: 1行か2行の配列を返す。
+ * 文字列を幅 width に収まる行に折り返す(route-map.md「配置」6)。行に入るだけ詰めたうえで、
+ * 「の」「・」の後ろ、「と」「や」の後ろ、文字の種類の変わり目の順に、折り返す位置を選ぶ。
+ * Preconditions: width は1文字の幅より大きい。
+ * Postconditions: 1行以上の配列を返す。行をつなぐと元の文字列になる(行頭と行末の空白を除く)。
  * Failure modes: なし。
  * Side effects: なし。
- * @param {string} name
+ * @param {string} text
+ * @param {number} width
+ * @param {number} [font]
+ * @returns {string[]}
  */
-export function wrapLabel(name) {
-  if (textWidth(name) <= GEOM.maxLabelWidth) return [name];
-  const chars = [...name];
-  const n = chars.length;
-  const tiers = [
-    (/** @type {number} */ i) => 'の・'.includes(chars[i - 1]),
-    (/** @type {number} */ i) => 'とや'.includes(chars[i - 1]),
-    (/** @type {number} */ i) => script(chars[i - 1]) !== script(chars[i]),
-  ];
-  for (const ok of tiers) {
-    let best = -1;
-    for (let i = 2; i <= n - 2; i++) {
-      if (!ok(i)) continue;
-      if (best < 0 || Math.abs(i - n / 2) < Math.abs(best - n / 2)) best = i;
+export function wrapText(text, width, font = GEOM.stFont) {
+  const out = [];
+  let rest = [...text];
+  while (rest.length > 0) {
+    if (textWidth(rest.join(''), font) <= width) {
+      out.push(rest.join(''));
+      break;
     }
-    if (best > 0) return [chars.slice(0, best).join(''), chars.slice(best).join('')];
+    let fit = 0;
+    let w = 0;
+    for (const ch of rest) {
+      const cw = textWidth(ch, font);
+      if (w + cw > width) break;
+      w += cw;
+      fit++;
+    }
+    fit = Math.max(1, fit);
+    const r = rest;
+    const tiers = [
+      (/** @type {number} */ i) => 'の・'.includes(r[i - 1]),
+      (/** @type {number} */ i) => 'とや'.includes(r[i - 1]) || r[i - 1] === ' ',
+      (/** @type {number} */ i) => script(r[i - 1]) !== script(r[i]),
+    ];
+    // 行が短くなりすぎる位置では折り返さない
+    const least = Math.max(2, Math.ceil(fit * 0.4));
+    let cut = -1;
+    for (const ok of tiers) {
+      for (let i = Math.min(fit, rest.length - 2); i >= least; i--) {
+        if (ok(i)) {
+          cut = i;
+          break;
+        }
+      }
+      if (cut > 0) break;
+    }
+    if (cut < 0) cut = fit;
+    out.push(rest.slice(0, cut).join('').trimEnd());
+    rest = rest.slice(cut);
+    while (rest[0] === ' ') rest = rest.slice(1);
   }
-  const mid = Math.ceil(n / 2);
-  return [chars.slice(0, mid).join(''), chars.slice(mid).join('')];
+  return out;
+}
+
+/**
+ * 行の数を max までにする。収まらなければ最後の行の末尾を「…」で省く。
+ * @param {string[]} lines @param {number} max @param {number} width @param {number} font
+ */
+function clampLines(lines, max, width, font) {
+  if (lines.length <= max) return lines;
+  const head = lines.slice(0, max - 1);
+  let last = [...lines.slice(max - 1).join('')];
+  while (last.length > 1 && textWidth(`${last.join('')}…`, font) > width) last = last.slice(0, -1);
+  return [...head, `${last.join('')}…`];
 }
 
 /**
@@ -143,7 +196,6 @@ export function branchStations(site, drawn, all = site.stations) {
  * @property {import('./schema.js').Line} line
  * @property {'up' | 'down' | 'right' | 'merge'} dir  merge は上下の両方から合流し、幹線の高さで右に置く支線
  * @property {number} row      同じ向きの段のうち幹線から何番目か(0 が最も近い)。right と merge は 0
- * @property {boolean} simple  分岐駅が幹線の駅1つだけ(幹線から分かれる従来の描き方)
  * @property {BranchInfo} info
  */
 
@@ -208,8 +260,7 @@ function planRows(site, branches, trunkIds, lastTrunk) {
       dir = side.get(info.branch.lineId) === 'up' ? 'up' : 'down';
       fallbacks.push({ line, reason: '幹線より右の場所をほかの支線が使った', drawn: '主な分岐駅の側に' });
     }
-    const simple = info.stations.length === 1 && trunkIds.has(info.branch.lineId);
-    rows.push({ line, dir, row: dir === 'up' ? ups++ : dir === 'down' ? downs++ : 0, simple, info });
+    rows.push({ line, dir, row: dir === 'up' ? ups++ : dir === 'down' ? downs++ : 0, info });
     side.set(line.id, dir === 'up' || dir === 'down' ? dir : 'mid');
   }
   return { rows, fallbacks };
@@ -256,514 +307,172 @@ export function mapStations(site) {
   return out;
 }
 
-/** 章の札の文字。 @param {any} chapter @param {boolean} current */
-function bandText(chapter, current) {
-  if (chapter.planned) return `第${chapter.number}章 未執筆`;
-  return current ? `第${chapter.number}章 このページ` : `第${chapter.number}章`;
-}
-
-/** 配置で見積もる章の札の幅。どのページでも同じ配置にするため、長い方の文字で測る。 @param {any} chapter */
-function reservedLabelW(chapter) {
-  return textWidth(bandText(chapter, true), GEOM.bandFont);
-}
-
 /**
- * 幹線の上の章の札と、上の段へ分かれる線との間合い(分岐駅からの横の距離)。1段上へ分かれる線のときの値。
- * 斜めの線は横幅 upDx で目当ての段まで上るので、2段目・3段目へ分かれる線は傾きが急で、この間合いは段の数で割った値になる。
- */
-const UP_CLEAR_TOP = (GEOM.upDx * (GEOM.plateH / 2 + 8 + GEOM.bandFont)) / GEOM.row;
-const UP_CLEAR_BOTTOM = (GEOM.upDx * (GEOM.plateH / 2 + 8 - 3)) / GEOM.row;
-
-/** 線と、札・駅名・印・章の札との間にあけるすき間。 */
-const CLEAR = 3;
-/** 線をよけて駅をずらす配置を、何回までやり直すか。 */
-const MAX_PASSES = 10;
-
-/**
- * @typedef {object} Segment  よける対象の線分
- * @property {number} x1
- * @property {number} y1
- * @property {number} x2
- * @property {number} y2
- * @property {string} lineId
- * @property {string | null} from  分岐駅から出る線なら、その分岐駅の ID
- * @property {string | null} to    支線の最初の駅に入る線なら、その駅の ID
+ * @typedef {object} Arrow  前提の矢印
+ * @property {number} from  前提にされる章の章番号
+ * @property {number} to    前提にする章の章番号
+ * @property {import('./graph.js').StationInfo[]} stations  前提にされる駅(読む順)
+ * @property {string} label
  */
 
-/** 章の札の外接矩形(layoutBoxes の band-label と同じ形)。 @param {boolean} above @param {number} y @param {number} x @param {number} w */
-function chapterLabelBox(above, y, x, w) {
-  const ty = above ? y + GEOM.plateH / 2 + 8 + GEOM.bandFont : y - GEOM.plateH / 2 - 8;
-  return { x, y: ty - GEOM.bandFont, w, h: GEOM.bandFont + 3 };
-}
-
 /**
- * 線分のうち矩形の内側にある部分の、両端の x を返す(Liang–Barsky)。交わらなければ null。
- * @param {Segment} s @param {number} x0 @param {number} y0 @param {number} x1 @param {number} y1
+ * 前提の矢印を決める(route-map.md「前提の矢印」)。
+ * Preconditions: shown は図に描く駅(読む順)。branches は、その図に描く支線の分岐駅。
+ * Postconditions: 章の組ごとに1本の矢印を返す(前提にされる章、前提にする章の章番号の順)。
+ * Failure modes: なし。
+ * Side effects: なし。
+ * @param {import('./schema.js').Line[]} lines
+ * @param {import('./graph.js').StationInfo[]} shown
+ * @param {Map<string, BranchInfo>} branches
+ * @returns {Arrow[]}
  */
-function clipX(s, x0, y0, x1, y1) {
-  const dx = s.x2 - s.x1;
-  const dy = s.y2 - s.y1;
-  let t0 = 0;
-  let t1 = 1;
-  for (const [p, q] of [
-    [-dx, s.x1 - x0],
-    [dx, x1 - s.x1],
-    [-dy, s.y1 - y0],
-    [dy, y1 - s.y1],
-  ]) {
-    if (p === 0) {
-      if (q < 0) return null;
-      continue;
-    }
-    const r = q / p;
-    if (p < 0) t0 = Math.max(t0, r);
-    else t1 = Math.min(t1, r);
-    if (t0 > t1) return null;
-  }
-  if (t1 - t0 < 1e-9) return null;
-  return [s.x1 + dx * t0, s.x1 + dx * t1];
-}
-
-/**
- * 矩形が線分に重ならないように、右へずらす量を返す。
- * @param {Array<{ x: number, y: number, w: number, h: number }>} boxes
- * @param {Segment[]} segments
- * @param {string} id      駅の ID(この駅から出る線・入る線はよけない)
- * @param {string} lineId  駅の路線(自分の路線の線はよけない)
- */
-function shiftToClear(boxes, segments, id, lineId) {
-  let shift = 0;
-  for (const s of segments) {
-    if (s.from === id || s.to === id || s.lineId === lineId) continue;
-    for (const b of boxes) {
-      const hit = clipX(s, b.x - CLEAR, b.y - CLEAR, b.x + b.w + CLEAR, b.y + b.h + CLEAR);
-      if (hit) shift = Math.max(shift, Math.max(hit[0], hit[1]) + CLEAR - b.x);
+export function prerequisiteArrows(lines, shown, branches) {
+  const byId = new Map(shown.map((s) => [s.id, s]));
+  const pos = new Map(shown.map((s, i) => [s.id, i]));
+  /** 手順 3 の関係。to と、requires の辺か @type {Map<string, Array<{ to: string, req: boolean }>>} */
+  const adj = new Map(shown.map((s) => [s.id, []]));
+  const add = (/** @type {string} */ u, /** @type {string} */ v, /** @type {boolean} */ req) =>
+    /** @type {Array<{ to: string, req: boolean }>} */ (adj.get(u)).push({ to: v, req });
+  /** @type {Array<[string, string]>} */
+  const cross = [];
+  for (const v of shown) {
+    for (const u of new Set(v.requires)) {
+      const s = byId.get(u);
+      if (!s) continue;
+      add(u, v.id, true);
+      if (s.lineId !== v.lineId) cross.push([u, v.id]);
     }
   }
-  return shift;
-}
-
-/** 折れ線を線分に分ける。 @param {number[][]} pts @param {string} lineId @param {string | null} from @param {string | null} to */
-function toSegments(pts, lineId, from, to) {
-  /** @type {Segment[]} */
-  const out = [];
-  for (let i = 1; i < pts.length; i++) {
-    const [x1, y1] = pts[i - 1];
-    const [x2, y2] = pts[i];
-    if (x1 !== x2 || y1 !== y2) out.push({ x1, y1, x2, y2, lineId, from, to });
+  // 同じ路線で隣り合う駅と、幹線の路線どうしのつながり
+  /** @type {Map<string, import('./graph.js').StationInfo[]>} */
+  const perLine = new Map();
+  for (const s of shown) perLine.set(s.lineId, [...(perLine.get(s.lineId) ?? []), s]);
+  for (const list of perLine.values()) for (let i = 1; i < list.length; i++) add(list[i - 1].id, list[i].id, false);
+  const trunk = lines.filter((l) => l.layout === null && perLine.has(l.id));
+  for (let i = 1; i < trunk.length; i++) {
+    const a = /** @type {import('./graph.js').StationInfo[]} */ (perLine.get(trunk[i - 1].id));
+    const b = /** @type {import('./graph.js').StationInfo[]} */ (perLine.get(trunk[i].id));
+    add(a[a.length - 1].id, b[0].id, false);
   }
-  return out;
+  const branchEdges = new Set();
+  for (const info of branches.values()) for (const s of info.stations) branchEdges.add(`${s.id}>${info.first.id}`);
+  /** requires の辺 u → v を除いても、u から v へたどれるか @param {string} u @param {string} v */
+  const reachable = (u, v) => {
+    const seen = new Set([u]);
+    const queue = [u];
+    while (queue.length > 0) {
+      const x = /** @type {string} */ (queue.shift());
+      for (const e of adj.get(x) ?? []) {
+        if (e.req && x === u && e.to === v) continue;
+        if (e.to === v) return true;
+        if (!seen.has(e.to)) {
+          seen.add(e.to);
+          queue.push(e.to);
+        }
+      }
+    }
+    return false;
+  };
+  /** @type {Map<string, Arrow>} */
+  const groups = new Map();
+  for (const [u, v] of cross) {
+    if (branchEdges.has(`${u}>${v}`) || reachable(u, v)) continue;
+    const su = /** @type {import('./graph.js').StationInfo} */ (byId.get(u));
+    const sv = /** @type {import('./graph.js').StationInfo} */ (byId.get(v));
+    const key = `${su.chapter.number}>${sv.chapter.number}`;
+    const g = groups.get(key) ?? { from: su.chapter.number, to: sv.chapter.number, stations: [], label: '' };
+    if (!g.stations.includes(su)) g.stations.push(su);
+    groups.set(key, g);
+  }
+  const out = [...groups.values()];
+  for (const g of out) {
+    g.stations.sort((a, b) => /** @type {number} */ (pos.get(a.id)) - /** @type {number} */ (pos.get(b.id)));
+    g.label = g.stations.map((s) => s.name).join('・');
+  }
+  return out.sort((a, b) => a.from - b.from || a.to - b.to);
 }
 
 /**
- * @typedef {object} Band  章の帯
+ * @typedef {{ x: number, y: number, w: number, h: number }} Box
+ * @typedef {{ text: string, x: number, y: number, w: number, h: number }} TextLine  y は行の上端
+ */
+
+/**
+ * @typedef {object} PlacedStation  章の札の中の駅の行
+ * @property {import('./graph.js').StationInfo} info
+ * @property {Card} card
+ * @property {number} x      行の左端
+ * @property {number} y      行の上端
+ * @property {number} w
+ * @property {number} h
+ * @property {Box | null} plate  表示番号の札(未執筆の駅は null)
+ * @property {TextLine[]} name
+ * @property {Box | null} pill   「途中の目標」の札
+ * @property {boolean} final
+ * @property {import('./schema.js').Goal | null} partial
+ * @property {import('./schema.js').Goal | null} goal
+ */
+
+/**
+ * @typedef {object} Card  章の札
  * @property {number} number      章番号
  * @property {string | null} chapterId  未執筆の章は null
  * @property {string} title
+ * @property {string} lineId
  * @property {boolean} planned
  * @property {boolean} current    今の章
+ * @property {number} col
+ * @property {number} tier        段。幹線の段が 0、上の段が負、下の段が正
  * @property {number} x
  * @property {number} y
  * @property {number} w
  * @property {number} h
- * @property {string} text        札の文字
- * @property {number} tx          札の左端
- * @property {number} ty          札の文字の基線
+ * @property {TextLine} head      「第N章」の行
+ * @property {TextLine[]} titleLines
+ * @property {PlacedStation[]} rows
  */
 
 /**
- * @typedef {object} PlacedStation
- * @property {import('./graph.js').StationInfo} info
+ * @typedef {object} Link  路線の線・分岐の線・前提の矢印
+ * @property {'line' | 'branch' | 'arrow'} kind
+ * @property {string} lineId      前提の矢印は ''
+ * @property {string} style
+ * @property {boolean} planned    未執筆の章へつながる線
+ * @property {number[][]} points
+ * @property {number} from        章番号
+ * @property {number} to          章番号
+ * @property {string} [id]        分岐の線と前提の矢印の、溝の中の区間を区別する名前
+ * @property {string} [group]     同じ支線の最初の札へ入る分岐の線どうしは同じ値
+ */
+
+/**
+ * @typedef {object} MapLabel
+ * @property {'arrow' | 'branch'} kind
+ * @property {string} text
+ * @property {string} lineId
  * @property {number} x
  * @property {number} y
- * @property {'trunk' | 'up' | 'down' | 'right' | 'merge'} dir
- * @property {string[]} label
- * @property {number} plateW
- * @property {number} labelW
- * @property {number} half      札・駅名・印のうち最も広いものの半分の幅
- * @property {boolean} above    駅名を札の上に書く
- * @property {boolean} final
- * @property {import('./schema.js').Goal | null} partial
- * @property {import('./schema.js').Goal | null} goal
- * @property {boolean} transfer
+ * @property {number} w
+ * @property {number} h
  */
 
 /**
  * @typedef {object} MapLayout
- * @property {PlacedStation[]} stations
- * @property {Array<{ lineId: string, style: string, points: number[][], planned: boolean[] }>} paths  planned は点ごとの、未執筆の駅へつながるか
- * @property {Band[]} bands  章の帯(章番号の順)
+ * @property {Card[]} cards        章番号の順
+ * @property {PlacedStation[]} stations  読む順
+ * @property {Link[]} links
+ * @property {MapLabel[]} labels
+ * @property {Arrow[]} arrows
  * @property {{ minX: number, minY: number, maxX: number, maxY: number }} bounds
  * @property {Array<{ line: import('./schema.js').Line, first: import('./graph.js').StationInfo }>} missing  E12
  * @property {Fallback[]} fallbacks  N03
  * @property {import('./schema.js').Line[]} linesShown
  */
 
-/**
- * 路線図を配置する。
- * Preconditions: drawn は requires をさかのぼって閉じた駅の集合。
- * Postconditions: 駅・線・章の帯の座標を返す。分岐駅が決まらない支線と、親の路線が描けない支線は描かず、
- *   前者を missing に入れる。opts.planned が true なら、未執筆の章の駅も描く(全体の図)。
- *   分岐駅が2つ以上ある支線は、分岐駅ごとに線(paths の1項目)を持ち、主な分岐駅からの線に支線の駅が続く。
- * Failure modes: なし。
- * Side effects: なし。
- * @param {import('./graph.js').Site} site
- * @param {Set<string>} drawn
- * @param {{ goals?: import('./schema.js').Goal[], highlight?: string | null, planned?: boolean }} [opts]
- * @returns {MapLayout}
- */
-export function layoutMap(site, drawn, opts = {}) {
-  const goals = new Map((opts.goals ?? []).map((g) => [g.station, g]));
-  const all = opts.planned ? mapStations(site) : site.stations;
-  if (opts.planned) drawn = new Set([...drawn, ...all.filter((s) => s.planned).map((s) => s.id)]);
-  const shown = all.filter((s) => drawn.has(s.id));
-  const byLine = new Map(site.lines.map((l) => [l.id, shown.filter((s) => s.lineId === l.id)]));
-  const { branches, missing } = branchStations(site, drawn, all);
-
-  /** @param {import('./graph.js').StationInfo} info @param {PlacedStation['dir']} dir @returns {PlacedStation} */
-  const measure = (info, dir) => {
-    const label = wrapLabel(info.name);
-    const plateW = Math.max(GEOM.minPlateW, Math.round(textWidth(info.code) + 14));
-    const labelW = Math.max(...label.map((l) => textWidth(l)));
-    const goal = goals.get(info.id) ?? null;
-    const partial = goal && goal.kind === 'partial' ? goal : null;
-    const half = Math.max(plateW, labelW, partial ? GEOM.pillW : 0) / 2;
-    const transfer =
-      !info.planned && shown.some((t) => !t.planned && t.lineId !== info.lineId && t.requires.includes(info.id));
-    return {
-      info,
-      x: 0,
-      y: 0,
-      dir,
-      label,
-      plateW,
-      labelW,
-      half,
-      above: dir === 'up',
-      final: !!goal && goal.kind === 'final',
-      partial,
-      goal,
-      transfer,
-    };
-  };
-
-  // 幹線
-  const trunkLines = site.lines.filter((l) => l.layout === null);
-  const trunkIds = new Set(trunkLines.map((l) => l.id));
-  const trunk = trunkLines.flatMap((l) => byLine.get(l.id) ?? []);
-  const lastTrunk = trunk[trunk.length - 1];
-  // 支線の向きと段
-  const { rows, fallbacks } = planRows(site, branches, trunkIds, lastTrunk);
-  const simpleRows = rows.filter((r) => r.simple);
-  /** 下へ分かれる線の出る幹線の駅 → その駅から出る線それぞれの、下りる段の数 @type {Map<string, number[]>} */
-  const downDrops = new Map();
-  for (const r of simpleRows) {
-    if (r.dir === 'down') downDrops.set(r.info.branch.id, [...(downDrops.get(r.info.branch.id) ?? []), r.row + 1]);
-  }
-  const upFrom = new Set(simpleRows.filter((r) => r.dir === 'up').map((r) => r.info.branch.id));
-  /** 上へ分かれる線の出る幹線の駅 → その駅から出る線のうち、最も高い段までの段の数 @type {Map<string, number>} */
-  const upRise = new Map();
-  for (const r of simpleRows) {
-    if (r.dir === 'up') upRise.set(r.info.branch.id, Math.max(upRise.get(r.info.branch.id) ?? 0, r.row + 1));
-  }
-  const otherLines = new Set(rows.filter((r) => !r.simple).map((r) => r.line.id));
-  /** @param {RowPlan} r */
-  const rowY = (r) => (r.dir === 'up' ? -GEOM.row * (r.row + 1) : r.dir === 'down' ? GEOM.row * (r.row + 1) : 0);
-
-  /**
-   * 1回分の配置。reserved は前の回の線で、駅はそれをよけて右へずれる。幹線と、幹線の駅1つから分かれる
-   * 支線の駅は、ほかの路線から分かれる線(connectors)だけをよける。幹線の駅1つから分かれる支線の駅は、
-   * 途中の段を横切る斜めの線(crossers)もよける。それ以外の支線の駅は、すべての線をよける。
-   * @param {{ connectors: Segment[], crossers: Segment[], all: Segment[] }} reserved
-   */
-  const placeAll = (reserved) => {
-    /** @type {Map<string, PlacedStation>} */
-    const placed = new Map();
-    /** @type {Array<{ lineId: string, style: string, points: number[][], planned: boolean[] }>} */
-    const paths = [];
-    /** ほかの路線から分かれる線(幹線の駅1つから分かれる線を除く) @type {Segment[]} */
-    const connectors = [];
-    /**
-     * 幹線の駅1つから、2段目より遠い段へ分かれる斜めの線。途中の段を横切る。幹線の駅と章の札は
-     * UP_CLEAR_TOP・UP_CLEAR_BOTTOM でよけるので、これをよけるのは支線の駅だけにする
-     * @type {Segment[]}
-     */
-    const crossers = [];
-    /** すべての線 @type {Segment[]} */
-    const segments = [];
-
-    // 章の札(route-map.md「配置」7)。段ごとに直前の章の札を覚え、札が重ならないように駅を右へずらす。
-    /** @type {Map<number, { number: number, start: number, w: number }>} */
-    const lastLabel = new Map();
-    /** 章番号 → 章の札の左端 @type {Map<number, number>} */
-    const labelStart = new Map();
-    /** 章の札の左端の、章の最初の駅からの差。上へ分かれる線の出る幹線の駅なら、その線の右に置く。 @param {PlacedStation} p */
-    const labelOffset = (p) => (p.dir === 'trunk' && upFrom.has(p.info.id) ? UP_CLEAR_TOP + 2 : -p.plateW / 2);
-    /** @param {PlacedStation} p */
-    const settle = (p) => {
-      const n = p.info.chapter.number;
-      const segs = otherLines.has(p.info.lineId)
-        ? reserved.all
-        : p.dir === 'trunk'
-          ? reserved.connectors
-          : [...reserved.connectors, ...reserved.crossers];
-      const last = lastLabel.get(p.y);
-      const starts = !last || last.number !== n;
-      for (let guard = 0; guard < 100; guard++) {
-        if (last && last.number !== n) {
-          p.x = Math.max(p.x, last.start + last.w + GEOM.gap - labelOffset(p));
-        } else if (last && p.dir === 'trunk' && upFrom.has(p.info.id)) {
-          // 同じ章の途中から上へ分かれるときは、章の札がその線に届かないところまで駅を離す。
-          // 札の高さで線に最も近づくのは、最も急な線(最も高い段へ分かれる線)
-          const rise = upRise.get(p.info.id) ?? 1;
-          p.x = Math.max(p.x, last.start + last.w - UP_CLEAR_BOTTOM / rise + 2);
-        }
-        if (segs.length === 0) break;
-        /** @type {Array<{ x: number, y: number, w: number, h: number }>} */
-        const boxes = stationBoxes(p);
-        if (starts) boxes.push(chapterLabelBox(p.above, p.y, p.x + labelOffset(p), reservedLabelW(p.info.chapter)));
-        const shift = shiftToClear(boxes, segs, p.info.id, p.info.lineId);
-        if (shift <= 1e-6) break;
-        p.x += shift;
-      }
-      if (starts) {
-        const start = p.x + labelOffset(p);
-        lastLabel.set(p.y, { number: n, start, w: reservedLabelW(p.info.chapter) });
-        labelStart.set(n, start);
-      }
-    };
-    /** @param {number[][]} pts @param {boolean[]} flags @param {string} lineId @param {string} style */
-    const addPath = (pts, flags, lineId, style) => {
-      paths.push({ lineId, style, points: pts, planned: flags });
-      segments.push(...toSegments(pts, lineId, null, null));
-    };
-
-    let prev = null;
-    for (const info of trunk) {
-      const p = measure(info, 'trunk');
-      if (prev) {
-        let dx = Math.max(GEOM.minDx, prev.half + p.half + GEOM.gap);
-        // 次の駅の駅名(下端は札の中心から 55 下)が、下へ分かれる線より右に来るようにする
-        for (const drop of downDrops.get(prev.info.id) ?? []) {
-          const sx = stubFor(prev, drop);
-          dx = Math.max(dx, sx + (GEOM.downDx * 0.55) / drop + p.half + GEOM.gap);
-        }
-        p.x = prev.x + dx;
-      }
-      settle(p);
-      placed.set(info.id, p);
-      prev = p;
-    }
-
-    // 幹線の線:前の幹線の駅を前提にしていれば、そこから引く
-    for (const line of trunkLines) {
-      const list = (byLine.get(line.id) ?? []).map((s) => /** @type {PlacedStation} */ (placed.get(s.id)));
-      if (list.length === 0) continue;
-      const from = list[0].info.requires
-        .map((id) => placed.get(id))
-        .filter((s) => s && s.dir === 'trunk' && s.info.lineId !== line.id)
-        .sort((a, b) => /** @type {PlacedStation} */ (b).x - /** @type {PlacedStation} */ (a).x)[0];
-      const pts = [...(from ? [[from.x, 0]] : []), ...list.map((s) => [s.x, 0])];
-      const flags = [...(from ? [false] : []), ...list.map((s) => !!s.info.planned)];
-      if (pts.length > 1) addPath(pts, flags, line.id, line.style);
-    }
-
-    /** 幹線の高さにある札・駅名・印・章の札の範囲(合流する支線は、この右に入れる) */
-    const trunkZone = () => {
-      /** @type {Array<{ x: number, y: number, w: number, h: number }>} */
-      const boxes = trunk.flatMap((info) => stationBoxes(/** @type {PlacedStation} */ (placed.get(info.id))));
-      for (const c of new Set(trunk.map((s) => s.chapter))) {
-        const start = labelStart.get(c.number);
-        if (start !== undefined) boxes.push(chapterLabelBox(false, 0, start, reservedLabelW(c)));
-      }
-      return {
-        right: Math.max(...boxes.map((b) => b.x + b.w)),
-        top: Math.min(...boxes.map((b) => b.y)),
-        bottom: Math.max(...boxes.map((b) => b.y + b.h)),
-      };
-    };
-
-    /**
-     * 分岐駅 P から、高さ y の段の支線へ向かう線の形(route-map.md「配置」2)。P の段を少し右へ進んで
-     * 自分の駅名(または章の札)をよけ、斜めに y まで進む。幹線の高さに入るときは、幹線の駅より右で入る。
-     * @param {PlacedStation} P @param {number} y @param {{ right: number, top: number, bottom: number } | null} zone
-     */
-    const connect = (P, y, zone) => {
-      const dirY = Math.sign(y - P.y);
-      const D = dirY < 0 ? GEOM.upDx : GEOM.downDx;
-      const nameSide = P.above ? -1 : 1;
-      let clear = P.half + 4;
-      if (dirY !== nameSide) {
-        const start = labelStart.get(P.info.chapter.number);
-        const end = start === undefined ? -Infinity : start + reservedLabelW(P.info.chapter);
-        clear = Math.max(P.plateW / 2, end - P.x) + 4;
-      }
-      const xd = P.x + clear;
-      let a = xd + (D * Math.abs(y - P.y)) / GEOM.row;
-      if (y === 0 && zone) {
-        const edge = dirY > 0 ? zone.top : zone.bottom;
-        const f = (edge - P.y) / (0 - P.y);
-        const need = zone.right + CLEAR;
-        if (f > 0 && f < 1 && xd + (a - xd) * f < need) a = xd + (need - xd) / f;
-      }
-      return { P, xd, a };
-    };
-
-    for (const r of rows) {
-      const list = byLine.get(r.line.id) ?? [];
-      const y = rowY(r);
-      if (r.simple) {
-        const b = /** @type {PlacedStation} */ (placed.get(r.info.branch.id));
-        const pts = [[b.x, 0]];
-        const firstPlanned = !!list[0]?.planned;
-        const flags = [false];
-        let x;
-        /** 幹線から段へ上る(下る)斜めの線 @type {number[][]} */
-        let diagonal = [];
-        if (r.dir === 'up') {
-          pts.push([b.x + GEOM.upDx, y]);
-          flags.push(firstPlanned);
-          x = b.x + GEOM.upDx;
-          diagonal = [
-            [b.x, 0],
-            [x, y],
-          ];
-        } else if (r.dir === 'down') {
-          const sx = stubFor(b, r.row + 1);
-          pts.push([b.x + sx, 0], [b.x + sx + GEOM.downDx, y]);
-          flags.push(firstPlanned, firstPlanned);
-          x = b.x + sx + GEOM.downDx;
-          diagonal = [
-            [b.x + sx, 0],
-            [x, y],
-          ];
-        } else x = b.x;
-        // 2段目より遠い段への斜めの線は、途中の段を横切るので、その段の駅と章の札がよける
-        if (r.row > 0 && diagonal.length > 0 && list.length > 0) {
-          crossers.push(...toSegments(diagonal, r.line.id, b.info.id, list[0].id));
-        }
-        let before = null;
-        for (const info of list) {
-          const p = measure(info, r.dir);
-          p.y = y;
-          if (before) p.x = before.x + Math.max(GEOM.minDx, before.half + p.half + GEOM.gap);
-          else if (r.dir === 'right') p.x = x + Math.max(GEOM.minDx, b.half + p.half + GEOM.gap);
-          else p.x = x + Math.max(p.plateW / 2 + 12, p.half - 10);
-          settle(p);
-          placed.set(info.id, p);
-          pts.push([p.x, y]);
-          flags.push(!!info.planned);
-          before = p;
-        }
-        addPath(pts, flags, r.line.id, r.line.style);
-        continue;
-      }
-
-      // 前の支線から分かれる支線、複数の路線から合流する支線
-      const parents = r.info.stations.map((s) => placed.get(s.id));
-      if (parents.some((p) => !p) || list.length === 0) continue;
-      const zone = r.dir === 'merge' ? trunkZone() : null;
-      const conns = parents.map((P) => connect(/** @type {PlacedStation} */ (P), y, zone));
-      let before = null;
-      for (const info of list) {
-        const p = measure(info, r.dir);
-        p.y = y;
-        if (before) p.x = before.x + Math.max(GEOM.minDx, before.half + p.half + GEOM.gap);
-        else {
-          p.x = Math.max(...conns.map((c) => c.a)) + Math.max(p.plateW / 2 + 12, p.half - 10);
-          // 入ってくる斜めの線が、最初の駅の駅名や印を横切らないところまで右へずらす
-          // (shiftToClear は駅に入る線をよけないので、ここで調べる)
-          let shift = 0;
-          for (const b of stationBoxes(p).filter((x) => x.kind !== 'plate')) {
-            for (const c of conns) {
-              const seg = { x1: c.xd, y1: c.P.y, x2: c.a, y2: y, lineId: r.line.id, from: null, to: null };
-              const hit = clipX(seg, b.x - CLEAR, b.y - CLEAR, b.x + b.w + CLEAR, b.y + b.h + CLEAR);
-              if (hit) shift = Math.max(shift, Math.max(hit[0], hit[1]) + CLEAR - b.x);
-            }
-          }
-          p.x += shift;
-        }
-        settle(p);
-        placed.set(info.id, p);
-        before = p;
-      }
-      const first = /** @type {PlacedStation} */ (placed.get(list[0].id));
-      const firstPlanned = !!list[0].planned;
-      // 主な分岐駅からの線に、支線の駅を続ける。ほかの分岐駅からの線は、支線の最初の駅で合わせる
-      const ordered = [...conns].sort(
-        (c1, c2) => Number(c2.P.info === r.info.branch) - Number(c1.P.info === r.info.branch),
-      );
-      ordered.forEach((c, i) => {
-        const pts = [
-          [c.P.x, c.P.y],
-          [c.xd, c.P.y],
-          [c.a, y],
-        ];
-        if (c.a !== first.x) pts.push([first.x, y]);
-        const seg = toSegments(pts, r.line.id, c.P.info.id, first.info.id);
-        connectors.push(...seg);
-        segments.push(...seg);
-        const flags = [false, ...pts.slice(1).map(() => firstPlanned)];
-        if (i === 0) {
-          const rest = list.slice(1).map((s) => /** @type {PlacedStation} */ (placed.get(s.id)));
-          segments.push(...toSegments([[first.x, y], ...rest.map((s) => [s.x, y])], r.line.id, null, null));
-          for (const s of rest) {
-            pts.push([s.x, y]);
-            flags.push(!!s.info.planned);
-          }
-        }
-        paths.push({ lineId: r.line.id, style: r.line.style, points: pts, planned: flags });
-      });
-    }
-    return { placed, paths, labelStart, connectors, crossers, segments };
-  };
-
-  // 線をよけて駅をずらすと、線の位置も変わりうる。駅が動かなくなるまで配置をやり直す
-  let out = placeAll({ connectors: [], crossers: [], all: [] });
-  for (let i = 0; i < MAX_PASSES && out.connectors.length + out.crossers.length > 0; i++) {
-    const next = placeAll({ connectors: out.connectors, crossers: out.crossers, all: out.segments });
-    const stable = [...next.placed].every(([id, p]) => Math.abs(p.x - (out.placed.get(id)?.x ?? NaN)) < 1e-6);
-    out = next;
-    if (stable) break;
-  }
-  const { placed, paths, labelStart } = out;
-
-  const stations = /** @type {PlacedStation[]} */ (all.map((s) => placed.get(s.id)).filter((p) => p !== undefined));
-  for (const st of stations) {
-    st.x = round(st.x);
-    st.y = round(st.y);
-  }
-  const bands = makeBands(stations, opts.highlight ?? null, labelStart);
-  const layout = {
-    stations,
-    paths: paths.map((p) => ({ ...p, points: p.points.map(([x, y]) => [round(x), round(y)]) })),
-    bands,
-    bounds: { minX: 0, minY: 0, maxX: 0, maxY: 0 },
-    missing,
-    fallbacks,
-    linesShown: site.lines.filter((l) => stations.some((s) => s && s.info.lineId === l.id)),
-  };
-  const { boxes } = layoutBoxes(layout);
-  const xs = boxes.flatMap((b) => [b.x, b.x + b.w]);
-  const ys = boxes.flatMap((b) => [b.y, b.y + b.h]);
-  for (const p of layout.paths) for (const [x, y] of p.points) (xs.push(x), ys.push(y));
-  layout.bounds = {
-    minX: round(Math.min(...xs) - GEOM.margin),
-    minY: round(Math.min(...ys) - GEOM.margin),
-    maxX: round(Math.max(...xs) + GEOM.margin),
-    maxY: round(Math.max(...ys) + GEOM.margin),
-  };
-  return layout;
-}
-
-/**
- * 下の段への線が、幹線を右へ少し進んでから下りる長さ。分岐駅の駅名の上端(札の中心から 18 下)の高さで、
- * 線が駅名の右端より 4 右に来るようにする。斜めの線は横幅 downDx で drop 段下りるので、2段目・3段目へ
- * 下りる線は傾きが急で、駅名の上端までに右へ進む量は段の数で割った値になる。
- * @param {PlacedStation} b @param {number} drop  下りる段の数(1段目なら 1)
- */
-function stubFor(b, drop) {
-  return Math.max(10, b.labelW / 2 + 4 - (GEOM.downDx * 0.18) / drop);
+/** 章の札の文字。 @param {{ number: number, planned?: boolean }} chapter @param {boolean} current */
+function headText(chapter, current) {
+  if (chapter.planned) return `第${chapter.number}章 未執筆`;
+  return current ? `第${chapter.number}章 このページ` : `第${chapter.number}章`;
 }
 
 /** @param {number} v */
@@ -772,151 +481,903 @@ function round(v) {
 }
 
 /**
- * 章の帯を作る(route-map.md「配置」7、「印と凡例」)。章は1つの段の上で続いた駅の区間になる。
- * @param {PlacedStation[]} stations
- * @param {string | null} highlight  今の章の ID
- * @param {Map<number, number>} labelStart  章番号 → 章の札の左端
- * @returns {Band[]}
+ * 章の札の大きさと、札の中の文字の位置(札の左上を原点とする)を決める(route-map.md「配置」6・12)。
+ * @param {any} chapter
+ * @param {import('./graph.js').StationInfo[]} stations
+ * @param {Map<string, import('./schema.js').Goal>} goals
  */
-function makeBands(stations, highlight, labelStart) {
-  /** @type {Map<number, PlacedStation[]>} */
-  const rows = new Map();
-  for (const st of stations) {
-    if (!rows.has(st.y)) rows.set(st.y, []);
-    /** @type {PlacedStation[]} */ (rows.get(st.y)).push(st);
+function measureCard(chapter, stations, goals) {
+  const g = GEOM;
+  const inner = g.cardW - 2 * g.pad;
+  const head = { text: '', x: g.pad, y: g.pad, w: inner, h: g.headH };
+  let y = g.pad + g.headH + g.headGap;
+  const titleLines = clampLines(wrapText(chapter.title, inner, g.titleFont), 2, inner, g.titleFont).map((text) => {
+    const line = { text, x: g.pad, y, w: textWidth(text, g.titleFont), h: g.titleLineH };
+    y += g.titleLineH;
+    return line;
+  });
+  y += g.titleGap;
+  const rows = stations.map((info) => {
+    const goal = goals.get(info.id) ?? null;
+    const partial = goal && goal.kind === 'partial' ? goal : null;
+    const nameX = info.planned ? g.pad : g.pad + g.plateW + g.plateGap;
+    const lines = wrapText(info.name, g.cardW - g.pad - nameX, g.stFont);
+    const top = y;
+    const name = lines.map((text, i) => ({
+      text,
+      x: nameX,
+      y: top + i * g.stLineH,
+      w: textWidth(text, g.stFont),
+      h: g.stLineH,
+    }));
+    let h = Math.max(g.plateH, lines.length * g.stLineH);
+    const pill = partial ? { x: nameX, y: top + h + 2, w: PILL_W, h: g.pillH } : null;
+    if (pill) h += 2 + g.pillH;
+    const plate = info.planned ? null : { x: g.pad, y: top + (g.stLineH - g.plateH) / 2, w: g.plateW, h: g.plateH };
+    y += h + g.rowGap;
+    return {
+      info,
+      x: g.pad,
+      y: top,
+      w: inner,
+      h,
+      plate,
+      name,
+      pill,
+      final: !!goal && goal.kind === 'final',
+      partial,
+      goal,
+    };
+  });
+  y += g.pad - g.rowGap;
+  return { head, titleLines, rows, h: y };
+}
+
+/** 札の「第N章」の行の高さ(路線の線と分岐の線が札に入る高さ)。 @param {{ y: number }} card */
+const headY = (card) => card.y + GEOM.pad + GEOM.headH / 2;
+
+/**
+ * 溝の中の区間。分岐の線と前提の矢印が、溝に沿って進む部分。
+ * @typedef {object} Piece
+ * @property {'row' | 'col'} axis  row は段の溝(横に進む)、col は列の溝(縦に進む)
+ * @property {number} gap          溝の番号(段の溝は上の段の番号、列の溝は左の列の番号)
+ * @property {number} lo           溝に沿った範囲(見積もり)
+ * @property {number} hi
+ * @property {number} pref         溝の中の位置の好み(-1 は上か左、+1 は下か右)
+ * @property {string} id           区間を持つ線の名前
+ * @property {string | null} group 同じ値の区間は、範囲が重ならなければ同じトラックに置く
+ * @property {number} track        割り当てたトラック
+ * @property {boolean} label       この区間の上にラベルを置く
+ */
+
+/**
+ * 路線図を配置する。
+ * Preconditions: drawn は requires をさかのぼって閉じた駅の集合。
+ * Postconditions: 章の札・路線の線・分岐の線・前提の矢印・ラベルの座標を返す。分岐駅が決まらない支線と、
+ *   親の路線が描けない支線は描かず、前者を missing に入れる。opts.planned が true なら、未執筆の章も描く(全体の図)。
+ * Failure modes: なし。
+ * Side effects: なし。
+ * @param {import('./graph.js').Site} site
+ * @param {Set<string>} drawn
+ * @param {{ goals?: import('./schema.js').Goal[], highlight?: string | null, planned?: boolean }} [opts]
+ * @returns {MapLayout}
+ */
+export function layoutMap(site, drawn, opts = {}) {
+  const g = GEOM;
+  const goals = new Map((opts.goals ?? []).map((x) => [x.station, x]));
+  const all = opts.planned ? mapStations(site) : site.stations;
+  if (opts.planned) drawn = new Set([...drawn, ...all.filter((s) => s.planned).map((s) => s.id)]);
+  const shown = all.filter((s) => drawn.has(s.id));
+  const byLine = new Map(site.lines.map((l) => [l.id, shown.filter((s) => s.lineId === l.id)]));
+  const { branches, missing } = branchStations(site, drawn, all);
+  const trunkLines = site.lines.filter((l) => l.layout === null);
+  const trunkIds = new Set(trunkLines.map((l) => l.id));
+  const trunk = trunkLines.flatMap((l) => byLine.get(l.id) ?? []);
+  const { rows: plans, fallbacks } = planRows(site, branches, trunkIds, trunk[trunk.length - 1]);
+
+  // ---- 札を格子に置く(配置 1〜5) ----
+  /** @param {import('./graph.js').StationInfo[]} list */
+  const chaptersOf = (list) => {
+    /** @type {Array<{ chapter: any, stations: import('./graph.js').StationInfo[] }>} */
+    const out = [];
+    for (const s of list) {
+      const last = out[out.length - 1];
+      if (last && last.chapter.number === s.chapter.number) last.stations.push(s);
+      else out.push({ chapter: s.chapter, stations: [s] });
+    }
+    return out;
+  };
+  /** @type {Map<number, Card>} */
+  const cards = new Map();
+  /** @param {any} chapter @param {import('./graph.js').StationInfo[]} stations @param {string} lineId @param {number} col @param {number} tier */
+  const addCard = (chapter, stations, lineId, col, tier) => {
+    const m = measureCard(chapter, stations, goals);
+    const current = !chapter.planned && chapter.id === (opts.highlight ?? null);
+    /** @type {Card} */
+    const card = {
+      number: chapter.number,
+      chapterId: chapter.planned ? null : chapter.id,
+      title: chapter.title,
+      lineId,
+      planned: !!chapter.planned,
+      current,
+      col,
+      tier,
+      x: 0,
+      y: 0,
+      w: g.cardW,
+      h: m.h,
+      head: { ...m.head, text: headText(chapter, current) },
+      titleLines: m.titleLines,
+      rows: /** @type {any} */ (m.rows),
+    };
+    for (const r of card.rows) r.card = card;
+    cards.set(chapter.number, card);
+  };
+  let col = 0;
+  for (const line of trunkLines) {
+    for (const c of chaptersOf(byLine.get(line.id) ?? [])) addCard(c.chapter, c.stations, line.id, col++, 0);
   }
-  /** @type {Band[]} */
-  const bands = [];
-  for (const [y, list] of rows) {
-    list.sort((a, b) => a.x - b.x);
-    const above = list[0].above;
-    const labelsH = Math.max(...list.map((st) => st.label.length)) * GEOM.lineH + GEOM.labelGap;
-    const pills = list.some((st) => st.partial) ? GEOM.pillH + 4 : 0;
-    const top = above ? y - GEOM.plateH / 2 - labelsH - pills - 8 : y - GEOM.plateH / 2 - 8 - GEOM.bandFont - 6;
-    const bottom = above ? y + GEOM.plateH / 2 + 8 + GEOM.bandFont + 6 : y + GEOM.plateH / 2 + labelsH + pills + 8;
-    const ty = above ? y + GEOM.plateH / 2 + 8 + GEOM.bandFont : y - GEOM.plateH / 2 - 8;
-    /** @type {Array<{ chapter: any, items: PlacedStation[] }>} */
-    const runs = [];
-    for (const st of list) {
-      const last = runs[runs.length - 1];
-      if (last && last.chapter.number === st.info.chapter.number) last.items.push(st);
-      else runs.push({ chapter: st.info.chapter, items: [st] });
-    }
-    const spans = runs.map(({ chapter, items }) => {
-      const first = items[0];
-      const last = items[items.length - 1];
-      const current = !chapter.planned && chapter.id === highlight;
-      const text = bandText(chapter, current);
-      const tx = labelStart.get(chapter.number) ?? first.x - first.plateW / 2;
-      return {
-        chapter,
-        current,
-        text,
-        tx,
-        left: Math.min(first.x - first.half - 8, tx - 6),
-        right: Math.max(last.x + last.half + 8, tx + textWidth(text, GEOM.bandFont) + 6),
-      };
+  const lastTrunkCol = col - 1;
+  /** 描いた支線 @type {Map<string, BranchInfo>} */
+  const placedBranches = new Map();
+  /** @type {Array<{ line: import('./schema.js').Line, info: BranchInfo, dir: RowPlan['dir'] }>} */
+  const branchPlans = [];
+  for (const r of plans) {
+    const groups = chaptersOf(byLine.get(r.line.id) ?? []);
+    const parents = r.info.stations.map((s) => cards.get(s.chapter.number));
+    if (groups.length === 0 || parents.some((p) => !p)) continue;
+    const parentCols = parents.map((p) => /** @type {Card} */ (p).col);
+    let start;
+    if (r.dir === 'right') start = lastTrunkCol + 1;
+    else if (r.dir === 'merge') start = Math.max(lastTrunkCol, ...parentCols) + 1;
+    else start = /** @type {Card} */ (cards.get(r.info.branch.chapter.number)).col + 1;
+    const tier = r.dir === 'up' ? -(r.row + 1) : r.dir === 'down' ? r.row + 1 : 0;
+    groups.forEach((c, i) => addCard(c.chapter, c.stations, r.line.id, start + i, tier));
+    placedBranches.set(r.line.id, r.info);
+    branchPlans.push({ line: r.line, info: r.info, dir: r.dir });
+  }
+  const cardList = [...cards.values()].sort((a, b) => a.number - b.number);
+  const placedStations = all.flatMap((s) => {
+    const c = cards.get(s.chapter.number);
+    return c ? c.rows.filter((r) => r.info === s) : [];
+  });
+  const arrows = prerequisiteArrows(
+    site.lines,
+    placedStations.map((r) => r.info),
+    placedBranches,
+  );
+
+  const tiers = cardList.map((c) => c.tier);
+  const minTier = Math.min(0, ...tiers);
+  const maxTier = Math.max(0, ...tiers);
+  const maxCol = Math.max(0, ...cardList.map((c) => c.col));
+  /** @type {Map<number, number>} */
+  const rowH = new Map();
+  for (const c of cardList) rowH.set(c.tier, Math.max(rowH.get(c.tier) ?? 0, c.h));
+  const lineById = new Map(site.lines.map((l) => [l.id, l]));
+
+  // ---- つなぐもの(配置 7〜9) ----
+  /**
+   * @typedef {object} Conn
+   * @property {'line' | 'branch' | 'arrow'} kind
+   * @property {Card} from
+   * @property {Card} to
+   * @property {string} lineId
+   * @property {string} style
+   * @property {boolean} planned
+   * @property {string} id
+   * @property {string | null} group
+   * @property {boolean} main       分岐の線のうち、主な分岐駅からの線(札の左の辺まで引く)
+   * @property {string} [label]
+   * @property {import('./graph.js').StationInfo} [station]  分岐の線の分岐駅
+   */
+  /** @type {Conn[]} */
+  const conns = [];
+  // 路線の線:同じ路線で隣り合う札と、幹線の路線どうし(前の路線の線の描き方)
+  const lineCards = (/** @type {string} */ id) => cardList.filter((c) => c.lineId === id).sort((a, b) => a.col - b.col);
+  /** @param {Card} a @param {Card} b @param {import('./schema.js').Line} line */
+  const lineConn = (a, b, line) =>
+    conns.push({
+      kind: 'line',
+      from: a,
+      to: b,
+      lineId: line.id,
+      style: line.style,
+      planned: a.planned || b.planned,
+      id: `line:${a.number}>${b.number}`,
+      group: null,
+      main: true,
     });
-    // 同じ段で隣り合う帯は重ねない
-    for (let i = 1; i < spans.length; i++) {
-      const a = spans[i - 1];
-      const b = spans[i];
-      if (a.right + 3 > b.left) {
-        const m = (a.right + b.left) / 2;
-        a.right = m - 1.5;
-        b.left = m + 1.5;
+  for (const line of site.lines) {
+    const list = lineCards(line.id);
+    for (let i = 1; i < list.length; i++) lineConn(list[i - 1], list[i], line);
+  }
+  const trunkDrawn = trunkLines.filter((l) => lineCards(l.id).length > 0);
+  for (let i = 1; i < trunkDrawn.length; i++) {
+    const a = lineCards(trunkDrawn[i - 1].id);
+    lineConn(a[a.length - 1], lineCards(trunkDrawn[i].id)[0], trunkDrawn[i - 1]);
+  }
+  // 分岐の線
+  for (const bp of branchPlans) {
+    const to = /** @type {Card} */ (cards.get(bp.info.first.chapter.number));
+    for (const s of bp.info.stations) {
+      const from = /** @type {Card} */ (cards.get(s.chapter.number));
+      const line = /** @type {import('./schema.js').Line} */ (lineById.get(bp.line.id));
+      if (from.tier === to.tier) {
+        // 幹線と同じ高さで右へ続ける支線(right)は、路線の線と同じに描く
+        conns.push({
+          kind: 'branch',
+          from,
+          to,
+          lineId: line.id,
+          style: line.style,
+          planned: to.planned,
+          id: `branch:${s.id}>${bp.line.id}`,
+          group: null,
+          main: true,
+          station: s,
+        });
+        continue;
       }
-    }
-    for (const sp of spans) {
-      bands.push({
-        number: sp.chapter.number,
-        chapterId: sp.chapter.planned ? null : sp.chapter.id,
-        title: sp.chapter.title,
-        planned: !!sp.chapter.planned,
-        current: sp.current,
-        x: round(sp.left),
-        y: round(top),
-        w: round(sp.right - sp.left),
-        h: round(bottom - top),
-        text: sp.text,
-        tx: round(sp.tx),
-        ty: round(ty),
+      conns.push({
+        kind: 'branch',
+        from,
+        to,
+        lineId: line.id,
+        style: line.style,
+        planned: to.planned,
+        id: `branch:${s.id}>${bp.line.id}`,
+        group: `branch:${bp.line.id}`,
+        main: s === bp.info.branch,
+        label: `${s.name}から`,
+        station: s,
       });
     }
   }
-  return bands.sort((a, b) => a.number - b.number);
-}
-
-/**
- * 1つの駅の札・駅名・途中下車の印の外接矩形。
- * @param {PlacedStation} s
- */
-function stationBoxes(s) {
-  const id = s.info.id;
-  const out = [
-    {
-      kind: 'plate',
-      owner: id,
-      x: s.x - s.plateW / 2,
-      y: s.y - GEOM.plateH / 2,
-      w: s.plateW,
-      h: GEOM.plateH,
-    },
-  ];
-  const lh = s.label.length * GEOM.lineH;
-  const ly = s.above ? s.y - GEOM.plateH / 2 - GEOM.labelGap - lh : s.y + GEOM.plateH / 2 + GEOM.labelGap;
-  out.push({ kind: 'label', owner: id, x: s.x - s.labelW / 2, y: ly, w: s.labelW, h: lh });
-  if (s.partial) {
-    const py = s.above ? ly - 4 - GEOM.pillH : ly + lh + 4;
-    out.push({ kind: 'pill', owner: id, x: s.x - GEOM.pillW / 2, y: py, w: GEOM.pillW, h: GEOM.pillH });
+  for (const a of arrows) {
+    conns.push({
+      kind: 'arrow',
+      from: /** @type {Card} */ (cards.get(a.from)),
+      to: /** @type {Card} */ (cards.get(a.to)),
+      lineId: '',
+      style: 'solid',
+      planned: false,
+      id: `arrow:${a.from}>${a.to}`,
+      group: null,
+      main: true,
+      label: a.label,
+    });
   }
-  return out;
+
+  /** 溝の大きさ(既定) @param {'row' | 'col'} axis @param {number} i */
+  const defaultGap = (axis, i) => {
+    if (axis === 'col') return i < 0 || i >= maxCol ? g.margin : g.colGap;
+    return i < minTier || i >= maxTier ? g.margin : g.rowGap0;
+  };
+  /** 溝の大きさ。広げた溝だけを持つ @type {Map<string, number>} */
+  const grown = new Map();
+  const gapSize = (/** @type {'row' | 'col'} */ axis, /** @type {number} */ i) =>
+    Math.max(defaultGap(axis, i), grown.get(`${axis}${i}`) ?? 0);
+
+  /** 1回分の配置。溝の大きさから座標を決め、溝の中の区間にトラックを割り当てる */
+  const pass = () => {
+    // 座標
+    /** @type {Map<number, number>} */
+    const colX = new Map();
+    let x = gapSize('col', -1);
+    for (let c = 0; c <= maxCol; c++) {
+      colX.set(c, x);
+      x += g.cardW + gapSize('col', c);
+    }
+    const width = x;
+    /** @type {Map<number, number>} */
+    const rowTop = new Map();
+    let y = gapSize('row', minTier - 1);
+    for (let t = minTier; t <= maxTier; t++) {
+      rowTop.set(t, y);
+      y += (rowH.get(t) ?? 0) + gapSize('row', t);
+    }
+    const height = y;
+    for (const c of cardList) {
+      c.x = /** @type {number} */ (colX.get(c.col));
+      c.y = /** @type {number} */ (rowTop.get(c.tier));
+    }
+    /** 溝の範囲 @param {'row' | 'col'} axis @param {number} i */
+    const span = (axis, i) => {
+      if (axis === 'col') {
+        const lo = i < 0 ? 0 : /** @type {number} */ (colX.get(i)) + g.cardW;
+        return { lo, hi: lo + gapSize('col', i) };
+      }
+      const lo = i < minTier ? 0 : /** @type {number} */ (rowTop.get(i)) + (rowH.get(i) ?? 0);
+      return { lo, hi: lo + gapSize('row', i) };
+    };
+    const mid = (/** @type {'row' | 'col'} */ axis, /** @type {number} */ i) => {
+      const s = span(axis, i);
+      return (s.lo + s.hi) / 2;
+    };
+    const cx = (/** @type {Card} */ c) => c.x + c.w / 2;
+    /** 札の辺の上下の溝。上の辺は上の段との溝 @param {Card} c @param {'top' | 'bottom'} edge */
+    const edgeGap = (c, edge) => (edge === 'top' ? c.tier - 1 : c.tier);
+    const edgeY = (/** @type {Card} */ c, /** @type {'top' | 'bottom'} */ edge) => (edge === 'top' ? c.y : c.y + c.h);
+
+    // 経路の形(溝と、溝の中の区間)
+    /**
+     * @typedef {object} Route
+     * @property {Conn} conn
+     * @property {'top' | 'bottom'} [es]  出る辺
+     * @property {'top' | 'bottom'} [et]  入る辺
+     * @property {number} [g1]  出た段の溝
+     * @property {number} [g2]  入る段の溝
+     * @property {number} [c]   通る列の溝
+     * @property {Piece[]} pieces
+     * @property {number} [p1]  出る点の x
+     * @property {number} [p2]  入る点の x
+     */
+    /** @type {Route[]} */
+    const routes = [];
+    /** 札の辺ごとの、出入りする前提の矢印 @type {Map<string, Array<{ route: Route, end: 'p1' | 'p2', toward: number }>>} */
+    const ports = new Map();
+    /** 札の辺ごとの、分岐の線の出る向き @type {Map<string, Set<number>>} */
+    const diag = new Map();
+    const portKey = (/** @type {Card} */ c, /** @type {string} */ edge) => `${c.number}:${edge}`;
+    for (const conn of conns) {
+      if (conn.kind === 'line' || (conn.kind === 'branch' && conn.from.tier === conn.to.tier)) {
+        routes.push({ conn, pieces: [] });
+        continue;
+      }
+      const { from, to } = conn;
+      if (conn.kind === 'branch') {
+        const es = to.tier < from.tier ? 'top' : 'bottom';
+        const g1 = edgeGap(from, es);
+        const c = to.col - 1;
+        const cMid = mid('col', c);
+        const dir = cMid >= cx(from) ? 1 : -1;
+        diag.set(portKey(from, es), new Set([...(diag.get(portKey(from, es)) ?? []), dir]));
+        const cs = span('col', c);
+        const near = dir > 0 ? from.x + from.w - 30 : from.x + 30;
+        const up = es === 'top' ? 1 : -1; // 溝から見た札の側(上の辺から出れば、札は溝の下)
+        const hy = headY(to);
+        const g1s = span('row', g1);
+        routes.push({
+          conn,
+          es,
+          g1,
+          c,
+          pieces: [
+            {
+              axis: 'row',
+              gap: g1,
+              lo: Math.min(near, cs.lo),
+              hi: Math.max(near, cs.hi),
+              pref: (up + (to.tier < from.tier ? -1 : 1)) / 2,
+              id: conn.id,
+              group: conn.group,
+              track: 0,
+              label: false,
+            },
+            {
+              axis: 'col',
+              gap: c,
+              lo: Math.min(g1s.lo, hy),
+              hi: Math.max(g1s.hi, hy),
+              pref: ((cx(from) < cMid ? -1 : 1) + 1) / 2,
+              id: conn.id,
+              group: conn.group,
+              track: 0,
+              label: false,
+            },
+          ],
+        });
+        continue;
+      }
+      // 前提の矢印(配置 9)
+      const es = to.tier < from.tier ? 'top' : to.tier > from.tier ? 'bottom' : 'top';
+      const et = from.tier < to.tier ? 'top' : from.tier > to.tier ? 'bottom' : 'top';
+      const g1 = edgeGap(from, es);
+      const g2 = edgeGap(to, et);
+      /** @type {Route} */
+      const route = { conn, es, et, g1, g2, pieces: [] };
+      if (g1 !== g2) route.c = to.col >= from.col ? to.col - 1 : to.col;
+      const towardFrom = route.c === undefined ? cx(to) : mid('col', route.c);
+      const towardTo = route.c === undefined ? cx(from) : mid('col', route.c);
+      for (const [card, edge, end, toward] of /** @type {const} */ ([
+        [from, es, 'p1', towardFrom],
+        [to, et, 'p2', towardTo],
+      ])) {
+        const k = portKey(card, edge);
+        ports.set(k, [...(ports.get(k) ?? []), { route, end, toward }]);
+      }
+      routes.push(route);
+    }
+    // 札の辺の上の、前提の矢印の出入りする点(配置 9:間をあけて並べる)
+    for (const [k, list] of ports) {
+      const [num, edge] = k.split(':');
+      const card = /** @type {Card} */ (cards.get(Number(num)));
+      const dirs = diag.get(`${num}:${edge}`) ?? new Set();
+      const left0 = card.x + 18 + (dirs.has(-1) ? 44 : 0);
+      const right0 = card.x + card.w - 18 - (dirs.has(1) ? 44 : 0);
+      const center = cx(card);
+      const L = list.filter((p) => p.toward < center).sort((a, b) => a.toward - b.toward);
+      const R = list.filter((p) => p.toward >= center).sort((a, b) => a.toward - b.toward);
+      const step = Math.min(g.port, (right0 - left0) / Math.max(1, list.length));
+      L.forEach((p, i) => (p.route[p.end] = left0 + i * step));
+      R.forEach((p, i) => (p.route[p.end] = right0 - (R.length - 1 - i) * step));
+    }
+    // 前提の矢印の、溝の中の区間
+    for (const route of routes) {
+      const conn = route.conn;
+      if (conn.kind !== 'arrow') continue;
+      const p1 = /** @type {number} */ (route.p1);
+      const p2 = /** @type {number} */ (route.p2);
+      const g1 = /** @type {number} */ (route.g1);
+      const g2 = /** @type {number} */ (route.g2);
+      const side1 = route.es === 'bottom' ? -1 : 1; // 出る札は溝の上(-1)か下(+1)
+      const side2 = route.et === 'bottom' ? -1 : 1;
+      const base = { id: conn.id, group: null, track: 0, label: false };
+      if (route.c === undefined) {
+        route.pieces.push({
+          ...base,
+          axis: 'row',
+          gap: g1,
+          lo: Math.min(p1, p2),
+          hi: Math.max(p1, p2),
+          pref: (side1 + side2) / 2,
+        });
+      } else {
+        const cs = span('col', route.c);
+        const cMid = (cs.lo + cs.hi) / 2;
+        const down = g2 > g1 ? 1 : -1;
+        route.pieces.push(
+          { ...base, axis: 'row', gap: g1, lo: Math.min(p1, cs.lo), hi: Math.max(p1, cs.hi), pref: (side1 + down) / 2 },
+          {
+            ...base,
+            axis: 'col',
+            gap: route.c,
+            lo: Math.min(span('row', g1).lo, span('row', g2).lo),
+            hi: Math.max(span('row', g1).hi, span('row', g2).hi),
+            pref: ((p1 < cMid ? -1 : 1) + (p2 < cMid ? -1 : 1)) / 2,
+          },
+          { ...base, axis: 'row', gap: g2, lo: Math.min(p2, cs.lo), hi: Math.max(p2, cs.hi), pref: (side2 - down) / 2 },
+        );
+      }
+      // ラベルは、横に進む区間のうち長いほう(見積もり)の上に置く
+      const rowPieces = route.pieces.filter((p) => p.axis === 'row');
+      rowPieces.sort((a, b) => b.hi - b.lo - (a.hi - a.lo))[0].label = true;
+    }
+
+    // トラックの割り当て(配置 9:同じ溝で範囲が重なる区間は別のトラックに)
+    /** @type {Map<string, Piece[]>} */
+    const byGap = new Map();
+    for (const r of routes)
+      for (const p of r.pieces) byGap.set(`${p.axis}${p.gap}`, [...(byGap.get(`${p.axis}${p.gap}`) ?? []), p]);
+    const SEP = 8;
+    /** @type {Map<string, { order: number[], lanes: number[], count: number }>} */
+    const trackInfo = new Map();
+    for (const [key, list] of byGap) {
+      list.sort((a, b) => a.lo - b.lo || a.hi - b.hi || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+      /** @type {Piece[][]} */
+      const tracks = [];
+      const clash = (/** @type {Piece} */ a, /** @type {Piece} */ b) => {
+        if (a.id === b.id) return false;
+        if (a.group && a.group === b.group) return a.lo < b.hi && b.lo < a.hi;
+        return a.lo < b.hi + SEP && b.lo < a.hi + SEP;
+      };
+      for (const p of list) {
+        const groupTrack = p.group ? tracks.findIndex((t) => t.some((q) => q.group === p.group)) : -1;
+        const fits = (/** @type {number} */ i) => tracks[i].every((q) => !clash(p, q));
+        let t = groupTrack >= 0 && fits(groupTrack) ? groupTrack : tracks.findIndex((_, i) => fits(i));
+        if (t < 0) {
+          t = tracks.length;
+          tracks.push([]);
+        }
+        tracks[t].push(p);
+        p.track = t;
+      }
+      // 溝の中の並び:上(左)に寄せたい区間のトラックを上(左)に
+      const prefOf = (/** @type {Piece[]} */ t) => t.reduce((s, p) => s + p.pref, 0) / t.length;
+      const order = tracks.map((_, i) => i).sort((a, b) => prefOf(tracks[a]) - prefOf(tracks[b]) || a - b);
+      const rank = new Map(order.map((t, i) => [t, i]));
+      for (const p of list) p.track = /** @type {number} */ (rank.get(p.track));
+      const lanes = order.map((t) => (tracks[t].some((p) => p.label) ? g.labelH + 2 * g.labelPad + 2 : g.track));
+      trackInfo.set(key, { order, lanes, count: tracks.length });
+    }
+    // ラベルを置く、溝の端の帯(行の数)。分岐の線のラベルは、出る札の側の帯に置く。ラベルを置けなかった溝は帯を足す
+    /** @type {Map<string, number>} */
+    const labelBands = new Map(extraRows);
+    for (const r of routes) {
+      if (r.conn.kind !== 'branch' || r.es === undefined) continue;
+      const key = `row${r.g1}:${r.es === 'top' ? 'bottom' : 'top'}`;
+      labelBands.set(key, Math.max(labelBands.get(key) ?? 0, 1 + (extraRows.get(key) ?? 0)));
+    }
+    /** 溝に要る大きさ @param {string} key */
+    const need = (key) => {
+      const info = trackInfo.get(key);
+      const band = (/** @type {string} */ side) => bandSize(labelBands, `${key}:${side}`);
+      if (!info) return band('top') + band('bottom');
+      if (key.startsWith('col')) return 2 * g.gapPad + (info.count - 1) * g.track;
+      return (
+        Math.max(g.gapPad, band('top') + 2) +
+        info.lanes.reduce((s, l) => s + l, 0) +
+        Math.max(g.gapPad, band('bottom') + 4)
+      );
+    };
+    return { colX, rowTop, width, height, span, routes, trackInfo, labelBands, need, edgeY, cx };
+  };
+
+  /** ラベルを置けなかった溝に足す帯の行の数 @type {Map<string, number>} */
+  const extraRows = new Map();
+  /** 帯の高さ @param {Map<string, number>} bands @param {string} key */
+  const bandSize = (bands, key) => {
+    const n = bands.get(key) ?? 0;
+    return n === 0 ? 0 : n * (g.labelH + g.labelPad) + g.labelPad;
+  };
+  /** @type {ReturnType<typeof draw> | null} */
+  let result = null;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    result = draw();
+    if (result.failed.length === 0) break;
+    for (const key of result.failed) extraRows.set(key, (extraRows.get(key) ?? 0) + 1);
+  }
+  const { links, labels, out } = /** @type {ReturnType<typeof draw>} */ (result);
+
+  /** 溝の大きさを決め、線とラベルを置く。置けなかったラベルの帯(溝と側)を failed に返す */
+  function draw() {
+    // 溝を広げながら配置をやり直す。溝は広がるだけなので、回数は限られる
+    let out = pass();
+    for (let i = 0; i < 12; i++) {
+      let changed = false;
+      const keys = new Set([...out.trackInfo.keys(), ...[...out.labelBands.keys()].map((b) => b.split(':')[0])]);
+      for (const key of keys) {
+        const axis = /** @type {'row' | 'col'} */ (key.startsWith('row') ? 'row' : 'col');
+        const idx = Number(key.slice(3));
+        const n = out.need(key);
+        if (n > gapSize(axis, idx) + 0.01) {
+          grown.set(key, n);
+          changed = true;
+        }
+      }
+      if (!changed) break;
+      out = pass();
+    }
+
+    // ---- 線の座標 ----
+    const { span, routes, trackInfo, labelBands, edgeY, cx } = out;
+    /** トラックの座標 @param {'row' | 'col'} axis @param {number} gap @param {number} track */
+    const trackPos = (axis, gap, track) => {
+      const key = `${axis}${gap}`;
+      const s = span(axis, gap);
+      const info = /** @type {{ lanes: number[], count: number }} */ (trackInfo.get(key));
+      if (axis === 'col') {
+        const total = (info.count - 1) * g.track;
+        return s.lo + (s.hi - s.lo - total) / 2 + track * g.track;
+      }
+      const top = bandSize(labelBands, `${key}:top`) + 2;
+      const bottom = bandSize(labelBands, `${key}:bottom`) + 4;
+      const lanesTotal = info.lanes.reduce((a, b) => a + b, 0);
+      // 帯を除いた範囲の中央に、トラックの並びを置く。ラベルを置くトラックは、その上にラベルの幅をあける
+      const lo = s.lo + top;
+      const hi = s.hi - bottom;
+      let y = lo + (hi - lo - lanesTotal) / 2;
+      for (let i = 0; i < track; i++) y += info.lanes[i];
+      const lane = info.lanes[track];
+      return y + (lane > g.track ? lane - 2 : lane / 2);
+    };
+    /** @type {Link[]} */
+    const links = [];
+    /** 分岐の線の、斜めの区間(ラベルの位置に使う) @type {Map<string, { x: number, y: number, ex: number, ty: number, edge: 'top' | 'bottom', dir: number, gap: number }>} */
+    const diagStart = new Map();
+    /** 前提の矢印の横の区間(ラベルの位置に使う) @type {Map<string, Array<{ x1: number, x2: number, y: number, label: boolean, gap: number }>>} */
+    const rowSegs = new Map();
+    for (const route of routes) {
+      const conn = route.conn;
+      const base = {
+        kind: conn.kind,
+        lineId: conn.lineId,
+        style: conn.style,
+        planned: conn.planned,
+        from: conn.from.number,
+        to: conn.to.number,
+        id: conn.id,
+        ...(conn.group ? { group: conn.group } : {}),
+      };
+      const { from, to } = conn;
+      if (route.pieces.length === 0) {
+        const y1 = headY(from);
+        links.push({
+          ...base,
+          points: [
+            [from.x + from.w, y1],
+            [to.x, headY(to)],
+          ],
+        });
+        continue;
+      }
+      if (conn.kind === 'branch') {
+        const [h, v] = route.pieces;
+        const es = /** @type {'top' | 'bottom'} */ (route.es);
+        const ty = trackPos('row', h.gap, h.track);
+        const tx = trackPos('col', v.gap, v.track);
+        const ey = edgeY(from, es);
+        const dy = Math.abs(ty - ey);
+        const dir = tx >= cx(from) ? 1 : -1;
+        const adjacent = dir > 0 ? v.gap === from.col : v.gap === from.col - 1;
+        let sx;
+        let ex;
+        if (adjacent) {
+          sx = Math.min(from.x + from.w - 12, Math.max(from.x + 12, tx - dir * dy));
+          ex = tx;
+        } else {
+          sx = dir > 0 ? from.x + from.w - 16 : from.x + 16;
+          ex = sx + dir * dy;
+        }
+        const hy = headY(to);
+        /** @type {number[][]} */
+        const pts = [
+          [sx, ey],
+          [ex, ty],
+        ];
+        if (Math.abs(ex - tx) > 0.01) pts.push([tx, ty]);
+        pts.push([tx, hy]);
+        // 主な分岐駅からの線は札の左の辺まで。ほかの分岐駅からの線は、主な線のトラックまで
+        const mainRoute = routes.find((r) => r.conn.group === conn.group && r.conn.main);
+        if (conn.main) pts.push([to.x, hy]);
+        else if (mainRoute) {
+          const mx = trackPos('col', mainRoute.pieces[1].gap, mainRoute.pieces[1].track);
+          if (mx > tx) pts.push([mx, hy]);
+        }
+        links.push({ ...base, points: pts });
+        diagStart.set(conn.id, { x: sx, y: ey, ex, ty, edge: es, dir, gap: h.gap });
+        continue;
+      }
+      // 前提の矢印
+      const p1 = /** @type {number} */ (route.p1);
+      const p2 = /** @type {number} */ (route.p2);
+      const y1 = edgeY(from, /** @type {'top' | 'bottom'} */ (route.es));
+      const y2 = edgeY(to, /** @type {'top' | 'bottom'} */ (route.et));
+      const segs = [];
+      /** @type {number[][]} */
+      let pts;
+      if (route.c === undefined) {
+        const [h] = route.pieces;
+        const ty = trackPos('row', h.gap, h.track);
+        pts = [
+          [p1, y1],
+          [p1, ty],
+          [p2, ty],
+          [p2, y2],
+        ];
+        segs.push({ x1: Math.min(p1, p2), x2: Math.max(p1, p2), y: ty, label: h.label, gap: h.gap });
+      } else {
+        const [h1, v, h2] = route.pieces;
+        const t1 = trackPos('row', h1.gap, h1.track);
+        const tx = trackPos('col', v.gap, v.track);
+        const t2 = trackPos('row', h2.gap, h2.track);
+        pts = [
+          [p1, y1],
+          [p1, t1],
+          [tx, t1],
+          [tx, t2],
+          [p2, t2],
+          [p2, y2],
+        ];
+        segs.push(
+          { x1: Math.min(p1, tx), x2: Math.max(p1, tx), y: t1, label: h1.label, gap: h1.gap },
+          { x1: Math.min(p2, tx), x2: Math.max(p2, tx), y: t2, label: h2.label, gap: h2.gap },
+        );
+      }
+      links.push({ ...base, points: pts });
+      rowSegs.set(conn.id, segs);
+    }
+    for (const l of links) l.points = l.points.map(([x, y]) => [round(x), round(y)]);
+
+    // ---- ラベル(配置 10) ----
+    /** @type {MapLabel[]} */
+    const labels = [];
+    const cardBoxes = cardList.map((c) => ({ x: c.x, y: c.y, w: c.w, h: c.h }));
+    /** 線分の一覧(ラベルの重なりの検査に使う) */
+    const segments = links.flatMap((l) =>
+      l.points.slice(1).map((p, i) => ({ x1: l.points[i][0], y1: l.points[i][1], x2: p[0], y2: p[1] })),
+    );
+    /** @param {Box} b */
+    const free = (b) => {
+      const m = 2;
+      const grow = { x: b.x - m, y: b.y - m, w: b.w + 2 * m, h: b.h + 2 * m };
+      if (cardBoxes.some((c) => boxesOverlap(grow, c))) return false;
+      if (labels.some((l) => boxesOverlap(grow, l))) return false;
+      if (segments.some((s) => segmentHitsBox(s, grow))) return false;
+      return grow.x >= 0 && grow.y >= 0;
+    };
+    /** @type {string[]} */
+    const failed = [];
+    const step = g.labelH + 2;
+    for (const route of routes) {
+      const conn = route.conn;
+      if (!conn.label) continue;
+      const w = round(textWidth(conn.label, g.labelFont) + 2);
+      const h = g.labelH;
+      /** 候補と、近さの点数(小さいほど先に試す) @type {Array<Box & { score: number }>} */
+      const candidates = [];
+      let bandKey = '';
+      if (conn.kind === 'branch') {
+        const d = diagStart.get(conn.id);
+        if (!d) continue;
+        bandKey = `row${d.gap}:${d.edge === 'top' ? 'bottom' : 'top'}`;
+        const gs = span('row', d.gap);
+        /** 斜めの区間の、高さ y での x @param {number} y */
+        const diagX = (y) => {
+          const t = Math.min(1, Math.max(0, (y - d.y) / (d.ty - d.y || 1)));
+          return d.x + (d.ex - d.x) * t;
+        };
+        // 斜めの区間のそばの段の溝に、札の辺に近い行から置く。線の内側(曲がる側の反対)を先に試す
+        for (let k = 0; ; k++) {
+          const y = d.edge === 'top' ? d.y - g.labelPad - h - k * step : d.y + g.labelPad + k * step;
+          if (d.edge === 'top' ? y < gs.lo + 1 : y + h > gs.hi - 1) break;
+          const near = diagX(d.edge === 'top' ? y + h : y);
+          const far = diagX(d.edge === 'top' ? y : y + h);
+          for (let j = 0; j < 60; j++) {
+            const off = 4 + j * 6;
+            candidates.push({ x: d.dir > 0 ? near - off - w : near + off, y, w, h, score: j * 6 + k * step * 1.5 });
+            candidates.push({ x: d.dir > 0 ? far + off : far - off - w, y, w, h, score: 300 + j * 6 + k * step * 1.5 });
+          }
+        }
+      } else {
+        const segs = [...(rowSegs.get(conn.id) ?? [])].sort(
+          (a, b) => Number(b.label) - Number(a.label) || b.x2 - b.x1 - (a.x2 - a.x1),
+        );
+        segs.forEach((sg, i) => {
+          if (i === 0) bandKey = `row${sg.gap}:top`;
+          const gs = span('row', sg.gap);
+          const center = (sg.x1 + sg.x2) / 2 - w / 2;
+          const reach = Math.max(0, (sg.x2 - sg.x1 - w) / 2) + w / 2;
+          // 区間の上を先に、区間の中央から離していく。だめなら区間の下、溝の中のほかの行
+          for (let k = 0; ; k++) {
+            const above = sg.y - g.labelPad - h - k * step;
+            const below = sg.y + g.labelPad + k * step;
+            const rowsHere = [
+              ...(above >= gs.lo + 1 ? [{ y: above, side: 0 }] : []),
+              ...(below + h <= gs.hi - 1 ? [{ y: below, side: 1 }] : []),
+            ];
+            if (rowsHere.length === 0) break;
+            for (const r of rowsHere) {
+              for (let j = 0; j * 4 <= reach; j++) {
+                const score = i * 1000 + k * step * 3 + r.side * 40 + j * 4;
+                candidates.push({ x: center - j * 4, y: r.y, w, h, score });
+                if (j > 0) candidates.push({ x: center + j * 4, y: r.y, w, h, score });
+              }
+            }
+          }
+        });
+      }
+      candidates.sort((a, b) => a.score - b.score);
+      const pick = candidates.find(free);
+      if (!pick) {
+        failed.push(bandKey);
+        continue;
+      }
+      labels.push({
+        kind: /** @type {'arrow' | 'branch'} */ (conn.kind),
+        text: conn.label,
+        lineId: conn.lineId,
+        x: round(pick.x),
+        y: round(pick.y),
+        w,
+        h,
+      });
+    }
+    return { links, labels, out, failed };
+  }
+
+  const xs = [0, out.width, ...labels.flatMap((l) => [l.x, l.x + l.w])];
+  const ys = [0, out.height, ...labels.flatMap((l) => [l.y, l.y + l.h])];
+  for (const l of links) for (const [x, y] of l.points) (xs.push(x), ys.push(y));
+  for (const c of cardList) {
+    c.x = round(c.x);
+    c.y = round(c.y);
+  }
+  return {
+    cards: cardList,
+    stations: placedStations,
+    links,
+    labels,
+    arrows,
+    bounds: {
+      minX: round(Math.min(...xs)),
+      minY: round(Math.min(...ys)),
+      maxX: round(Math.max(...xs)),
+      maxY: round(Math.max(...ys)),
+    },
+    missing,
+    fallbacks,
+    linesShown: site.lines.filter((l) => cardList.some((c) => c.lineId === l.id)),
+  };
+}
+
+/** @param {Box} a @param {Box} b */
+function boxesOverlap(a, b) {
+  return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 }
 
 /**
- * 駅の札・駅名・印・帯の文字の外接矩形と、線の線分を返す(重なりの検査に使う)。
+ * 線分が矩形の内側を通るか(Liang–Barsky)。
+ * @param {{ x1: number, y1: number, x2: number, y2: number }} s @param {Box} b
+ */
+export function segmentHitsBox(s, b) {
+  const dx = s.x2 - s.x1;
+  const dy = s.y2 - s.y1;
+  let t0 = 0;
+  let t1 = 1;
+  for (const [p, q] of [
+    [-dx, s.x1 - b.x],
+    [dx, b.x + b.w - s.x1],
+    [-dy, s.y1 - b.y],
+    [dy, b.y + b.h - s.y1],
+  ]) {
+    if (p === 0) {
+      if (q <= 0) return false;
+      continue;
+    }
+    const r = q / p;
+    if (p < 0) t0 = Math.max(t0, r);
+    else t1 = Math.min(t1, r);
+    if (t0 >= t1) return false;
+  }
+  return true;
+}
+
+/**
+ * 札・札の中の文字と印・ラベルの外接矩形と、線の線分を返す(重なりの検査に使う)。
  * Preconditions: layout は layoutMap の結果。
- * Postconditions: boxes(kind と持ち主の駅 ID 付き)と segments を返す。
+ * Postconditions: boxes(kind と、札の中のものは持ち主の章番号付き)と segments(kind と線の名前付き)を返す。
  * Failure modes: なし。
  * Side effects: なし。
  * @param {MapLayout} layout
  */
 export function layoutBoxes(layout) {
-  /** @type {Array<{ kind: string, owner: string, x: number, y: number, w: number, h: number }>} */
+  /** @type {Array<{ kind: string, owner: string, card: number | null, x: number, y: number, w: number, h: number }>} */
   const boxes = [];
-  for (const s of layout.stations) boxes.push(...stationBoxes(s));
-  for (const b of layout.bands) {
-    const w = textWidth(b.text, GEOM.bandFont);
-    boxes.push({
-      kind: 'band-label',
-      owner: `第${b.number}章`,
-      x: b.tx,
-      y: b.ty - GEOM.bandFont,
-      w,
-      h: GEOM.bandFont + 3,
-    });
+  for (const c of layout.cards) {
+    const own = `第${c.number}章`;
+    boxes.push({ kind: 'card', owner: own, card: null, x: c.x, y: c.y, w: c.w, h: c.h });
+    const inCard = (/** @type {string} */ kind, /** @type {string} */ owner, /** @type {Box} */ b) =>
+      boxes.push({ kind, owner, card: c.number, x: c.x + b.x, y: c.y + b.y, w: b.w, h: b.h });
+    inCard('head', own, { ...c.head, w: textWidth(c.head.text, GEOM.headFont) });
+    for (const t of c.titleLines) inCard('title', own, t);
+    for (const r of c.rows) {
+      const owner = r.info.code || r.info.name;
+      if (r.plate) inCard('plate', owner, r.plate);
+      for (const t of r.name) inCard('name', owner, t);
+      if (r.pill) inCard('pill', owner, r.pill);
+    }
   }
-  /** @type {Array<{ lineId: string, x1: number, y1: number, x2: number, y2: number }>} */
+  for (const l of layout.labels)
+    boxes.push({ kind: 'label', owner: l.text, card: null, x: l.x, y: l.y, w: l.w, h: l.h });
+  /** @type {Array<{ kind: string, id: string, group: string | null, lineId: string, x1: number, y1: number, x2: number, y2: number }>} */
   const segments = [];
-  for (const p of layout.paths) {
-    for (let i = 1; i < p.points.length; i++) {
-      const [x1, y1] = p.points[i - 1];
-      const [x2, y2] = p.points[i];
-      segments.push({ lineId: p.lineId, x1, y1, x2, y2 });
+  for (const l of layout.links) {
+    for (let i = 1; i < l.points.length; i++) {
+      const [x1, y1] = l.points[i - 1];
+      const [x2, y2] = l.points[i];
+      if (x1 === x2 && y1 === y2) continue;
+      segments.push({ kind: l.kind, id: l.id ?? '', group: l.group ?? null, lineId: l.lineId, x1, y1, x2, y2 });
     }
   }
   return { boxes, segments };
 }
 
+/** 前提の矢印の矢じりの長さと、半分の幅 */
+const HEAD_LEN = 7;
+const HEAD_HALF = 4;
+
 /**
  * 路線図の SVG を書く。
  * Preconditions: layout は layoutMap の結果。
- * Postconditions: SVG の文字列を返す。駅はリンクにし、title と desc を付ける。
+ * Postconditions: SVG の文字列を返す。駅の行と章の札はリンクにし、title と desc を付ける。
  * Failure modes: なし。
  * Side effects: なし。
  * @param {MapLayout} layout
  * @param {{ title: string, idPrefix: string, hrefFor: (s: import('./graph.js').StationInfo) => string, chapterHref?: (chapterId: string) => string | null }} opts
- *   章の帯(札を含む)は chapterHref のリンクにする。null を返す章と、未執筆の章の帯はリンクにしない。
+ *   章の札は chapterHref のリンクにする。null を返す章と、未執筆の章の札はリンクにしない。
  */
 export function renderMapSvg(layout, opts) {
   const { minX, minY, maxX, maxY } = layout.bounds;
@@ -930,93 +1391,112 @@ export function renderMapSvg(layout, opts) {
     `<title id="${tid}">${escapeXml(opts.title)}</title>`,
     `<desc id="${did}">${escapeXml(mapDescription(layout))}</desc>`,
   );
-  // 章の帯。帯と札をひとまとまりのリンクにし、駅より下に描く(帯の中の駅は駅へのリンクのまま)
-  for (const b of layout.bands) {
-    const flags = [...(b.current ? ['current'] : []), ...(b.planned ? ['planned'] : [])];
-    const rect = `<rect class="${['band', ...flags].join(' ')}" x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="10"/>`;
-    const text = `<text class="${['band-label', ...flags].join(' ')}" x="${b.tx}" y="${b.ty}">${escapeXml(b.text)}</text>`;
-    const href = !b.planned && b.chapterId && opts.chapterHref ? opts.chapterHref(b.chapterId) : null;
+  const d = (/** @type {number[][]} */ pts) => pts.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x} ${y}`).join(' ');
+  // 路線の線と分岐の線は札より下に描く(線の端の丸みを札で隠す)
+  for (const l of layout.links) {
+    if (l.kind === 'arrow') continue;
+    const cls = [
+      'ln',
+      `l-${l.lineId}`,
+      ...(l.kind === 'branch' ? ['branch'] : []),
+      ...(l.style === 'dotted' ? ['dotted'] : []),
+      ...(l.planned ? ['planned'] : []),
+    ];
+    out.push(`<path class="${cls.join(' ')}" d="${d(l.points)}"/>`);
+  }
+  for (const c of layout.cards) {
+    const flags = [...(c.current ? ['current'] : []), ...(c.planned ? ['planned'] : [])];
+    const at = (/** @type {Box} */ b) => ({ x: round(c.x + b.x), y: round(c.y + b.y) });
+    const head = at(c.head);
+    const title = c.titleLines
+      .map((t) => {
+        const p = at(t);
+        return `<tspan x="${p.x}" y="${round(p.y + GEOM.titleFont)}">${escapeXml(t.text)}</tspan>`;
+      })
+      .join('');
+    const body =
+      `<rect class="${['card', `l-${c.lineId}`, ...flags].join(' ')}" x="${c.x}" y="${c.y}" width="${c.w}" height="${round(c.h)}" rx="6"/>` +
+      `<text class="${['card-head', `l-${c.lineId}`, ...flags].join(' ')}" x="${head.x}" y="${round(head.y + GEOM.headFont - 1)}">${escapeXml(c.head.text)}</text>` +
+      `<text class="card-title${c.planned ? ' planned' : ''}">${title}</text>`;
+    const href = !c.planned && c.chapterId && opts.chapterHref ? opts.chapterHref(c.chapterId) : null;
     out.push(
       href
-        ? `<a href="${escapeXml(href)}" class="ch" aria-label="${escapeXml(`第${b.number}章 ${b.title}`)}">${rect}${text}</a>`
-        : `<g class="ch">${rect}${text}</g>`,
+        ? `<a href="${escapeXml(href)}" class="ch" aria-label="${escapeXml(`第${c.number}章 ${c.title}`)}">${body}</a>`
+        : `<g class="ch">${body}</g>`,
     );
-  }
-  for (const p of layout.paths) {
-    // 未執筆の駅へつながる区間は、別の灰色の線にする
-    /** @type {Array<{ planned: boolean, points: number[][] }>} */
-    const runs = [];
-    for (let i = 1; i < p.points.length; i++) {
-      const planned = !!(p.planned?.[i] || p.planned?.[i - 1]);
-      const last = runs[runs.length - 1];
-      if (last && last.planned === planned) last.points.push(p.points[i]);
-      else runs.push({ planned, points: [p.points[i - 1], p.points[i]] });
-    }
-    for (const r of runs) {
-      const d = r.points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x} ${y}`).join(' ');
-      const cls = [
-        'ln',
-        `l-${p.lineId}`,
-        ...(p.style === 'dotted' ? ['dotted'] : []),
-        ...(r.planned ? ['planned'] : []),
-      ];
-      out.push(`<path class="${cls.join(' ')}" d="${d}"/>`);
-    }
-  }
-  const { boxes } = layoutBoxes(layout);
-  for (const s of layout.stations) {
-    const cls = ['plate', `l-${s.info.lineId}`];
-    if (s.final) cls.push('final');
-    if (s.transfer) cls.push('transfer');
-    const tip = s.goal ? `<title>${escapeXml(`${s.final ? '終着駅' : '途中下車駅'}:${s.goal.label}`)}</title>` : '';
-    const label = /** @type {any} */ (boxes.find((b) => b.kind === 'label' && b.owner === s.info.id));
-    const lines = s.label
-      .map((t, i) => `<tspan x="${s.x}" y="${round(label.y + GEOM.font + i * GEOM.lineH - 1)}">${escapeXml(t)}</tspan>`)
-      .join('');
-    if (s.info.planned) {
+    for (const r of c.rows) {
+      const names = r.name
+        .map((t) => {
+          const p = at(t);
+          return `<tspan x="${p.x}" y="${round(p.y + GEOM.stFont)}">${escapeXml(t.text)}</tspan>`;
+        })
+        .join('');
+      if (r.info.planned) {
+        out.push(`<text class="label planned">${names}</text>`);
+        continue;
+      }
+      const row = at(r);
+      const plate = /** @type {Box} */ (r.plate);
+      const pp = at(plate);
+      const tip = r.goal ? `<title>${escapeXml(`${r.final ? '最終目標' : '途中の目標'}:${r.goal.label}`)}</title>` : '';
       out.push(
-        `<g class="st planned">`,
-        `<rect class="plate planned" x="${round(s.x - s.plateW / 2)}" y="${round(s.y - GEOM.plateH / 2)}" width="${s.plateW}" height="${GEOM.plateH}" rx="5"/>`,
-        `<text class="label planned">${lines}</text>`,
-        `</g>`,
+        `<a href="${escapeXml(opts.hrefFor(r.info))}" class="st" aria-label="${escapeXml(`${r.info.code} ${r.info.name}`)}">${r.final ? tip : ''}`,
+        `<rect class="hit" x="${row.x}" y="${row.y}" width="${round(r.w)}" height="${round(r.name.length * GEOM.stLineH)}"/>`,
+        `<rect class="${['plate', `l-${c.lineId}`, ...(r.final ? ['final'] : [])].join(' ')}" x="${pp.x}" y="${pp.y}" width="${plate.w}" height="${plate.h}" rx="4"/>`,
+        `<text class="code l-${c.lineId}${r.final ? ' inv' : ''}" x="${round(pp.x + plate.w / 2)}" y="${round(pp.y + plate.h / 2)}">${escapeXml(r.info.code)}</text>`,
+        `<text class="label">${names}</text>`,
+        `</a>`,
       );
-      continue;
+      if (r.pill && r.partial) {
+        const p = at(r.pill);
+        out.push(
+          `<g class="pill"><title>${escapeXml(`途中の目標:${r.partial.label}`)}</title><rect x="${p.x}" y="${p.y}" width="${r.pill.w}" height="${r.pill.h}" rx="7.5"/><text x="${round(p.x + r.pill.w / 2)}" y="${round(p.y + r.pill.h / 2)}">途中の目標</text></g>`,
+        );
+      }
     }
+  }
+  // 前提の矢印は札より上に描く(矢じりを札の辺に重ねる)
+  for (const l of layout.links) {
+    if (l.kind !== 'arrow') continue;
+    const pts = l.points.map((p) => [...p]);
+    const [tx, ty] = pts[pts.length - 1];
+    const py = pts[pts.length - 2][1];
+    const s = Math.sign(ty - py) || 1;
+    pts[pts.length - 1] = [tx, round(ty - s * HEAD_LEN)];
+    const head = `M${tx} ${ty} L${tx - HEAD_HALF} ${round(ty - s * HEAD_LEN)} L${tx + HEAD_HALF} ${round(ty - s * HEAD_LEN)} Z`;
+    out.push(`<path class="arrow" d="${d(pts)}"/><path class="arrow-head" d="${head}"/>`);
+  }
+  for (const lb of layout.labels) {
+    const cls = lb.kind === 'arrow' ? 'arrow-label' : `branch-label l-${lb.lineId}`;
     out.push(
-      `<a href="${escapeXml(opts.hrefFor(s.info))}" class="st" aria-label="${escapeXml(`${s.info.code} ${s.info.name}`)}">${tip}`,
-      `<rect class="${cls.join(' ')}" x="${round(s.x - s.plateW / 2)}" y="${round(s.y - GEOM.plateH / 2)}" width="${s.plateW}" height="${GEOM.plateH}" rx="5"/>`,
-      `<text class="code l-${s.info.lineId}${s.final ? ' inv' : ''}" x="${s.x}" y="${s.y}">${escapeXml(s.info.code)}</text>`,
-      `<text class="label">${lines}</text>`,
-      `</a>`,
+      `<text class="${cls}" x="${round(lb.x + 1)}" y="${round(lb.y + GEOM.labelFont)}">${escapeXml(lb.text)}</text>`,
     );
-    if (s.partial) {
-      const pill = /** @type {any} */ (boxes.find((b) => b.kind === 'pill' && b.owner === s.info.id));
-      out.push(
-        `<g class="pill"><title>${escapeXml(`途中下車駅:${s.partial.label}`)}</title><rect x="${round(pill.x)}" y="${round(pill.y)}" width="${GEOM.pillW}" height="${GEOM.pillH}" rx="10"/><text x="${s.x}" y="${round(pill.y + GEOM.pillH / 2)}">途中下車OK</text></g>`,
-      );
-    }
   }
   out.push('</svg>');
   return out.join('');
 }
 
 /**
- * 図の説明(desc)。路線ごとに、駅を表示番号・駅名・印の順で並べる。
+ * 図の説明(desc)。路線ごとに、章を読む順に並べ、章ごとに駅を表示番号・駅名・印の順で並べる。
+ * そのあとに、前提の矢印ごとに1文を書く(route-map.md「代替テキスト」)。
  * @param {MapLayout} layout
  */
 export function mapDescription(layout) {
-  return layout.linesShown
-    .map((line) => {
-      const list = layout.stations.filter((s) => s.info.lineId === line.id);
-      const items = list.map((s) => {
-        if (s.info.planned) return `${s.info.name}(未執筆)`;
-        const marks = [];
-        if (s.final) marks.push('終着');
-        if (s.partial) marks.push('途中下車OK');
-        if (s.transfer) marks.push('乗換');
-        return `${s.info.code} ${s.info.name}${marks.length ? `(${marks.join('・')})` : ''}`;
+  const lines = layout.linesShown.map((line) => {
+    const cards = layout.cards.filter((c) => c.lineId === line.id).sort((a, b) => a.col - b.col);
+    const parts = cards.map((c) => {
+      const items = c.rows.map((r) => {
+        if (r.info.planned) return r.info.name;
+        const marks = [...(r.final ? ['最終目標'] : []), ...(r.partial ? ['途中の目標'] : [])];
+        return `${r.info.code} ${r.info.name}${marks.map((m) => `(${m})`).join('')}`;
       });
-      return `${line.name}:${items.join('、')}。`;
-    })
-    .join('');
+      return `第${c.number}章 ${c.title}${c.planned ? '(未執筆)' : ''}:${items.join('、')}。`;
+    });
+    return `${line.name}。${parts.join('')}`;
+  });
+  const arrows = layout.arrows.map(
+    (a) =>
+      `第${a.to}章は、第${a.from}章の ${a.stations.map((s) => (s.code ? `${s.code} ${s.name}` : s.name)).join('、')}を前提にする。`,
+  );
+  return [...lines, ...arrows].join('');
 }

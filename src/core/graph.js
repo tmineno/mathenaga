@@ -54,7 +54,6 @@ export const KIND_NAMES = {
  * @property {Map<string, { id: string, name: string, station: StationInfo }>} theorems
  * @property {Map<string, string>} kinds   ID → 種類(line、field、chapter、station、definition、theorem、equation、figure、application、reference)
  * @property {Map<string, import('./references.js').Reference>} references  文献の ID → 文献(文献の一覧の順)
- * @property {Set<string>} transfers   乗換駅
  * @property {Map<string, Set<string>>} scope   分野 → 分野の範囲
  * @property {Map<string, import('./chapter.js').ChapterModel[]>} fieldChapters  分野 → 分野内の章の順序
  * @property {import('./schema.js').PlannedChapter[]} planned   未執筆の章(章番号の順。requires は存在する駅だけ)
@@ -283,15 +282,6 @@ export function buildSite(input) {
     }
   }
 
-  // 乗換駅
-  const transfers = new Set();
-  for (const t of stations) {
-    for (const r of t.requires) {
-      const s = /** @type {StationInfo} */ (stationById.get(r));
-      if (s.lineId !== t.lineId) transfers.add(r);
-    }
-  }
-
   // field 属性と目標の参照先
   for (const c of chapters) {
     const blocks = [...c.head.goals, ...c.head.motivations, ...c.stations.flatMap((s) => s.applications)];
@@ -326,7 +316,6 @@ export function buildSite(input) {
     theorems,
     kinds,
     references,
-    transfers,
     scope: new Map(),
     fieldChapters: new Map(),
     planned,

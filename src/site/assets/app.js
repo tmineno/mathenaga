@@ -497,14 +497,14 @@
     }
   });
 
-  // ---------- 路線図の章の帯(docs/spec/route-map.md「リンク」) ----------
-  // 帯の上には駅の札が重なるので、:hover だけでは駅の上で強調が消える。
-  // ポインターが帯の矩形の中にある間は、その帯に on を付けたままにする。
+  // ---------- 路線図の章の札(docs/spec/route-map.md「リンク」) ----------
+  // 札の上には駅の行のリンクが重なるので、:hover だけでは駅の上で強調が消える。
+  // ポインターが札の矩形の中にある間は、その札に on を付けたままにする。
   // 図は transform で動かすので、画面上の矩形で判定する。
 
   all('svg.map').forEach(function (svg) {
-    var bands = all('a.ch', svg);
-    if (bands.length === 0) return;
+    var cards = all('a.ch', svg);
+    if (cards.length === 0) return;
     var current = null;
     function mark(a) {
       if (current === a) return;
@@ -514,8 +514,8 @@
     }
     svg.addEventListener('pointermove', function (e) {
       var hit = null;
-      bands.forEach(function (a) {
-        var r = a.querySelector('rect.band').getBoundingClientRect();
+      cards.forEach(function (a) {
+        var r = a.querySelector('rect.card').getBoundingClientRect();
         if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) hit = a;
       });
       mark(hit);
@@ -539,6 +539,7 @@
   var ZOOM_MAX = 3;
   var ZOOM_MIN = 0.3;
   var DRAG_START = 5;
+  var FRAME_MAX = 600;
 
   all('.map-scroll').forEach(function (frame) {
     var svg = frame.querySelector('svg.map');
@@ -550,7 +551,8 @@
     var ready = false;
 
     frame.classList.add('pan');
-    frame.style.height = H + 'px';
+    // 枠の内側の高さは、1 倍のときの図の高さと 600px の小さいほう(枠の線の分を足す)
+    frame.style.height = Math.min(H, FRAME_MAX) + (frame.offsetHeight - frame.clientHeight) + 'px';
 
     function box() {
       return { w: frame.clientWidth, h: frame.clientHeight };
@@ -588,18 +590,22 @@
       draw();
       setItem(ZOOM_KEY, String(view.s));
     }
-    // 開いたとき:保存した倍率(なければ 1 倍)で、章ページの今の章の帯を横の中央に、ほかは左端から
+    // 開いたとき:保存した倍率(なければ 1 倍)で、章ページの今の章の札を横と縦の中央に、ほかは左上の端から
     function init() {
       var f = box();
       if (f.w === 0) return;
       ready = true;
       view.s = clampZoom(savedZoom() || 1);
-      view.y = 0;
-      var cur = svg.querySelector('rect.band.current');
+      var cur = svg.querySelector('rect.card.current');
       if (cur) {
         var cx = Number(cur.getAttribute('x')) + Number(cur.getAttribute('width')) / 2 - vb[0];
+        var cy = Number(cur.getAttribute('y')) + Number(cur.getAttribute('height')) / 2 - vb[1];
         view.x = f.w / 2 - cx * view.s;
-      } else view.x = 0;
+        view.y = f.h / 2 - cy * view.s;
+      } else {
+        view.x = 0;
+        view.y = 0;
+      }
       draw();
     }
     mapResets.push(function () {

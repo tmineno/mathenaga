@@ -10,6 +10,7 @@ import {
   CH3 as CH3_SOURCE,
   CONTENT,
   addFigures,
+  addLine,
   buildIn,
   edit,
   replaceOnce,
@@ -106,16 +107,16 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
       assert.ok(!(await isOpen(page, '.vgroup[data-kind=goal] > details[data-field=cs]')));
       assert.ok(await visible(page, '.map-v[data-for=physics]'));
       assert.ok(!(await visible(page, '.map-v[data-for=""]')));
-      assert.equal(await page.locator('.map-v[data-for=physics] rect.band.current').count(), 1);
+      assert.equal(await page.locator('.map-v[data-for=physics] rect.card.current').count(), 1);
       assert.match(await text(page, '.here-next [data-for=physics]'), /第4章/);
       assert.equal(await page.locator('.out-label:visible').count(), 0);
       assert.ok(await isOpen(page, '#completeness details[data-field=physics]'));
       assert.ok(!(await isOpen(page, '#completeness details[data-field=cs]')));
       assert.equal(await page.locator('#contraction details.v').count(), 1);
       assert.ok(!(await isOpen(page, '#contraction details[data-field=cs]')));
-      assert.match(await text(page, '#picard-lindelof .goal-note[data-goal-for=physics]'), /途中下車OK/);
+      assert.match(await text(page, '#picard-lindelof .goal-note[data-goal-for=physics]'), /途中の目標/);
       const ahead = await text(page, '.next[data-for=physics]');
-      assert.match(ahead, /幾何線に乗り換える/);
+      assert.match(ahead, /幾何線へ進む/);
       assert.match(ahead, /M04 連続写像\(第2章\)から、第6章 位相空間へ/);
       await context.close();
     });
@@ -124,13 +125,13 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
       const { context, page } = await open();
       await page.goto(`${server.url}${CH3}?field=cs`);
       assert.ok(await isOpen(page, '.vgroup[data-kind=goal] > details[data-field=cs]'));
-      assert.equal(await page.locator('.map-v[data-for=cs] rect.band.current').count(), 1);
+      assert.equal(await page.locator('.map-v[data-for=cs] rect.card.current').count(), 1);
       assert.ok(await visible(page, '.map-v[data-for=cs]'));
-      assert.equal(await text(page, '.here-next [data-for=cs]'), 'なし(この章の A04 が終着駅)');
+      assert.equal(await text(page, '.here-next [data-for=cs]'), 'なし(この章の A04 が最終目標)');
       const ahead = await text(page, '.next[data-for=cs]');
-      assert.match(ahead, /終着駅.*A04 で到着します/);
+      assert.match(ahead, /最終目標.*A04 で到達します/);
       assert.match(ahead, /さらに進む場合第4章 ノルムと内積\(情報科学の範囲外\)/);
-      assert.ok(!ahead.includes('乗り換える'));
+      assert.ok(!ahead.includes('へ進む'));
       assert.ok(await page.locator('#picard-lindelof').evaluate((el) => el.classList.contains('is-out')));
       assert.ok(await visible(page, '#picard-lindelof .out-label'));
       await context.close();
@@ -142,7 +143,7 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
       assert.ok(await visible(page, '.vgroup[data-kind=goal] > .v.common'));
       assert.equal(await page.locator('details.v[open]').count(), 0);
       assert.ok(await visible(page, '.map-v[data-for=""]'));
-      assert.equal(await page.locator('.map-v[data-for=""] rect.band.current').count(), 1);
+      assert.equal(await page.locator('.map-v[data-for=""] rect.card.current').count(), 1);
       assert.match(await text(page, '.here-next [data-for=""] a'), /第4章/);
       assert.ok(await visible(page, '.chooser'));
       await context.close();
@@ -1195,14 +1196,14 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
     });
   });
 
-  describe('route-map: 14. 章の帯を押すと章のページの先頭へ移る(ブラウザ)', () => {
-    test('全体の図の第3章の帯の、駅のない部分を押す', async () => {
+  describe('route-map: 14. 章の札を押すと章のページの先頭へ移る(ブラウザ)', () => {
+    test('全体の図の第3章の札の、駅の行のない部分を押す', async () => {
       const { context, page } = await open();
       await page.goto(server.url);
-      const band = page.locator('svg.map a.ch[aria-label="第3章 完備性と不動点"] rect.band');
-      const box = await band.boundingBox();
+      const card = page.locator('svg.map a.ch[aria-label="第3章 完備性と不動点"] rect.card');
+      const box = await card.boundingBox();
       assert.ok(box);
-      // 帯の右下の隅(駅の札と駅名のない場所)を押す
+      // 札の右下の隅(駅の行のない余白)を押す
       await page.mouse.click(box.x + box.width - 4, box.y + box.height - 4);
       await page.waitForURL(/\/chapters\/completeness-fixed-point\/$/);
       assert.equal(await page.evaluate(() => window.scrollY), 0);
@@ -1210,32 +1211,31 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
     });
   });
 
-  describe('route-map: 17. ポインタが帯の中にある間は帯を強調し続ける(ブラウザ)', () => {
-    test('駅の札の上でも第3章の帯は強調のまま。線の上を押すと章へ移る', async () => {
+  describe('route-map: 17. ポインタが札の中にある間は札を強調し続ける(ブラウザ)', () => {
+    test('駅の行の上でも第3章の札は強調のまま。札の外へ出すと戻る。駅の行を押すと駅へ移る', async () => {
       const { context, page } = await open();
       await page.goto(server.url);
       const link = page.locator('svg.map a.ch[aria-label="第3章 完備性と不動点"]');
-      const band = link.locator('rect.band');
-      const fill = () => band.evaluate((r) => getComputedStyle(r).fill);
+      const card = link.locator('rect.card');
+      const fill = () => card.evaluate((r) => getComputedStyle(r).fill);
       const normal = await fill();
-      const box = await band.boundingBox();
-      const plate = await page.locator('svg.map a.st[aria-label="A02 完備性"] rect.plate').boundingBox();
-      const next = await page.locator('svg.map a.st[aria-label="A03 縮小写像"] rect.plate').boundingBox();
-      assert.ok(box && plate && next);
-      // 帯の右下の隅(駅のない場所)に入れる
+      const box = await card.boundingBox();
+      const row = await page.locator('svg.map a.st[aria-label="A02 完備性"] rect.hit').boundingBox();
+      assert.ok(box && row);
+      // 札の右下の隅(駅の行のない場所)に入れる
       await page.mouse.move(box.x + box.width - 4, box.y + box.height - 4, { steps: 4 });
       const highlighted = await fill();
       assert.notEqual(highlighted, normal);
-      // A02 の札の上へ動かしても強調のまま
-      await page.mouse.move(plate.x + plate.width / 2, plate.y + plate.height / 2, { steps: 6 });
+      // A02 の行の上へ動かしても強調のまま
+      await page.mouse.move(row.x + row.width - 6, row.y + row.height / 2, { steps: 6 });
       assert.equal(await fill(), highlighted);
       assert.ok(await link.evaluate((a) => a.classList.contains('on')));
-      // 帯の外へ出すと元に戻る
+      // 札の外へ出すと元に戻る
       await page.mouse.move(2, 2, { steps: 6 });
       assert.equal(await fill(), normal);
-      // A02 と A03 の間の線の上を押すと、第3章のページの先頭へ
-      await page.mouse.click((plate.x + plate.width + next.x) / 2, plate.y + plate.height / 2);
-      await page.waitForURL(/\/chapters\/completeness-fixed-point\/$/);
+      // 駅名の右の余白(行の中)を押しても、駅へ移る
+      await page.mouse.click(row.x + row.width - 6, row.y + row.height / 2);
+      await page.waitForURL(/\/chapters\/completeness-fixed-point\/#completeness$/);
       await context.close();
     });
   });
@@ -1246,7 +1246,24 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
     /** @param {import('playwright').Page} page */
     const svgBox = async (page) => /** @type {any} */ (await frameOf(page).locator('svg.map').boundingBox());
 
-    test('18. スクロールバーはなく、ドラッグで動く。駅の上からのドラッグでは移らない', async () => {
+    /** 10 の路線(第14章の変分線)を足した版。全体の図が枠より高い(route-map.md 18・35) */
+    let tall = /** @type {{ root: string, url: string, close: () => Promise<unknown> } | null} */ (null);
+    before(async () => {
+      const root = await tempRoot();
+      await addLine(root, { id: 'variations', code: 'V', name: '変分線', layout: 'up' }, '14-calculus-of-variations', [
+        { name: '汎関数', id: 'functional', requires: 'hilbert-space' },
+      ]);
+      const r = await buildIn(root);
+      assert.deepEqual(r.errors, []);
+      const s = await serve(path.join(root, 'dist'));
+      tall = { root, ...s };
+    });
+    after(async () => {
+      await tall?.close();
+      if (tall) await fs.rm(tall.root, { recursive: true, force: true });
+    });
+
+    test('18. スクロールバーはなく、ドラッグで横にも縦にも動く。駅の上からのドラッグでは移らない', async () => {
       const { context, page } = await open();
       await page.goto(server.url);
       const frame = frameOf(page);
@@ -1261,6 +1278,38 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
       const after = await svgBox(page);
       assert.ok(after.x < before.x - 100, `図が左へ動いていない(${before.x} → ${after.x})`);
       assert.equal(new URL(page.url()).pathname, '/');
+      // 枠より高い図は、上へドラッグすると上へ動く
+      await page.goto(/** @type {any} */ (tall).url);
+      // 枠(600px)が画面に収まるところまでページを動かしてから測る
+      await frameOf(page).scrollIntoViewIfNeeded();
+      const f = /** @type {any} */ (await frameOf(page).boundingBox());
+      const top = await svgBox(page);
+      assert.ok(top.height > f.height + 50, `図が枠より高くない(${top.height} と ${f.height})`);
+      await page.mouse.move(f.x + f.width / 2, f.y + f.height / 2 + 60);
+      await page.mouse.down();
+      await page.mouse.move(f.x + f.width / 2, f.y + f.height / 2 - 60, { steps: 10 });
+      await page.mouse.up();
+      await page.waitForTimeout(300);
+      const moved = await svgBox(page);
+      assert.ok(moved.y < top.y - 60, `図が上へ動いていない(${top.y} → ${moved.y})`);
+      await context.close();
+    });
+
+    test('35. 枠の高さは、1 倍のときの図の高さと 600px の小さいほう', async () => {
+      const { context, page } = await open();
+      const pages = [
+        [server.url, ''],
+        [`${server.url}fields/cs/`, ''],
+        [`${server.url}fields/physics/`, ''],
+        [/** @type {any} */ (tall).url, ''],
+      ];
+      for (const [url] of pages) {
+        await page.goto(url);
+        const frame = frameOf(page);
+        const natural = Number(await frame.locator('svg.map').getAttribute('height'));
+        const inner = await frame.evaluate((el) => el.clientHeight);
+        assert.ok(Math.abs(inner - Math.min(natural, 600)) <= 1, `${url}: 枠 ${inner}、図 ${natural}`);
+      }
       await context.close();
     });
 
@@ -1291,7 +1340,7 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
         const svg = frame.locator('svg.map');
         const natural = Number(await svg.getAttribute('width'));
         const naturalH = Number(await svg.getAttribute('height'));
-        const f = /** @type {any} */ (await frame.boundingBox());
+        const f = await frame.evaluate((el) => ({ width: el.clientWidth, height: el.clientHeight }));
         const fit = Math.min(1, f.width / natural, f.height / naturalH);
         const scale = async () => (await svgBox(page)).width / natural;
         for (let i = 0; i < 12; i++) await page.locator('.map-tools button[aria-label="縮小"]').first().click();
@@ -1307,14 +1356,34 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
       }
     });
 
-    test('20. 幅 400px の第3章では、今の章の帯の中央が枠の中に見える', async () => {
+    test('20. 幅 400px の第3章では、今の章の札の中央が枠の中に見える', async () => {
       const { context, page } = await open({ viewport: { width: 400, height: 800 } });
       await page.goto(`${server.url}${CH3}`);
       const frame = frameOf(page);
       const f = /** @type {any} */ (await frame.boundingBox());
-      const band = /** @type {any} */ (await frame.locator('rect.band.current').boundingBox());
-      const cx = band.x + band.width / 2;
-      assert.ok(cx > f.x && cx < f.x + f.width, `帯の中央 ${cx} が枠 ${f.x}..${f.x + f.width} の外`);
+      const card = /** @type {any} */ (await frame.locator('rect.card.current').boundingBox());
+      const cx = card.x + card.width / 2;
+      const cy = card.y + card.height / 2;
+      assert.ok(cx > f.x && cx < f.x + f.width, `札の中央 ${cx} が枠 ${f.x}..${f.x + f.width} の外`);
+      assert.ok(cy > f.y && cy < f.y + f.height, `札の中央 ${cy} が枠 ${f.y}..${f.y + f.height} の外`);
+      await context.close();
+    });
+
+    test('章ページの図では、今の章の札を枠の縦と横の中央に置く(図の端を越えては動かさない)', async () => {
+      const { context, page } = await open();
+      // 第16章のある全体の図は枠より高い。第4章(上の段)の札を縦の中央に置ける
+      await page.goto(`${/** @type {any} */ (tall).url}chapters/norm-inner-product/`);
+      const frame = frameOf(page);
+      const f = /** @type {any} */ (await frame.boundingBox());
+      const svg = await svgBox(page);
+      const card = /** @type {any} */ (await frame.locator('rect.card.current').boundingBox());
+      const dx = card.x + card.width / 2 - (f.x + f.width / 2);
+      const dy = card.y + card.height / 2 - (f.y + f.height / 2);
+      const clampedX = svg.x >= f.x || svg.x + svg.width <= f.x + f.width + 1;
+      const clampedY = svg.y >= f.y || svg.y + svg.height <= f.y + f.height + 1;
+      assert.ok(Math.abs(dx) <= 1 || clampedX, `横の中央からのずれ ${dx}`);
+      assert.ok(Math.abs(dy) <= 1 || clampedY, `縦の中央からのずれ ${dy}`);
+      assert.ok(Math.abs(dy) <= 1, `縦の中央からのずれ ${dy}(図の端で止まった)`);
       await context.close();
     });
 
@@ -1328,24 +1397,30 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
       assert.ok(before.x > f.x + f.width, '最初から枠の中にある');
       await link.focus();
       await page.waitForTimeout(100);
+      // フォーカスでページがスクロールすることがあるので、枠もフォーカスのあとで測り直す
+      const f2 = /** @type {any} */ (await frame.boundingBox());
       const r = /** @type {any} */ (await link.boundingBox());
-      assert.ok(r.x >= f.x && r.x + r.width <= f.x + f.width, `フォーカスした駅が枠の外(${r.x})`);
+      assert.ok(r.x >= f2.x && r.x + r.width <= f2.x + f2.width, `フォーカスした駅が枠の外(横 ${r.x})`);
+      assert.ok(r.y >= f2.y && r.y + r.height <= f2.y + f2.height, `フォーカスした駅が枠の外(縦 ${r.y})`);
       await context.close();
     });
 
-    test('22. スクリプトを止めると、ボタンはなく横スクロールになる', async () => {
+    test('22. スクリプトを止めると、ボタンはなく枠の中を横にも縦にもスクロールできる', async () => {
       const { context, page } = await open({ javaScriptEnabled: false });
       await page.goto(server.url);
       assert.equal(await page.locator('.map-tools').count(), 0);
       const frame = page.locator('.map-scroll').first();
       assert.equal(await frame.evaluate((el) => getComputedStyle(el).overflowX), 'auto');
+      assert.equal(await frame.evaluate((el) => getComputedStyle(el).overflowY), 'auto');
       assert.ok(await frame.evaluate((el) => el.scrollWidth > el.clientWidth));
+      // テスト用原稿の全体の図は 600px より高いので、縦にもスクロールできる
+      assert.ok(await frame.evaluate((el) => el.scrollHeight > el.clientHeight));
       await context.close();
     });
   });
 
-  describe('route-map: 23. 強調した帯の色(ブラウザ)', () => {
-    test('今の章の帯とポインタを重ねた帯は、ライトとダークで決めた強調の色', async () => {
+  describe('route-map: 23. 強調した札の色(ブラウザ)', () => {
+    test('今の章の札とポインタを重ねた札は、ライトとダークで決めた強調の色', async () => {
       for (const [scheme, hl] of /** @type {const} */ ([
         ['light', 'rgb(236, 232, 250)'],
         ['dark', 'rgb(64, 54, 111)'],
@@ -1354,15 +1429,15 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
         await page.goto(`${server.url}${CH3}`);
         const map = page.locator('.map:visible').first();
         const fill = (/** @type {import('playwright').Locator} */ l) => l.evaluate((e) => getComputedStyle(e).fill);
-        assert.equal(await fill(map.locator('.band.current')), hl, scheme);
+        assert.equal(await fill(map.locator('.card.current')), hl, scheme);
         const other = map
           .locator('a.ch')
-          .filter({ hasNot: page.locator('.band.current') })
+          .filter({ hasNot: page.locator('.card.current') })
           .first();
-        const plain = await fill(other.locator('.band'));
+        const plain = await fill(other.locator('.card'));
         assert.notEqual(plain, hl, scheme);
         await other.hover({ force: true });
-        assert.equal(await fill(other.locator('.band')), hl, scheme);
+        assert.equal(await fill(other.locator('.card')), hl, scheme);
         await context.close();
       }
     });
@@ -1373,10 +1448,21 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
       const stroke = async (/** @type {'light' | 'dark'} */ scheme) => {
         const { context, page } = await open({ colorScheme: scheme });
         await page.goto(server.url);
-        const r = await page.evaluate(() => ({
-          analysis: getComputedStyle(document.querySelector('path.l-analysis')).stroke,
-          main: getComputedStyle(document.querySelector('path.l-main')).stroke,
-        }));
+        const r = await page.evaluate(() => {
+          const style = (/** @type {string} */ sel) =>
+            getComputedStyle(/** @type {Element} */ (document.querySelector(sel)));
+          return {
+            analysis: style('path.l-analysis').stroke,
+            main: style('path.l-main').stroke,
+            // 札の枠、「第N章」の文字、表示番号の札の枠と文字も路線の色
+            parts: [
+              style('rect.card.l-analysis').stroke,
+              style('text.card-head.l-analysis').fill,
+              style('rect.plate.l-analysis').stroke,
+              style('text.code.l-analysis').fill,
+            ],
+          };
+        });
         await context.close();
         return r;
       };
@@ -1386,6 +1472,8 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
       assert.equal(dark.analysis, 'rgb(170, 152, 242)');
       assert.equal(light.main, 'rgb(135, 144, 161)');
       assert.equal(dark.main, 'rgb(135, 144, 161)');
+      assert.deepEqual(light.parts, Array(4).fill('rgb(91, 69, 184)'));
+      assert.deepEqual(dark.parts, Array(4).fill('rgb(170, 152, 242)'));
     });
   });
 
@@ -1799,8 +1887,8 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
       await page.goto(`${server.url}chapters/norm-inner-product/`);
       assert.equal(await mapScale(page), 1.5625);
       const frame = /** @type {any} */ (await page.locator('.map-v:visible .map-scroll').boundingBox());
-      const band = /** @type {any} */ (await page.locator('.map-v:visible rect.band.current').boundingBox());
-      assert.ok(Math.abs(band.x + band.width / 2 - (frame.x + frame.width / 2)) <= 1, '今の章の帯が枠の横の中央にない');
+      const card = /** @type {any} */ (await page.locator('.map-v:visible rect.card.current').boundingBox());
+      assert.ok(Math.abs(card.x + card.width / 2 - (frame.x + frame.width / 2)) <= 1, '今の章の札が枠の横の中央にない');
       await choose(page, 'theme', 'auto');
       await page.locator('#_settings button', { hasText: '元に戻す' }).click();
       await page.goto(`${server.url}chapters/norm-inner-product/`);

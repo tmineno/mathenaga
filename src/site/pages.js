@@ -11,7 +11,7 @@ import {
   chapterStations,
   nextChapter,
   prerequisiteChapters,
-  transferGuide,
+  otherLineGuide,
 } from '../core/navigation.js';
 import { byFieldOrder, stationItems, walkInline } from '../core/order.js';
 import { escapeHtml as h } from '../core/text.js';
@@ -452,10 +452,10 @@ class Renderer {
     const legend = layout.linesShown.map(
       (l) => `<li><span class="sw l-${l.id}${l.style === 'dotted' ? ' dotted' : ''}"></span>${h(l.name)}</li>`,
     );
-    if (layout.stations.some((s) => s.final)) legend.push('<li><span class="mk final"></span>終着駅</li>');
-    if (layout.stations.some((s) => s.transfer)) legend.push('<li><span class="mk transfer"></span>乗換駅</li>');
-    if (layout.stations.some((s) => s.partial)) legend.push('<li><span class="mk pill"></span>途中下車OK</li>');
-    if (layout.bands.some((b) => b.planned)) legend.push('<li><span class="mk planned"></span>未執筆</li>');
+    if (layout.stations.some((s) => s.final)) legend.push('<li><span class="mk final"></span>最終目標</li>');
+    if (layout.stations.some((s) => s.partial)) legend.push('<li><span class="mk pill"></span>途中の目標</li>');
+    if (layout.arrows.length > 0) legend.push('<li><span class="mk arrow"></span>前提の矢印</li>');
+    if (layout.cards.some((c) => c.planned)) legend.push('<li><span class="mk planned"></span>未執筆</li>');
     return { html: `<ul class="legend">${legend.join('')}</ul><div class="map-scroll">${svg}</div>`, layout };
   }
 
@@ -536,7 +536,7 @@ ${p.main}
         const st = this.site.stationById.get(g.station);
         if (!st) return '';
         const kind =
-          g.kind === 'final' ? '<span class="gk final">終着駅</span>' : '<span class="gk partial">途中下車OK</span>';
+          g.kind === 'final' ? '<span class="gk final">最終目標</span>' : '<span class="gk partial">途中の目標</span>';
         return `<li>${kind}${this.badge(st)}<span>${h(st.name)}</span><span class="note">${h(g.label)}</span></li>`;
       })
       .join('');
@@ -646,7 +646,7 @@ ${c.subtitle ? `<p class="ch-sub">${h(c.subtitle)}</p>` : ''}
         hrefFor: (s) => (s.chapter === c ? `#${s.id}` : `${this.chapterUrl(s.chapter.id, f.id)}#${s.id}`),
         chapterHref: (id) => (id === c.id ? '#' : this.chapterUrl(id, f.id)),
       });
-      const note = m.layout.bands.some((b) => b.current)
+      const note = m.layout.cards.some((c) => c.current)
         ? ''
         : `<p class="note">この章は${h(f.title)}の路線図に載っていません。</p>`;
       return `<div class="map-v" data-for="${h(f.id)}" hidden>${m.html}${note}</div>`;
@@ -727,7 +727,7 @@ ${aheadSec}
           .filter((g) => g.station === st.id)
           .map(
             (g) =>
-              `<p class="goal-note" data-goal-for="${h(f.id)}"><span class="gk ${g.kind}">${g.kind === 'final' ? '終着駅' : '途中下車OK'}</span>${h(f.title)}:${h(g.label)}</p>`,
+              `<p class="goal-note" data-goal-for="${h(f.id)}"><span class="gk ${g.kind}">${g.kind === 'final' ? '最終目標' : '途中の目標'}</span>${h(f.title)}:${h(g.label)}</p>`,
           ),
       )
       .join('');
@@ -856,7 +856,7 @@ ${notes}${items.join('')}${appHtml}${this.notesList(
       const finals = f
         ? chapterStations(this.site, c).filter((s) => f.goals.some((g) => g.kind === 'final' && g.station === s.id))
         : [];
-      text = finals.length ? `なし(この章の ${finals.map((s) => this.badge(s)).join('、')} が終着駅)` : 'なし';
+      text = finals.length ? `なし(この章の ${finals.map((s) => this.badge(s)).join('、')} が最終目標)` : 'なし';
     }
     if (f && !chapterInField(this.site, c, f.id)) text += ` <span class="note">この章は${h(f.title)}の範囲外</span>`;
     return text;
@@ -875,8 +875,8 @@ ${notes}${items.join('')}${appHtml}${this.notesList(
       for (const g of f.goals.filter((x) => x.station === st.id)) {
         items.push(
           g.kind === 'final'
-            ? `<li><b>終着駅</b>${h(f.title)}の目標「${h(g.label)}」には、この章の ${this.badge(st)} で到着します。</li>`
-            : `<li><b>途中下車</b>${h(g.label)}。この章の ${this.badge(st)} で降りて構いません。</li>`,
+            ? `<li><b>最終目標</b>${h(f.title)}の目標「${h(g.label)}」には、この章の ${this.badge(st)} で到達します。</li>`
+            : `<li><b>途中の目標</b>${h(g.label)}。この章の ${this.badge(st)} で読み終えて構いません。</li>`,
         );
       }
     }
@@ -893,7 +893,7 @@ ${notes}${items.join('')}${appHtml}${this.notesList(
         );
       }
     }
-    for (const t of transferGuide(site, c, f.id)) {
+    for (const t of otherLineGuide(site, c, f.id)) {
       const first = `<a href="${this.chapterUrl(t.first.chapter.id, f.id)}">第${t.first.chapter.number}章 ${h(t.first.chapter.title)}</a>`;
       // 分岐駅が2つ以上あれば(合流する支線)、読む順に「・」でつなぐ(site.md「この先」)
       const stations = t.branches.map(({ station: b, here }) =>
@@ -902,7 +902,7 @@ ${notes}${items.join('')}${appHtml}${this.notesList(
           : `${this.badge(b)} ${h(b.name)}(<a href="${this.chapterUrl(b.chapter.id, f.id)}#${h(b.id)}">第${b.chapter.number}章</a>)`,
       );
       const from = `${stations.join('・')}${t.branches[t.branches.length - 1].here ? ' から' : 'から'}`;
-      items.push(`<li><b>${h(t.line.name)}に乗り換える</b>${from}、${first}へ</li>`);
+      items.push(`<li><b>${h(t.line.name)}へ進む</b>${from}、${first}へ</li>`);
     }
     return items.join('');
   }
