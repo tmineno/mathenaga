@@ -79,6 +79,7 @@ content/
 | color_dark | ダークテーマで使う路線の色。`#RRGGBB`。書かなければ color を使う | 任意 |
 | style | 線の種類。`solid`(実線)か `dotted`(点線)。書かなければ `solid` | 任意 |
 | layout | 支線として分岐する向き。`up`・`down`・`right` のどれか。書かない路線は幹線になる。親の路線が幹線より上か下の段にあれば、向きは親の路線で決まり、この値は使わない([route-map.md](route-map.md)) | 任意 |
+| start | `true` なら、この支線を始発の路線にする。ほかの路線から分かれずに自分の最初の章から始まり、最初の駅の前提は前提の矢印で示す。`true` を書けるのは layout が `up` か `down` の路線だけ。書かなければ `false`([route-map.md](route-map.md)「始発の路線」) | 任意 |
 | planned | この路線に載る、まだ書いていない章の配列(下の「未執筆の章」) | 任意 |
 
 - 幹線は1つ以上要る。
@@ -116,12 +117,14 @@ content/
 |---|---|---|
 | chapter | 章番号。0 以上の整数。章フォルダの章番号とも、ほかの planned の章番号とも重複できない | 必須 |
 | title | 章のタイトル | 必須 |
-| stations | 予定の駅名の配列。1つ以上 | 必須 |
-| requires | 前提にする駅の ID の配列。路線図で、支線の分岐駅を決めるのに使う。読む順で前の駅だけを指せる | 任意 |
+| stations | 予定の駅の配列。1つ以上。各要素は、駅名の文字列か、`name`(駅名、必須)と `requires`(その駅が前提にする駅の ID の配列、任意)を持つ項目 | 必須 |
+| requires | 章の最初の駅が前提にする駅の ID の配列。stations の最初の要素に requires を書いたときは、この項目を書けない | 任意 |
 
+- requires(章の requires と、駅ごとの requires)は、書いた章の駅の ID だけを指せる(未執筆の駅には ID がない)。読む順で前の駅だけを指せる。
+- 路線図では、requires を支線の分岐駅を決めるのと、前提の矢印を決めるのに使う([route-map.md](route-map.md))。
 - 未執筆の章は、全体の路線図にだけ現れる([route-map.md](route-map.md))。章ページ・定義索引・次の章の案内・分野の範囲・参照範囲には入らない。
 - 未執筆の駅には ID も表示番号もなく、`[[…]]` の参照先にならない。表示番号は書いた駅だけで振るので、途中の章を書き終えると、その後ろの駅の表示番号は変わる。
-- 支線の最初の章が未執筆なら、requires に、幹線か路線ファイルでその支線より前にある支線の駅を書く。書かなければ E12 で止まる([route-map.md](route-map.md))。
+- 支線の最初の章が未執筆なら、requires に、幹線か路線ファイルでその支線より前にある支線の駅を書く。書かなければ E12 で止まる([route-map.md](route-map.md))。始発の路線では requires を書かなくてよいが、書くなら幹線か路線ファイルでその路線より前にある路線の駅にする。
 - 章を書き終えたら、章フォルダを置き、planned からその章を消す。消し忘れると章番号の重複で E04 になる。
 
 ```yaml
@@ -144,7 +147,7 @@ content/
 | description | 分野の入口ページに出す1〜3文の紹介文 | 必須 |
 | goals | 目標の配列。1つ以上で、kind が final のものを1つ以上含む | 必須 |
 | goals[].station | 目標の駅の ID | 必須 |
-| goals[].kind | `final`(終着駅)または `partial`(途中下車駅) | 必須 |
+| goals[].kind | `final`(最終目標)または `partial`(途中の目標) | 必須 |
 | goals[].label | 路線図と入口ページに出す目標の説明 | 必須 |
 
 - 同じ分野の goals に、同じ駅を2回書けない。
@@ -402,13 +405,13 @@ $$\forall \varepsilon > 0,\ \exists N,\ \forall m, n \ge N: d(x_m, x_n) < \varep
 |---|---|---|
 | E01 | 読み取りの失敗 | YAML・front matter が解釈できない。章フォルダに index.md がない |
 | E02 | 知らない名前 | 表にないブロック名・属性・YAML の項目(planned の中と文献の一覧を含む)。kind・layout・style・文献の type の値の誤り |
-| E03 | 値の形式 | ID の形式、`def-` で始まる ID、「章番号-章の ID」の形でない章フォルダ名、color・color_dark・code の形式、planned の形(配列でない、chapter が 0 以上の整数でない、stations・requires が文字列の配列でない、stations が空)、文献の形(year が4桁の整数でない、isbn の桁数かチェックディジットの誤り、`10.` で始まらない doi、authors が空、book でない文献の isbn、article でない文献の journal・issue・pages) |
+| E03 | 値の形式 | ID の形式、`def-` で始まる ID、「章番号-章の ID」の形でない章フォルダ名、color・color_dark・code の形式、start が true でも false でもない、layout が `up` でも `down` でもない路線の `start: true`、planned の形(配列でない、chapter が 0 以上の整数でない、stations の要素が文字列でも name を持つ項目でもない、requires が文字列の配列でない、stations が空)、文献の形(year が4桁の整数でない、isbn の桁数かチェックディジットの誤り、`10.` で始まらない doi、authors が空、book でない文献の isbn、article でない文献の journal・issue・pages) |
 | E04 | 重複 | 名前空間での ID の重複、章番号の重複(planned の章番号を含む)、路線記号の重複、同じ分野の goals での駅の重複、駅と ID を共有する定義が2つ以上 |
-| E05 | 参照先の誤り | 存在しない ID や種類の違う ID を指している。requires(planned の requires を含む)、line、goals の station、field 属性、`[[ID]]`、`[[@ID]]` が対象 |
-| E06 | 前提の順序 | requires が、読む順で後ろの駅か自分自身を指している。planned の requires が、その章より章番号の大きい章の駅を指している。循環があれば循環の一覧も出す |
+| E05 | 参照先の誤り | 存在しない ID や種類の違う ID を指している。requires(planned の章と駅の requires を含む)、line、goals の station、field 属性、`[[ID]]`、`[[@ID]]` が対象 |
+| E06 | 前提の順序 | requires が、読む順で後ろの駅か自分自身を指している。planned の requires(駅ごとの requires を含む)が、その章より章番号の大きい章の駅を指している。循環があれば循環の一覧も出す |
 | E07 | 名前の解決 | `[[名前]]` の候補が参照範囲にない、または2つ以上ある |
 | E08 | 必須の欠落 | front matter と YAML の必須項目、駅のない章、駅の summary、定理のある駅の proof-sketch、共通版の goal と motivation、review、definition の name と en、theorem の ID と name、application の field と title、answer のない question、final の目標がない分野、幹線のない路線ファイル、文献の必須項目(doi と isbn がどちらもない文献を含む) |
-| E09 | 個数・位置の誤り | summary・review・共通版が2つ以上、同じ分野の分野版が2つ以上、章頭の外の goal と motivation、駅の外の駅のブロック、章末の後の駅や地の文、question のない answer、ブロックの入れ子、1段目の見出し、ID のない2段目の見出し、駅の見出しの数式・参照・注 |
+| E09 | 個数・位置の誤り | summary・review・共通版が2つ以上、同じ分野の分野版が2つ以上、章頭の外の goal と motivation、駅の外の駅のブロック、章末の後の駅や地の文、question のない answer、ブロックの入れ子、1段目の見出し、ID のない2段目の見出し、駅の見出しの数式・参照・注、planned の章の requires と最初の駅の requires の両方を書いた |
 | E10 | 数式 | 閉じていない `$`、KaTeX が解釈できない数式、`\tag`・`\label`・`\eqref` などの番号と参照の命令 |
 | E11 | 図 | 参照先のファイルがない |
 | E14 | 注と引用 | 閉じていない `^[`、空の注(`^[]`)、注の中の注、注の中の別行立ての数式、definition の本文の中の注と文献の引用(`[[@文献ID]]`) |
@@ -479,6 +482,9 @@ $$\forall \varepsilon > 0,\ \exists N,\ \forall m, n \ge N: d(x_m, x_n) < \varep
    33. 文献の一覧の項目に `url: https://example.com/` を書く(E02)。
    34. 文献の一覧の kreyszig-fa に `volume: "I"` を書く(book の巻は書けるので E03 にはならない。fingerprint が記録と合わないので E15 だけ)。
    35. 文献の一覧の kreyszig-fa に `issue: "1"` を書く(article でない文献の issue なので E03。fingerprint が記録と合わないので E15)。
+   36. planned の第12章の stations の2番目の要素を `{name: ベクトル場, requires: [no-such-station]}` にする(E05)。
+   37. planned の第12章の stations の最初の要素を `{name: 接空間, requires: [banach]}` にし、第12章にも `requires: [banach]` を書く(E09)。
+   38. planned の第12章の stations の最初の要素を `{name: 接空間, color: red}` にする(E02)。
 5. 4 の誤りのうち、別々のファイルにある2つを同時に入れると、1回のビルドで両方が出る。
 6. 本文に `<script>alert(1)</script>` と書いた章をビルドすると、ページにはその文字列が文字として出て、script 要素はできない。
 7. テスト用原稿の文献の一覧には kreyszig-fa と lecun-deep-learning があり、どちらにも確認の記録がある。テスト用原稿の章から lecun-deep-learning の引用をすべて消してビルドすると、エラーはなく、N04 で lecun-deep-learning が出る。

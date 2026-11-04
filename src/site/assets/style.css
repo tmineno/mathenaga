@@ -8,8 +8,8 @@
   --rule: #d7dde6;
   --accent: #5b45b8;
   --accent-soft: #ece8fa;
-  /* 路線図で強調する帯と駅の札の地(route-map.md「印と凡例」)。ダークでは地との明るさの差が小さいので強める */
-  --band-hl: #ece8fa;
+  /* 路線図で強調する章の札と駅の札の地(route-map.md「印と凡例」)。ダークでは地との明るさの差が小さいので強める */
+  --card-hl: #ece8fa;
   --ok: #0f7f73;
   --ok-soft: #e0f2ef;
   --warn: #a3560f;
@@ -34,7 +34,7 @@
     --rule: #2a313e;
     --accent: #aa98f2;
     --accent-soft: #221d38;
-    --band-hl: #40366f;
+    --card-hl: #40366f;
     --ok: #4dc1b3;
     --ok-soft: #112e2a;
     --warn: #e69c59;
@@ -50,7 +50,7 @@
   --rule: #2a313e;
   --accent: #aa98f2;
   --accent-soft: #221d38;
-  --band-hl: #40366f;
+  --card-hl: #40366f;
   --ok: #4dc1b3;
   --ok-soft: #112e2a;
   --warn: #e69c59;
@@ -951,10 +951,6 @@ details.fold.proof > summary {
 .mk.final {
   background: var(--muted);
 }
-.mk.transfer {
-  border-color: var(--ink);
-  border-width: 3px;
-}
 .mk.pill {
   width: 24px;
   border-radius: 999px;
@@ -966,8 +962,36 @@ details.fold.proof > summary {
   border-style: dashed;
   border-color: var(--muted);
 }
+/* 前提の矢印の印:細い線と矢じり */
+.mk.arrow {
+  position: relative;
+  width: 28px;
+  height: 10px;
+  border: none;
+  border-radius: 0;
+  background: none;
+}
+.mk.arrow::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 7px;
+  top: 4px;
+  border-top: 1.5px solid var(--ink);
+}
+.mk.arrow::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 1px;
+  border-left: 7px solid var(--ink);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+}
+/* 枠の高さは、図の高さと 600px の小さいほう(route-map.md「図の操作」)。スクリプトが動かないときは縦横にスクロールする */
 .map-scroll {
-  overflow-x: auto;
+  overflow: auto;
+  max-height: 600px;
   background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: 10px;
@@ -982,6 +1006,7 @@ svg.map {
 .map-scroll.pan {
   position: relative;
   overflow: hidden;
+  max-height: none;
   padding: 0;
   cursor: grab;
   touch-action: pan-y;
@@ -1019,27 +1044,110 @@ svg.map {
   border-color: var(--accent);
   color: var(--accent);
 }
+/* 路線の線と分岐の線(route-map.md「印と凡例」)。線は押せない */
 .map .ln {
-  /* 線は押せない。帯の中で線の上を押しても、下の章の帯のリンクが働く */
   pointer-events: none;
   fill: none;
   stroke: var(--lc);
-  stroke-width: 8;
+  stroke-width: 6;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+.map .ln.branch {
+  stroke-width: 5;
+}
 .map .ln.dotted {
   stroke-width: 5;
-  stroke-dasharray: 0.5 10;
+  stroke-dasharray: 0.5 9;
+}
+.map .ln.planned {
+  stroke: var(--rule);
+  stroke-width: 4;
+  stroke-dasharray: 6 5;
+  stroke-linecap: butt;
+}
+/* 章の札。今の章は強調の色、未執筆の章は灰色の破線の枠 */
+.map .card {
+  fill: var(--surface);
+  stroke: var(--lc);
+  stroke-width: 2;
+}
+.map .card.current {
+  fill: var(--card-hl);
+}
+.map .card.planned {
+  stroke: var(--muted);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+}
+.map .card-head {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 700;
+  fill: var(--lc);
+}
+.map .card-head.planned {
+  fill: var(--muted);
+}
+.map .card-title {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  fill: var(--ink);
+}
+.map .card-title.planned {
+  fill: var(--muted);
+}
+/* 倍率ごとの表示(route-map.md「倍率ごとの表示」)。縮小したときの文字は、スクリプトが倍率から data-lod を
+   付けたときだけ出す(1 は概要、2 は章のタイトルだけ)。文字の大きさは map.js の GEOM.ov1…・ov2… と合わせる */
+.map .ov {
+  display: none;
+}
+.map .ov1.card-head {
+  font-size: 18px;
+}
+.map .ov1.card-title {
+  font-size: 22px;
+}
+.map .ov2.card-title {
+  font-size: 30px;
+}
+svg.map[data-lod='1'] .ov1,
+svg.map[data-lod='2'] .ov2 {
+  display: inline;
+}
+svg.map[data-lod='1'] :is(.card-head, .card-title):not(.ov),
+svg.map[data-lod='2'] :is(.card-head, .card-title):not(.ov),
+svg.map[data-lod='1'] :is(a.st, .pill, .label, .arrow-label, .branch-label),
+svg.map[data-lod='2'] :is(a.st, .pill, .label, .arrow-label, .branch-label) {
+  display: none;
+}
+/* 章の札は章のページの先頭へのリンク */
+.map a.ch:hover .card:not(.current),
+.map a.ch.on .card:not(.current),
+.map a.ch:focus .card:not(.current) {
+  fill: var(--card-hl);
+}
+.map a.ch:hover .card-title,
+.map a.ch.on .card-title,
+.map a.ch:focus .card-title {
+  text-decoration: underline;
+}
+.map a.ch:focus-visible {
+  outline: none;
+}
+.map a.ch:focus-visible .card {
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+/* 駅の行 */
+.map .hit {
+  fill: transparent;
 }
 .map .plate {
   fill: var(--surface);
   stroke: var(--lc);
-  stroke-width: 2.5;
-}
-.map .plate.transfer {
-  stroke: var(--ink);
-  stroke-width: 3.5;
+  stroke-width: 1.5;
 }
 .map .plate.final {
   fill: var(--lc);
@@ -1047,7 +1155,7 @@ svg.map {
 .map .code {
   font-family: var(--font-code);
   font-weight: 600;
-  font-size: 13px;
+  font-size: 11px;
   text-anchor: middle;
   dominant-baseline: central;
   fill: var(--lc);
@@ -1057,63 +1165,27 @@ svg.map {
 }
 .map .label {
   font-family: var(--font-body);
-  font-size: 13px;
-  fill: var(--ink);
-  text-anchor: middle;
-}
-/* 章の帯(route-map.md「印と凡例」)。今の章は強調の色、未執筆の章は灰色の破線の枠。 */
-.map .band {
-  fill: var(--paper);
-}
-.map .band.current {
-  fill: var(--band-hl);
-}
-.map .band.planned {
-  fill: none;
-  stroke: var(--muted);
-  stroke-width: 1;
-  stroke-dasharray: 4 3;
-}
-.map .band-label {
-  font-family: var(--font-body);
   font-size: 12px;
-  font-weight: 700;
-  fill: var(--muted);
-}
-.map .band-label.current {
-  fill: var(--accent);
-}
-/* 章の帯は章のページの先頭へのリンク */
-.map a.ch:hover .band:not(.current),
-.map a.ch.on .band:not(.current),
-.map a.ch:focus .band:not(.current) {
-  fill: var(--band-hl);
-}
-.map a.ch:hover .band-label,
-.map a.ch.on .band-label,
-.map a.ch:focus .band-label {
-  fill: var(--accent);
-  text-decoration: underline;
-}
-.map a.ch:focus-visible {
-  outline: none;
-}
-.map a.ch:focus-visible .band {
-  stroke: var(--accent);
-  stroke-width: 2;
-}
-/* 未執筆の駅と、そこへつながる線 */
-.map .ln.planned {
-  stroke: var(--rule);
-}
-.map .plate.planned {
-  fill: var(--surface);
-  stroke: var(--muted);
-  stroke-width: 1.5;
-  stroke-dasharray: 3 2;
+  fill: var(--ink);
 }
 .map .label.planned {
   fill: var(--muted);
+}
+.map a.st:hover .label,
+.map a.st:focus .label {
+  fill: var(--accent);
+  text-decoration: underline;
+}
+.map a.st:hover .plate:not(.final),
+.map a.st:focus .plate:not(.final) {
+  fill: var(--card-hl);
+}
+.map a.st:focus-visible {
+  outline: none;
+}
+.map a.st:focus-visible .plate {
+  stroke: var(--accent);
+  stroke-width: 3;
 }
 .map .pill rect {
   fill: var(--ok-soft);
@@ -1122,21 +1194,35 @@ svg.map {
 }
 .map .pill text {
   font-family: var(--font-body);
-  font-size: 12px;
+  font-size: 11px;
   fill: var(--ok);
   text-anchor: middle;
   dominant-baseline: central;
 }
-.map a.st:hover .plate,
-.map a.st:focus .plate {
-  fill: var(--band-hl);
+/* 前提の矢印とラベル。線とラベルは押せない */
+.map .arrow {
+  pointer-events: none;
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
 }
-.map a.st:focus-visible {
-  outline: none;
+.map .arrow-head {
+  pointer-events: none;
+  fill: var(--ink);
 }
-.map a.st:focus-visible .plate {
-  stroke: var(--accent);
-  stroke-width: 4;
+.map .arrow-label {
+  pointer-events: none;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 700;
+  fill: var(--ink);
+}
+.map .branch-label {
+  pointer-events: none;
+  font-family: var(--font-body);
+  font-size: 11px;
+  fill: var(--muted);
 }
 
 /* 駅のしおり(site.md「しおり」)と改善案の起票(site.md「改善案の起票」)のアイコン。

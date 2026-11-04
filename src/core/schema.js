@@ -16,6 +16,7 @@ const LINE_CODE = /^[A-Z]+$/;
  * @property {string} colorDark
  * @property {'solid' | 'dotted'} style
  * @property {'up' | 'down' | 'right' | null} layout
+ * @property {boolean} start  始発の路線(route-map.md「始発の路線」)。layout が up か down の路線だけ
  * @property {number} order  路線ファイルでの順
  * @property {PlannedChapter[]} planned  未執筆の章(書いた順)
  */
@@ -24,9 +25,14 @@ const LINE_CODE = /^[A-Z]+$/;
  * @typedef {object} PlannedChapter  路線ファイルの planned に書いた、未執筆の章
  * @property {number} number   章番号
  * @property {string} title
- * @property {string[]} stations  予定の駅名
- * @property {string[]} requires  前提にする駅の ID(書いたまま。存在の検査は graph.js)
+ * @property {PlannedStation[]} stations  予定の駅(読む順)
  * @property {string} lineId
+ */
+
+/**
+ * @typedef {object} PlannedStation  未執筆の章の予定の駅
+ * @property {string} name
+ * @property {string[]} requires  前提にする駅の ID(書いたまま。存在の検査は graph.js)。章に書いた requires は最初の駅のもの
  */
 
 /**
@@ -63,7 +69,7 @@ export function checkLines(data, file) {
     errors.push(issue('E01', file, null, '路線ファイルは路線の配列で書く'));
     return { lines, errors };
   }
-  const allowed = ['id', 'code', 'name', 'color', 'color_dark', 'style', 'layout', 'planned'];
+  const allowed = ['id', 'code', 'name', 'color', 'color_dark', 'style', 'layout', 'start', 'planned'];
   const codes = new Map();
   data.forEach((item, index) => {
     const where = `${index + 1}番目の路線`;
@@ -100,6 +106,11 @@ export function checkLines(data, file) {
     if (item.layout !== undefined && !['up', 'down', 'right'].includes(item.layout)) {
       errors.push(issue('E02', file, null, `${where}の layout「${item.layout}」は up・down・right のどれか`));
     }
+    if (item.start !== undefined && typeof item.start !== 'boolean') {
+      errors.push(issue('E03', file, null, `${where}の start「${item.start}」は true か false で書く`));
+    } else if (item.start === true && item.layout !== 'up' && item.layout !== 'down') {
+      errors.push(issue('E03', file, null, `${where}は start が true なので、layout に up か down を書く`));
+    }
     const planned = nonEmptyString(item.id) ? checkPlanned(item.planned, item.id, file, where, errors) : [];
     if (!nonEmptyString(item.id)) return;
     lines.push({
@@ -115,6 +126,7 @@ export function checkLines(data, file) {
             : '#888888',
       style: item.style === 'dotted' ? 'dotted' : 'solid',
       layout: ['up', 'down', 'right'].includes(item.layout) ? item.layout : null,
+      start: item.start === true && (item.layout === 'up' || item.layout === 'down'),
       order: index,
       planned,
     });
@@ -165,24 +177,50 @@ function checkPlanned(value, lineId, file, where, errors) {
       ok = false;
     }
     const strings = (/** @type {unknown} */ v) => Array.isArray(v) && v.every((x) => nonEmptyString(x));
-    if (
-      item.stations !== undefined &&
-      item.stations !== null &&
-      !(strings(item.stations) && item.stations.length > 0)
-    ) {
-      errors.push(issue('E03', file, null, `${w}の stations は駅名の配列で、1つ以上書く`));
-      ok = false;
+    /** @type {PlannedStation[]} */
+    const stations = [];
+    if (item.stations !== undefined && item.stations !== null) {
+      if (!Array.isArray(item.stations) || item.stations.length === 0) {
+        errors.push(issue('E03', file, null, `${w}の stations は駅の配列で、1つ以上書く`));
+        ok = false;
+      } else {
+        item.stations.forEach((/** @type {unknown} */ st, k) => {
+          const ws = `${w}の stations の${k + 1}番目`;
+          if (nonEmptyString(st)) {
+            stations.push({ name: st.trim(), requires: [] });
+            return;
+          }
+          if (!isObject(st) || !nonEmptyString(st.name)) {
+            errors.push(issue('E03', file, null, `${ws}は、駅名か、name を持つ項目で書く`));
+            ok = false;
+            return;
+          }
+          unknownKeys(st, ['name', 'requires'], file, ws, errors);
+          if (st.requires !== undefined && !strings(st.requires)) {
+            errors.push(issue('E03', file, null, `${ws}の requires は駅の ID の配列で書く`));
+            ok = false;
+            return;
+          }
+          stations.push({ name: st.name.trim(), requires: /** @type {string[]} */ (st.requires ?? []) });
+        });
+      }
     }
     if (item.requires !== undefined && !strings(item.requires)) {
       errors.push(issue('E03', file, null, `${w}の requires は駅の ID の配列で書く`));
       ok = false;
     }
+    // 章の requires は最初の駅の requires。両方に書くと、どちらを使うか決まらない
+    const first = Array.isArray(item.stations) ? item.stations[0] : undefined;
+    if (item.requires !== undefined && isObject(first) && first.requires !== undefined) {
+      errors.push(issue('E09', file, null, `${w}の requires と、stations の最初の駅の requires の両方が書かれている`));
+      ok = false;
+    }
     if (!ok) return;
+    if (item.requires !== undefined) stations[0].requires = item.requires;
     out.push({
       number: item.chapter,
       title: item.title,
-      stations: item.stations.map((x) => x.trim()),
-      requires: item.requires ?? [],
+      stations,
       lineId,
     });
   });
@@ -242,7 +280,7 @@ export function checkField(data, id, file) {
       }
     });
     if (!data.goals.some((g) => isObject(g) && g.kind === 'final')) {
-      errors.push(issue('E08', file, null, 'kind が final の目標(終着駅)がない'));
+      errors.push(issue('E08', file, null, 'kind が final の目標(最終目標)がない'));
     }
   }
   return {

@@ -6,7 +6,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { after, describe, test } from 'node:test';
 import { ROOT, analyze } from '../../src/build.js';
-import { chapterInField, nextChapter, prerequisiteChapters, transferGuide } from '../../src/core/navigation.js';
+import { chapterInField, nextChapter, otherLineGuide, prerequisiteChapters } from '../../src/core/navigation.js';
+import { branchStations, layoutMap, mapStations } from '../../src/core/map.js';
 import { versionOf } from '../../src/site/pages.js';
 import {
   CH3,
@@ -41,8 +42,8 @@ function capture(re, text) {
   return m[1];
 }
 
-/** 乗換案内を比べやすい形にする。 @param {any[]} items */
-function summarizeTransfers(items) {
+/** ほかの路線への案内を比べやすい形にする。 @param {any[]} items */
+function summarizeGuide(items) {
   return items.map((t) => ({
     line: t.line.id,
     branches: t.branches.map((/** @type {any} */ b) => ({
@@ -79,9 +80,20 @@ describe('build: 受け入れテスト', () => {
     for (const [id, code] of Object.entries(expected)) assert.equal(site.stationById.get(id).code, code, id);
   });
 
-  test('2. 乗換駅は4つだけ', async () => {
+  test('2. 全体の図の分岐駅は3つで、前提の矢印はない', async () => {
     const { site } = await ref();
-    assert.deepEqual([...site.transfers].sort(), ['continuous-map', 'metric-space', 'reading-proofs', 'sets-maps']);
+    const all = mapStations(site);
+    const { branches } = branchStations(site, new Set(all.map((s) => s.id)), all);
+    assert.deepEqual(
+      [...branches].map(([line, info]) => [line, info.stations.map((s) => s.id)]),
+      [
+        ['analysis', ['metric-space']],
+        ['geometry', ['continuous-map']],
+        ['set-theory', ['sets-maps']],
+      ],
+    );
+    const overall = layoutMap(site, new Set(site.stations.map((s) => s.id)), { planned: true });
+    assert.deepEqual(overall.arrows, []);
   });
 
   test('3. 第3章の前提は第1章だけ', async () => {
@@ -132,17 +144,17 @@ describe('build: 受け入れテスト', () => {
     assert.equal(nextChapter(site, ch(9), null), null);
   });
 
-  test('7. 乗換案内', async () => {
+  test('7. ほかの路線への案内', async () => {
     const { site, ch } = await ref();
-    assert.deepEqual(summarizeTransfers(transferGuide(site, ch(3), 'physics')), [
+    assert.deepEqual(summarizeGuide(otherLineGuide(site, ch(3), 'physics')), [
       { line: 'geometry', branches: [{ id: 'continuous-map', ch: 2, here: false }], firstCh: 6 },
     ]);
-    assert.equal(transferGuide(site, ch(3), 'physics')[0].first.id, 'topological-space');
-    assert.deepEqual(summarizeTransfers(transferGuide(site, ch(1), 'physics')), [
+    assert.equal(otherLineGuide(site, ch(3), 'physics')[0].first.id, 'topological-space');
+    assert.deepEqual(summarizeGuide(otherLineGuide(site, ch(1), 'physics')), [
       { line: 'analysis', branches: [{ id: 'metric-space', ch: 1, here: true }], firstCh: 3 },
       { line: 'geometry', branches: [{ id: 'continuous-map', ch: 2, here: false }], firstCh: 6 },
     ]);
-    assert.deepEqual(transferGuide(site, ch(3), 'cs'), []);
+    assert.deepEqual(otherLineGuide(site, ch(3), 'cs'), []);
   });
 
   test('8. 第3章の参照がすべて解決し、原稿の数式がすべて描画される', async () => {
@@ -497,7 +509,7 @@ describe('build: 受け入れテスト', () => {
     assert.match(errors[0].message, /\[\[@app-function-space\]\] で指す/);
   });
 
-  test('28. 合流する支線の乗換案内は、分岐駅を読む順にすべて持つ', async () => {
+  test('28. 合流する支線のほかの路線への案内は、分岐駅を読む順にすべて持つ', async () => {
     const root = await tempRoot();
     roots.push(root);
     await addMergeLine(root);
@@ -507,7 +519,7 @@ describe('build: 受け入れテスト', () => {
     const r = await analyzeIn(root);
     const site = r.ctx.site;
     const ch5 = /** @type {any} */ (site.chapters.find((c) => c.number === 5));
-    const item = summarizeTransfers(transferGuide(site, ch5, 'physics')).find((t) => t.line === MERGE_LINE.id);
+    const item = summarizeGuide(otherLineGuide(site, ch5, 'physics')).find((t) => t.line === MERGE_LINE.id);
     assert.deepEqual(item, {
       line: MERGE_LINE.id,
       branches: [
@@ -520,7 +532,7 @@ describe('build: 受け入れテスト', () => {
     const page = await readDist(path.join(root, 'dist'), 'chapters/hilbert-spaces/index.html');
     assert.match(
       page,
-      /リーマン幾何線に乗り換える<\/b>この章の .*?ヒルベルト空間・.*?多様体\(<a href="\/chapters\/manifolds\/\?field=physics#manifold">第9章<\/a>\)から、/,
+      /リーマン幾何線へ進む<\/b>この章の .*?ヒルベルト空間・.*?多様体\(<a href="\/chapters\/manifolds\/\?field=physics#manifold">第9章<\/a>\)から、/,
     );
   });
 

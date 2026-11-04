@@ -1,4 +1,4 @@
-// 章ページの案内:次の章、章の前提、乗換案内(docs/spec/build.md「導出する値」)と、
+// 章ページの案内:次の章、章の前提、ほかの路線への案内(docs/spec/build.md「導出する値」)と、
 // 図ごとの分岐駅の検査(docs/spec/route-map.md の E12・N03)。
 
 import { issue } from './issues.js';
@@ -61,7 +61,7 @@ export function chapterStations(site, chapter) {
 }
 
 /**
- * @typedef {object} TransferItem
+ * @typedef {object} OtherLineItem
  * @property {import('./schema.js').Line} line
  * @property {Array<{ station: import('./graph.js').StationInfo, here: boolean }>} branches
  *   分岐駅(1つ以上、読む順)と、それがこの章にあるか
@@ -69,7 +69,7 @@ export function chapterStations(site, chapter) {
  */
 
 /**
- * 乗換案内。分野を選んだ章で、章の路線と違い、分野の範囲に駅がある支線ごとに1項目。
+ * ほかの路線への案内。分野を選んだ章で、章の路線と違い、分野の範囲に駅がある支線ごとに1項目。
  * Preconditions: fieldId は分野の ID。
  * Postconditions: 路線ファイルの順に項目を返す。分岐駅が決まらない支線は含めない。
  *   分岐駅が2つ以上ある支線(合流する支線)は、そのすべてを読む順に持つ。
@@ -78,9 +78,9 @@ export function chapterStations(site, chapter) {
  * @param {import('./graph.js').Site} site
  * @param {import('./chapter.js').ChapterModel} chapter
  * @param {string} fieldId
- * @returns {TransferItem[]}
+ * @returns {OtherLineItem[]}
  */
-export function transferGuide(site, chapter, fieldId) {
+export function otherLineGuide(site, chapter, fieldId) {
   const scope = site.scope.get(fieldId) ?? new Set();
   const { branches } = branchStations(site, scope);
   const items = [];
@@ -100,7 +100,7 @@ export function transferGuide(site, chapter, fieldId) {
 /**
  * 全体の図と分野ごとの図で、分岐駅の検査(E12)と right の扱い(N03)を行う。
  * Preconditions: site は buildSite の結果。
- * Postconditions: E12 のエラーと N03 の通知を返す。章ページの図は全体の図・分野の図と配置が同じなので数えない。
+ * Postconditions: E12 のエラー(始発の路線の最初の駅が後ろの路線を前提にするものを含む)と N03 の通知を返す。章ページの図は全体の図・分野の図と配置が同じなので数えない。
  * Failure modes: なし。
  * Side effects: なし。
  * @param {import('./graph.js').Site} site
@@ -133,6 +133,18 @@ export function checkMaps(site, linesFile) {
           x.first.chapter.file,
           x.first.model.line,
           `${m.name}:支線 ${x.line.name} の最初の駅 ${x.first.id} が、幹線の駅も、路線ファイルで前にある支線の駅も前提にしていない`,
+        ),
+      );
+    }
+    for (const x of layout.lateStarts) {
+      const later = x.later.map((s) => s.id).join('、');
+      const where = x.first.planned ? `未執筆の第${x.first.chapter.number}章の「${x.first.name}」` : `${x.first.id}`;
+      errors.push(
+        issue(
+          'E12',
+          x.first.planned ? linesFile : x.first.chapter.file,
+          x.first.planned ? null : x.first.model.line,
+          `${m.name}:始発の路線 ${x.line.name} の最初の駅 ${where} が、路線ファイルで後ろにある路線の駅(${later})を前提にしている`,
         ),
       );
     }

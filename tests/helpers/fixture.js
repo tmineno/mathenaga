@@ -244,7 +244,7 @@ export async function addLine(root, line, folder, stations) {
 }
 
 /**
- * 分野の目標に終着駅を足す。
+ * 分野の目標に最終目標を足す。
  * @param {string} root @param {string} field @param {string} station
  */
 export async function addFinalGoal(root, field, station) {
