@@ -79,6 +79,7 @@ content/
 | color_dark | ダークテーマで使う路線の色。`#RRGGBB`。書かなければ color を使う | 任意 |
 | style | 線の種類。`solid`(実線)か `dotted`(点線)。書かなければ `solid` | 任意 |
 | layout | 支線として分岐する向き。`up`・`down`・`right` のどれか。書かない路線は幹線になる。親の路線が幹線より上か下の段にあれば、向きは親の路線で決まり、この値は使わない([route-map.md](route-map.md)) | 任意 |
+| start | `true` なら、この支線を始発の路線にする。ほかの路線から分かれずに自分の最初の章から始まり、最初の駅の前提は前提の矢印で示す。`true` を書けるのは layout が `up` か `down` の路線だけ。書かなければ `false`([route-map.md](route-map.md)「始発の路線」) | 任意 |
 | planned | この路線に載る、まだ書いていない章の配列(下の「未執筆の章」) | 任意 |
 
 - 幹線は1つ以上要る。
@@ -123,7 +124,7 @@ content/
 - 路線図では、requires を支線の分岐駅を決めるのと、前提の矢印を決めるのに使う([route-map.md](route-map.md))。
 - 未執筆の章は、全体の路線図にだけ現れる([route-map.md](route-map.md))。章ページ・定義索引・次の章の案内・分野の範囲・参照範囲には入らない。
 - 未執筆の駅には ID も表示番号もなく、`[[…]]` の参照先にならない。表示番号は書いた駅だけで振るので、途中の章を書き終えると、その後ろの駅の表示番号は変わる。
-- 支線の最初の章が未執筆なら、requires に、幹線か路線ファイルでその支線より前にある支線の駅を書く。書かなければ E12 で止まる([route-map.md](route-map.md))。
+- 支線の最初の章が未執筆なら、requires に、幹線か路線ファイルでその支線より前にある支線の駅を書く。書かなければ E12 で止まる([route-map.md](route-map.md))。始発の路線では requires を書かなくてよいが、書くなら幹線か路線ファイルでその路線より前にある路線の駅にする。
 - 章を書き終えたら、章フォルダを置き、planned からその章を消す。消し忘れると章番号の重複で E04 になる。
 
 ```yaml
@@ -404,7 +405,7 @@ $$\forall \varepsilon > 0,\ \exists N,\ \forall m, n \ge N: d(x_m, x_n) < \varep
 |---|---|---|
 | E01 | 読み取りの失敗 | YAML・front matter が解釈できない。章フォルダに index.md がない |
 | E02 | 知らない名前 | 表にないブロック名・属性・YAML の項目(planned の中と文献の一覧を含む)。kind・layout・style・文献の type の値の誤り |
-| E03 | 値の形式 | ID の形式、`def-` で始まる ID、「章番号-章の ID」の形でない章フォルダ名、color・color_dark・code の形式、planned の形(配列でない、chapter が 0 以上の整数でない、stations の要素が文字列でも name を持つ項目でもない、requires が文字列の配列でない、stations が空)、文献の形(year が4桁の整数でない、isbn の桁数かチェックディジットの誤り、`10.` で始まらない doi、authors が空、book でない文献の isbn、article でない文献の journal・issue・pages) |
+| E03 | 値の形式 | ID の形式、`def-` で始まる ID、「章番号-章の ID」の形でない章フォルダ名、color・color_dark・code の形式、start が true でも false でもない、layout が `up` でも `down` でもない路線の `start: true`、planned の形(配列でない、chapter が 0 以上の整数でない、stations の要素が文字列でも name を持つ項目でもない、requires が文字列の配列でない、stations が空)、文献の形(year が4桁の整数でない、isbn の桁数かチェックディジットの誤り、`10.` で始まらない doi、authors が空、book でない文献の isbn、article でない文献の journal・issue・pages) |
 | E04 | 重複 | 名前空間での ID の重複、章番号の重複(planned の章番号を含む)、路線記号の重複、同じ分野の goals での駅の重複、駅と ID を共有する定義が2つ以上 |
 | E05 | 参照先の誤り | 存在しない ID や種類の違う ID を指している。requires(planned の章と駅の requires を含む)、line、goals の station、field 属性、`[[ID]]`、`[[@ID]]` が対象 |
 | E06 | 前提の順序 | requires が、読む順で後ろの駅か自分自身を指している。planned の requires(駅ごとの requires を含む)が、その章より章番号の大きい章の駅を指している。循環があれば循環の一覧も出す |
