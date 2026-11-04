@@ -1,6 +1,6 @@
 // 値を書かない不変条件(ADR-004)。テスト用原稿と今の原稿の両方で確かめる。
 // 期待値はどれも、ビルドとは別の単純な読み方で原稿から作り、具体的な値は書かない。
-// build.md 8・9・11・16・21・26・27、content-format.md 2、route-map.md 6・29・30 のうち、値によらない部分。
+// build.md 8・9・11・16・21・26・27、content-format.md 2、route-map.md 6・29・30・36 のうち、値によらない部分。
 
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -175,7 +175,7 @@ for (const [name, src, load] of MANUSCRIPTS) {
       for (const [k, v] of first) assert.ok(v.equals(/** @type {Buffer} */ (second.get(k))), `${k} が違う`);
     });
 
-    test('route-map 6. どの図でも札・駅名・印・帯の文字・線が重ならない', async () => {
+    test('route-map 6. どの図でも札・札の中の文字と印・ラベル・線が重ならない', async () => {
       const { ctx } = await load();
       const site = ctx.site;
       const all = new Set(site.stations.map((s) => s.id));
@@ -206,6 +206,7 @@ for (const [name, src, load] of MANUSCRIPTS) {
         [...written].sort(),
       );
       const planned = (await linesOf(src)).flatMap((l) => (l.planned ?? []).flatMap((p) => p.stations));
+      assert.ok(planned.length > 0);
       assert.equal(overall.stations.filter((s) => s.info.planned).length, planned.length);
       for (const f of site.fields) {
         const map = layoutMap(site, site.scope.get(f.id), { goals: f.goals });
@@ -213,22 +214,44 @@ for (const [name, src, load] of MANUSCRIPTS) {
       }
     });
 
-    test('route-map 30. 幹線の路線の書いた駅は、幹線の高さに読む順で左から並ぶ', async () => {
+    test('route-map 30. 幹線の路線の書いた章の札は、幹線の段に読む順で左から並ぶ', async () => {
       const { ctx } = await load();
       const site = ctx.site;
       const trunk = new Set((await linesOf(src)).filter((l) => !l.layout).map((l) => l.id));
-      const expected = (await chaptersOf(src)).filter((c) => trunk.has(c.line)).flatMap((c) => c.stations);
+      const expected = (await chaptersOf(src)).filter((c) => trunk.has(c.line));
       assert.ok(expected.length > 0);
       const overall = layoutMap(site, new Set(site.stations.map((s) => s.id)), { planned: true });
-      const drawn = overall.stations.filter((s) => !s.info.planned && trunk.has(s.info.lineId));
+      const drawn = overall.cards.filter((c) => !c.planned && trunk.has(c.lineId));
       assert.ok(
-        drawn.every((s) => s.y === 0),
-        '幹線の駅が幹線の高さにない',
+        drawn.every((c) => c.tier === 0),
+        '幹線の章の札が幹線の段にない',
+      );
+      const ordered = [...drawn].sort((a, b) => a.col - b.col);
+      assert.deepEqual(
+        ordered.map((c) => c.number),
+        expected.map((c) => c.number),
       );
       assert.deepEqual(
-        [...drawn].sort((a, b) => a.x - b.x).map((s) => s.info.id),
-        expected,
+        ordered.flatMap((c) => c.rows.map((r) => r.info.id)),
+        expected.flatMap((c) => c.stations),
       );
+    });
+
+    test('route-map 36. どの図の SVG・凡例・desc にも、乗換・終着・途中下車の文字列がない', async () => {
+      const { dist } = await load();
+      const pages = (await listFiles(dist)).filter((f) => f.endsWith('.html'));
+      let maps = 0;
+      for (const f of pages) {
+        const html = await readDist(dist, f);
+        const parts = [...html.matchAll(/<svg class="map"[\s\S]*?<\/svg>|<ul class="legend">[\s\S]*?<\/ul>/g)];
+        maps += parts.length;
+        for (const [part] of parts) {
+          for (const word of ['乗換', '終着', '途中下車'])
+            assert.ok(!part.includes(word), `${f} の路線図に「${word}」がある`);
+        }
+      }
+      // 調べた範囲が空でないこと(路線図のあるページを読んだこと)を確かめる
+      assert.ok(maps > pages.length, `路線図と凡例が ${maps} 個しか見つからない`);
     });
   });
 }
