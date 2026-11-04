@@ -141,7 +141,8 @@ function clampLines(lines, max, width, font) {
 /**
  * 図ごとの分岐駅を決める(docs/spec/route-map.md「分岐駅」)。
  * Preconditions: drawn は requires をさかのぼって閉じた駅の集合。
- * Postconditions: 支線 → BranchInfo と、分岐駅が決まらない支線の一覧を返す。候補は幹線と、
+ * Postconditions: 支線 → BranchInfo と、分岐駅が決まらない支線の一覧を返す。始発の路線は BranchInfo を持たず、
+ *   starts(路線 → その図に描く最初の駅)と、最初の駅が後ろの路線の駅を前提にするもの(lateStarts、E12)に入る。候補は幹線と、
  *   路線ファイルでその支線より前にある支線の駅に限るので、支線の親子は循環しない。
  * Failure modes: なし。
  * Side effects: なし。
@@ -155,6 +156,13 @@ export function branchStations(site, drawn, all = site.stations) {
   const branches = new Map();
   /** @type {Array<{ line: import('./schema.js').Line, first: import('./graph.js').StationInfo }>} */
   const missing = [];
+  /** 始発の路線と、その図に描く最初の駅 @type {Map<string, import('./graph.js').StationInfo>} */
+  const starts = new Map();
+  /**
+   * 最初の駅が、路線ファイルで後ろにある路線の駅を前提にしている始発の路線(E12)
+   * @type {Array<{ line: import('./schema.js').Line, first: import('./graph.js').StationInfo, later: import('./graph.js').StationInfo[] }>}
+   */
+  const lateStarts = [];
   /** 駅から requires をさかのぼって届く駅の ID @type {Map<string, Set<string>>} */
   const memo = new Map();
   /** @param {string} id @returns {Set<string>} */
@@ -174,7 +182,14 @@ export function branchStations(site, drawn, all = site.stations) {
   for (const line of site.lines) {
     if (line.layout === null) continue;
     const first = all.find((s) => s.lineId === line.id && drawn.has(s.id));
-    if (first) {
+    if (first && line.start) {
+      // 始発の路線は分岐駅を持たない。最初の駅の前提は前提の矢印で描く(route-map.md「始発の路線」)
+      starts.set(line.id, first);
+      const later = first.requires
+        .map((id) => /** @type {import('./graph.js').StationInfo} */ (site.stationById.get(id)))
+        .filter((s) => s && drawn.has(s.id) && s.lineId !== line.id && !earlier.has(s.lineId));
+      if (later.length > 0) lateStarts.push({ line, first, later });
+    } else if (first) {
       let candidates = first.requires
         .map((id) => /** @type {import('./graph.js').StationInfo} */ (site.stationById.get(id)))
         .filter((s) => s && drawn.has(s.id) && earlier.has(s.lineId));
@@ -196,7 +211,7 @@ export function branchStations(site, drawn, all = site.stations) {
     }
     earlier.add(line.id);
   }
-  return { branches, missing };
+  return { branches, missing, starts, lateStarts };
 }
 
 /**
@@ -204,7 +219,8 @@ export function branchStations(site, drawn, all = site.stations) {
  * @property {import('./schema.js').Line} line
  * @property {'up' | 'down' | 'right' | 'merge'} dir  merge は上下の両方から合流し、幹線の高さで右に置く支線
  * @property {number} row      同じ向きの段のうち幹線から何番目か(0 が最も近い)。right と merge は 0
- * @property {BranchInfo} info
+ * @property {BranchInfo | null} info  始発の路線は null
+ * @property {import('./graph.js').StationInfo | null} start  始発の路線の、その図に描く最初の駅
  */
 
 /**
@@ -216,16 +232,17 @@ export function branchStations(site, drawn, all = site.stations) {
 
 /**
  * 支線の向きと段を決める(route-map.md「配置」3・4)。座標は使わない。
- * Preconditions: branches は branchStations の結果。親の路線は路線ファイルで前にある。
- * Postconditions: 路線ファイルの順に RowPlan を返す。親の路線が描けない支線は含めない。
+ * Preconditions: branches と starts は branchStations の結果。親の路線は路線ファイルで前にある。
+ * Postconditions: 路線ファイルの順に RowPlan を返す。親の路線が描けない支線は含めない。始発の路線は layout の向きに置く。
  * Failure modes: なし。
  * Side effects: なし。
  * @param {import('./graph.js').Site} site
  * @param {Map<string, BranchInfo>} branches
+ * @param {Map<string, import('./graph.js').StationInfo>} starts
  * @param {Set<string>} trunkIds
  * @param {import('./graph.js').StationInfo | undefined} lastTrunk  その図の幹線の最後の駅
  */
-function planRows(site, branches, trunkIds, lastTrunk) {
+function planRows(site, branches, starts, trunkIds, lastTrunk) {
   /** @type {RowPlan[]} */
   const rows = [];
   /** @type {Fallback[]} */
@@ -236,6 +253,14 @@ function planRows(site, branches, trunkIds, lastTrunk) {
   let downs = 0;
   let midUsed = false;
   for (const line of site.lines) {
+    const start = starts.get(line.id);
+    if (start && (line.layout === 'up' || line.layout === 'down')) {
+      // 始発の路線は親の路線を持たないので、layout で上か下の段に置く(配置 3)
+      const dir = line.layout;
+      rows.push({ line, dir, row: dir === 'up' ? ups++ : downs++, info: null, start });
+      side.set(line.id, dir);
+      continue;
+    }
     const info = branches.get(line.id);
     if (line.layout === null || !info) continue;
     const sides = info.stations.map((s) => side.get(s.lineId));
@@ -268,7 +293,7 @@ function planRows(site, branches, trunkIds, lastTrunk) {
       dir = side.get(info.branch.lineId) === 'up' ? 'up' : 'down';
       fallbacks.push({ line, reason: '幹線より右の場所をほかの支線が使った', drawn: '主な分岐駅の側に' });
     }
-    rows.push({ line, dir, row: dir === 'up' ? ups++ : dir === 'down' ? downs++ : 0, info });
+    rows.push({ line, dir, row: dir === 'up' ? ups++ : dir === 'down' ? downs++ : 0, info, start: null });
     side.set(line.id, dir === 'up' || dir === 'down' ? dir : 'mid');
   }
   return { rows, fallbacks };
@@ -480,6 +505,8 @@ export function prerequisiteArrows(lines, shown, branches) {
  * @property {Arrow[]} arrows
  * @property {{ minX: number, minY: number, maxX: number, maxY: number }} bounds
  * @property {Array<{ line: import('./schema.js').Line, first: import('./graph.js').StationInfo }>} missing  E12
+ * @property {Array<{ line: import('./schema.js').Line, first: import('./graph.js').StationInfo, later: import('./graph.js').StationInfo[] }>} lateStarts
+ *   E12:最初の駅が、路線ファイルで後ろにある路線の駅を前提にしている始発の路線
  * @property {Fallback[]} fallbacks  N03
  * @property {import('./schema.js').Line[]} linesShown
  */
@@ -629,11 +656,11 @@ export function layoutMap(site, drawn, opts = {}) {
   if (opts.planned) drawn = new Set([...drawn, ...all.filter((s) => s.planned).map((s) => s.id)]);
   const shown = all.filter((s) => drawn.has(s.id));
   const byLine = new Map(site.lines.map((l) => [l.id, shown.filter((s) => s.lineId === l.id)]));
-  const { branches, missing } = branchStations(site, drawn, all);
+  const { branches, missing, starts, lateStarts } = branchStations(site, drawn, all);
   const trunkLines = site.lines.filter((l) => l.layout === null);
   const trunkIds = new Set(trunkLines.map((l) => l.id));
   const trunk = trunkLines.flatMap((l) => byLine.get(l.id) ?? []);
-  const { rows: plans, fallbacks } = planRows(site, branches, trunkIds, trunk[trunk.length - 1]);
+  const { rows: plans, fallbacks } = planRows(site, branches, starts, trunkIds, trunk[trunk.length - 1]);
 
   // ---- 札を格子に置く(配置 1〜5) ----
   /** @param {import('./graph.js').StationInfo[]} list */
@@ -687,17 +714,31 @@ export function layoutMap(site, drawn, opts = {}) {
   const branchPlans = [];
   for (const r of plans) {
     const groups = chaptersOf(byLine.get(r.line.id) ?? []);
-    const parents = r.info.stations.map((s) => cards.get(s.chapter.number));
+    if (r.start) {
+      // 始発の路線:最初の駅が前提にする駅を含む札のうち、最も右の札の次の列から(配置 5)
+      if (groups.length === 0) continue;
+      const cols = r.start.requires.flatMap((id) => {
+        const s = site.stationById.get(id);
+        const c = s && drawn.has(s.id) ? cards.get(s.chapter.number) : undefined;
+        return c ? [c.col] : [];
+      });
+      const begin = cols.length > 0 ? Math.max(...cols) + 1 : 0;
+      const tier = r.dir === 'up' ? -(r.row + 1) : r.row + 1;
+      groups.forEach((c, i) => addCard(c.chapter, c.stations, r.line.id, begin + i, tier));
+      continue;
+    }
+    const info = /** @type {BranchInfo} */ (r.info);
+    const parents = info.stations.map((s) => cards.get(s.chapter.number));
     if (groups.length === 0 || parents.some((p) => !p)) continue;
     const parentCols = parents.map((p) => /** @type {Card} */ (p).col);
     let start;
     if (r.dir === 'right') start = lastTrunkCol + 1;
     else if (r.dir === 'merge') start = Math.max(lastTrunkCol, ...parentCols) + 1;
-    else start = /** @type {Card} */ (cards.get(r.info.branch.chapter.number)).col + 1;
+    else start = /** @type {Card} */ (cards.get(info.branch.chapter.number)).col + 1;
     const tier = r.dir === 'up' ? -(r.row + 1) : r.dir === 'down' ? r.row + 1 : 0;
     groups.forEach((c, i) => addCard(c.chapter, c.stations, r.line.id, start + i, tier));
-    placedBranches.set(r.line.id, r.info);
-    branchPlans.push({ line: r.line, info: r.info, dir: r.dir });
+    placedBranches.set(r.line.id, info);
+    branchPlans.push({ line: r.line, info, dir: r.dir });
   }
   const cardList = [...cards.values()].sort((a, b) => a.number - b.number);
   const placedStations = all.flatMap((s) => {
@@ -1350,6 +1391,7 @@ export function layoutMap(site, drawn, opts = {}) {
       maxY: round(Math.max(...ys)),
     },
     missing,
+    lateStarts,
     fallbacks,
     linesShown: site.lines.filter((l) => cardList.some((c) => c.lineId === l.id)),
   };

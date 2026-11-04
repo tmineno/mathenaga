@@ -100,7 +100,7 @@ export function otherLineGuide(site, chapter, fieldId) {
 /**
  * 全体の図と分野ごとの図で、分岐駅の検査(E12)と right の扱い(N03)を行う。
  * Preconditions: site は buildSite の結果。
- * Postconditions: E12 のエラーと N03 の通知を返す。章ページの図は全体の図・分野の図と配置が同じなので数えない。
+ * Postconditions: E12 のエラー(始発の路線の最初の駅が後ろの路線を前提にするものを含む)と N03 の通知を返す。章ページの図は全体の図・分野の図と配置が同じなので数えない。
  * Failure modes: なし。
  * Side effects: なし。
  * @param {import('./graph.js').Site} site
@@ -133,6 +133,18 @@ export function checkMaps(site, linesFile) {
           x.first.chapter.file,
           x.first.model.line,
           `${m.name}:支線 ${x.line.name} の最初の駅 ${x.first.id} が、幹線の駅も、路線ファイルで前にある支線の駅も前提にしていない`,
+        ),
+      );
+    }
+    for (const x of layout.lateStarts) {
+      const later = x.later.map((s) => s.id).join('、');
+      const where = x.first.planned ? `未執筆の第${x.first.chapter.number}章の「${x.first.name}」` : `${x.first.id}`;
+      errors.push(
+        issue(
+          'E12',
+          x.first.planned ? linesFile : x.first.chapter.file,
+          x.first.planned ? null : x.first.model.line,
+          `${m.name}:始発の路線 ${x.line.name} の最初の駅 ${where} が、路線ファイルで後ろにある路線の駅(${later})を前提にしている`,
         ),
       );
     }
