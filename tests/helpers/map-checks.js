@@ -31,15 +31,19 @@ export function assertNoOverlap(name, layout) {
       assert.ok(!hit(cards[i], cards[j]), `${name}: ${cards[i].owner}と${cards[j].owner}の札が重なる`);
     }
   }
-  // 札の中の文字と印:同じ札の中で重ならず、札からはみ出さない
+  // 札の中の文字と印:札からはみ出さず、同じ札の同じ表示の段階(lod)の中で重ならない。
+  // 段階が違うもの(駅の行のある表示と、縮小したときの文字)は同時に表示しないので比べない
   for (const c of cards) {
     const own = boxes.filter((b) => b.card !== null && `第${b.card}章` === c.owner);
-    for (const b of own) assert.ok(inside(b, c), `${name}: ${b.kind}(${b.owner}) が${c.owner}の札からはみ出す`);
+    for (const b of own) {
+      assert.ok(inside(b, c), `${name}: ${b.kind}(${b.owner}、段階 ${b.lod}) が${c.owner}の札からはみ出す`);
+    }
     for (let i = 0; i < own.length; i++) {
       for (let j = i + 1; j < own.length; j++) {
+        if (own[i].lod !== own[j].lod) continue;
         const a = shrink(own[i]);
         const b = shrink(own[j]);
-        assert.ok(!hit(a, b), `${name}: ${a.kind}(${a.owner}) と ${b.kind}(${b.owner}) が重なる`);
+        assert.ok(!hit(a, b), `${name}: ${a.kind}(${a.owner}) と ${b.kind}(${b.owner}) が段階 ${a.lod} で重なる`);
       }
     }
   }

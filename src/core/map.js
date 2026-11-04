@@ -31,6 +31,14 @@ export const GEOM = {
   labelH: 13,
   labelPad: 3, // ラベルと線のすき間
   port: 12, // 札の辺の上で、矢印の出入りする点の間隔
+  // 縮小したときの札の文字(route-map.md「倍率ごとの表示」)。style.css の .ov1・.ov2 の文字の大きさと合わせる
+  ov1HeadFont: 18, // 概要:「第N章」の行
+  ov1HeadH: 22,
+  ov1Gap: 4,
+  ov1TitleFont: 22, // 概要:章のタイトル
+  ov1TitleLineH: 27,
+  ov2TitleFont: 30, // 章のタイトルだけ
+  ov2TitleLineH: 36,
 };
 
 /**
@@ -430,6 +438,13 @@ export function prerequisiteArrows(lines, shown, branches) {
  * @property {TextLine} head      「第N章」の行
  * @property {TextLine[]} titleLines
  * @property {PlacedStation[]} rows
+ * @property {Overview[]} overview  縮小したときの札の文字。[0] が概要、[1] が章のタイトルだけ
+ */
+
+/**
+ * @typedef {object} Overview  縮小したときの札の文字(札の左上を原点とする)
+ * @property {TextLine | null} head  「第N章」の行。章のタイトルだけの段階では null
+ * @property {TextLine[]} lines      章のタイトル
  */
 
 /**
@@ -530,7 +545,52 @@ function measureCard(chapter, stations, goals) {
     };
   });
   y += g.pad - g.rowGap;
-  return { head, titleLines, rows, h: y };
+  // 札の高さは、縮小したときの章のタイトル(3行まで)も入る高さにする(route-map.md「配置」6)
+  const lines = (/** @type {number} */ font) => Math.min(OV_MAX_LINES, wrapText(chapter.title, inner, font).length);
+  const h = Math.max(
+    y,
+    2 * g.pad + g.ov1HeadH + g.ov1Gap + lines(g.ov1TitleFont) * g.ov1TitleLineH,
+    2 * g.pad + lines(g.ov2TitleFont) * g.ov2TitleLineH,
+  );
+  return { head, titleLines, rows, h };
+}
+
+/** 縮小したときの章のタイトルの行の数の上限。札の高さはこの行数まで入るように決める */
+const OV_MAX_LINES = 3;
+
+/**
+ * 縮小したときの札の文字を決める(route-map.md「倍率ごとの表示」)。札の大きさは変えず、駅の行の代わりに
+ * 大きな文字で「第N章」の行と章のタイトル(概要)、または章のタイトルだけを書く。
+ * Preconditions: h は札の高さで、駅の行が1つ以上ある札の高さ(80px)以上。
+ * Postconditions: 2つの段階の文字を返す。どの行も札の内側に収まり、入らない行は末尾を「…」で省く。
+ * Failure modes: なし。
+ * Side effects: なし。
+ * @param {string} headText  「第N章」の行の文字
+ * @param {string} title
+ * @param {number} h
+ * @returns {Overview[]}
+ */
+function measureOverview(headText, title, h) {
+  const g = GEOM;
+  const inner = g.cardW - 2 * g.pad;
+  /** @param {number} top @param {number} font @param {number} lineH */
+  const fit = (top, font, lineH) => {
+    const max = Math.max(1, Math.floor((h - g.pad - top) / lineH));
+    return clampLines(wrapText(title, inner, font), max, inner, font).map((text, i) => ({
+      text,
+      x: g.pad,
+      y: top + i * lineH,
+      w: textWidth(text, font),
+      h: lineH,
+    }));
+  };
+  // 「このページ」「未執筆」を添えると入らないときは「第N章」だけにする
+  const text = textWidth(headText, g.ov1HeadFont) <= inner ? headText : headText.split(' ')[0];
+  const head = { text, x: g.pad, y: g.pad, w: textWidth(text, g.ov1HeadFont), h: g.ov1HeadH };
+  return [
+    { head, lines: fit(g.pad + g.ov1HeadH + g.ov1Gap, g.ov1TitleFont, g.ov1TitleLineH) },
+    { head: null, lines: fit(g.pad, g.ov2TitleFont, g.ov2TitleLineH) },
+  ];
 }
 
 /** 札の「第N章」の行の高さ(路線の線と分岐の線が札に入る高さ)。 @param {{ y: number }} card */
@@ -593,6 +653,7 @@ export function layoutMap(site, drawn, opts = {}) {
   const addCard = (chapter, stations, lineId, col, tier) => {
     const m = measureCard(chapter, stations, goals);
     const current = !chapter.planned && chapter.id === (opts.highlight ?? null);
+    const head = headText(chapter, current);
     /** @type {Card} */
     const card = {
       number: chapter.number,
@@ -607,9 +668,10 @@ export function layoutMap(site, drawn, opts = {}) {
       y: 0,
       w: g.cardW,
       h: m.h,
-      head: { ...m.head, text: headText(chapter, current) },
+      head: { ...m.head, text: head },
       titleLines: m.titleLines,
       rows: /** @type {any} */ (m.rows),
+      overview: measureOverview(head, chapter.title, m.h),
     };
     for (const r of card.rows) r.card = card;
     cards.set(chapter.number, card);
@@ -1328,19 +1390,24 @@ export function segmentHitsBox(s, b) {
 /**
  * 札・札の中の文字と印・ラベルの外接矩形と、線の線分を返す(重なりの検査に使う)。
  * Preconditions: layout は layoutMap の結果。
- * Postconditions: boxes(kind と、札の中のものは持ち主の章番号付き)と segments(kind と線の名前付き)を返す。
+ * Postconditions: boxes(kind と、札の中のものは持ち主の章番号と表示の段階付き)と segments(kind と線の名前付き)を返す。
+ *   札の中のものの lod は、0 が駅の行のある表示、1 が概要、2 が章のタイトルだけ。段階が違うものは同時に表示しない。
  * Failure modes: なし。
  * Side effects: なし。
  * @param {MapLayout} layout
  */
 export function layoutBoxes(layout) {
-  /** @type {Array<{ kind: string, owner: string, card: number | null, x: number, y: number, w: number, h: number }>} */
+  /** @type {Array<{ kind: string, owner: string, card: number | null, lod: number | null, x: number, y: number, w: number, h: number }>} */
   const boxes = [];
   for (const c of layout.cards) {
     const own = `第${c.number}章`;
-    boxes.push({ kind: 'card', owner: own, card: null, x: c.x, y: c.y, w: c.w, h: c.h });
-    const inCard = (/** @type {string} */ kind, /** @type {string} */ owner, /** @type {Box} */ b) =>
-      boxes.push({ kind, owner, card: c.number, x: c.x + b.x, y: c.y + b.y, w: b.w, h: b.h });
+    boxes.push({ kind: 'card', owner: own, card: null, lod: null, x: c.x, y: c.y, w: c.w, h: c.h });
+    const inCard = (
+      /** @type {string} */ kind,
+      /** @type {string} */ owner,
+      /** @type {Box} */ b,
+      /** @type {number} */ lod = 0,
+    ) => boxes.push({ kind, owner, card: c.number, lod, x: c.x + b.x, y: c.y + b.y, w: b.w, h: b.h });
     inCard('head', own, { ...c.head, w: textWidth(c.head.text, GEOM.headFont) });
     for (const t of c.titleLines) inCard('title', own, t);
     for (const r of c.rows) {
@@ -1349,9 +1416,13 @@ export function layoutBoxes(layout) {
       for (const t of r.name) inCard('name', owner, t);
       if (r.pill) inCard('pill', owner, r.pill);
     }
+    c.overview.forEach((o, i) => {
+      if (o.head) inCard('head', own, o.head, i + 1);
+      for (const t of o.lines) inCard('title', own, t, i + 1);
+    });
   }
   for (const l of layout.labels)
-    boxes.push({ kind: 'label', owner: l.text, card: null, x: l.x, y: l.y, w: l.w, h: l.h });
+    boxes.push({ kind: 'label', owner: l.text, card: null, lod: null, x: l.x, y: l.y, w: l.w, h: l.h });
   /** @type {Array<{ kind: string, id: string, group: string | null, lineId: string, x1: number, y1: number, x2: number, y2: number }>} */
   const segments = [];
   for (const l of layout.links) {
@@ -1414,10 +1485,33 @@ export function renderMapSvg(layout, opts) {
         return `<tspan x="${p.x}" y="${round(p.y + GEOM.titleFont)}">${escapeXml(t.text)}</tspan>`;
       })
       .join('');
+    // 縮小したときの文字(route-map.md「倍率ごとの表示」)。スクリプトが段階を決めるまでは出さない
+    const fonts = [
+      { head: GEOM.ov1HeadFont, title: GEOM.ov1TitleFont },
+      { head: 0, title: GEOM.ov2TitleFont },
+    ];
+    const overview = c.overview
+      .map((o, i) => {
+        const cls = `ov ov${i + 1}`;
+        const lines = o.lines
+          .map((t) => {
+            const p = at(t);
+            return `<tspan x="${p.x}" y="${round(p.y + fonts[i].title)}">${escapeXml(t.text)}</tspan>`;
+          })
+          .join('');
+        const h = o.head ? at(o.head) : null;
+        return (
+          (o.head && h
+            ? `<text class="${[cls, 'card-head', `l-${c.lineId}`, ...flags].join(' ')}" x="${h.x}" y="${round(h.y + fonts[i].head - 1)}">${escapeXml(o.head.text)}</text>`
+            : '') + `<text class="${cls} card-title${c.planned ? ' planned' : ''}">${lines}</text>`
+        );
+      })
+      .join('');
     const body =
       `<rect class="${['card', `l-${c.lineId}`, ...flags].join(' ')}" x="${c.x}" y="${c.y}" width="${c.w}" height="${round(c.h)}" rx="6"/>` +
       `<text class="${['card-head', `l-${c.lineId}`, ...flags].join(' ')}" x="${head.x}" y="${round(head.y + GEOM.headFont - 1)}">${escapeXml(c.head.text)}</text>` +
-      `<text class="card-title${c.planned ? ' planned' : ''}">${title}</text>`;
+      `<text class="card-title${c.planned ? ' planned' : ''}">${title}</text>` +
+      overview;
     const href = !c.planned && c.chapterId && opts.chapterHref ? opts.chapterHref(c.chapterId) : null;
     out.push(
       href

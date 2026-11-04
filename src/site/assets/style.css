@@ -1098,6 +1098,30 @@ svg.map {
 .map .card-title.planned {
   fill: var(--muted);
 }
+/* 倍率ごとの表示(route-map.md「倍率ごとの表示」)。縮小したときの文字は、スクリプトが倍率から data-lod を
+   付けたときだけ出す(1 は概要、2 は章のタイトルだけ)。文字の大きさは map.js の GEOM.ov1…・ov2… と合わせる */
+.map .ov {
+  display: none;
+}
+.map .ov1.card-head {
+  font-size: 18px;
+}
+.map .ov1.card-title {
+  font-size: 22px;
+}
+.map .ov2.card-title {
+  font-size: 30px;
+}
+svg.map[data-lod='1'] .ov1,
+svg.map[data-lod='2'] .ov2 {
+  display: inline;
+}
+svg.map[data-lod='1'] :is(.card-head, .card-title):not(.ov),
+svg.map[data-lod='2'] :is(.card-head, .card-title):not(.ov),
+svg.map[data-lod='1'] :is(a.st, .pill, .label, .arrow-label, .branch-label),
+svg.map[data-lod='2'] :is(a.st, .pill, .label, .arrow-label, .branch-label) {
+  display: none;
+}
 /* 章の札は章のページの先頭へのリンク */
 .map a.ch:hover .card:not(.current),
 .map a.ch.on .card:not(.current),

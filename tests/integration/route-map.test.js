@@ -703,6 +703,31 @@ describe('route-map: 重なりの検査そのもの', () => {
     });
     assert.throws(() => assertNoOverlap('test', l), /重なって進む/);
   });
+  test('縮小したときの章のタイトルが札からはみ出すと失敗する', async () => {
+    const l = await broken((x) => {
+      const c = card(x, 3);
+      c.overview[1].lines[0].y = c.h - 5;
+    });
+    assert.throws(() => assertNoOverlap('test', l), /title\(第3章、段階 2\) が第3章の札からはみ出す/);
+  });
+  test('同じ段階の文字どうしが重なると失敗する', async () => {
+    const l = await broken((x) => {
+      const ov = card(x, 3).overview[0];
+      ov.lines[0].y = ov.head.y + 4;
+    });
+    assert.throws(() => assertNoOverlap('test', l), /段階 1 で重なる/);
+  });
+  test('段階の違う文字どうしは、重なっていても比べない', async () => {
+    const l = await broken(() => {});
+    // 比べないことを確かめるには、段階の違う文字が実際に重なっている必要がある
+    const { boxes } = layoutBoxes(l);
+    const inner = boxes.filter((b) => b.card === 3);
+    const crossed = inner.some((a) =>
+      inner.some((b) => a.lod !== b.lod && a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h),
+    );
+    assert.ok(crossed, '段階の違う文字が重なっていない');
+    assertNoOverlap('test', l);
+  });
   test('layoutBoxes は札・札の中の文字・ラベル・線を返す', async () => {
     const l = await broken(() => {});
     const { boxes, segments } = layoutBoxes(l);
@@ -712,6 +737,11 @@ describe('route-map: 重なりの検査そのもの', () => {
         kind,
       );
     }
+    for (const lod of [0, 1, 2])
+      assert.ok(
+        boxes.some((b) => b.lod === lod && b.kind === 'title'),
+        `段階 ${lod}`,
+      );
     for (const kind of ['line', 'branch', 'arrow']) {
       assert.ok(
         segments.some((s) => s.kind === kind),
@@ -728,6 +758,44 @@ describe('route-map: 駅名の折り返し', () => {
     assert.deepEqual(wrapText('ヒルベルト空間', 78, 13), ['ヒルベルト', '空間']);
     assert.deepEqual(wrapText('コンパクト性と連結性', 100, 13), ['コンパクト性と', '連結性']);
     assert.deepEqual(wrapText('記号の読み方', 124, 12), ['記号の読み方']);
+  });
+});
+
+describe('route-map: 倍率ごとの表示(札の中の文字)', () => {
+  /** @param {string} t */
+  const squash = (t) => t.replace(/ /g, '');
+  test('概要は「第N章」の行と章のタイトルを、章のタイトルだけの段階はタイトルを、駅の行の段階より大きな文字で書く', async () => {
+    const { site, all } = await maps();
+    const page = layoutMap(site, all, { planned: true, highlight: 'completeness-fixed-point' });
+    for (const c of page.cards) {
+      const [ov1, ov2] = c.overview;
+      const name = `第${c.number}章`;
+      assert.equal(ov1.head?.text, c.head.text, name);
+      assert.equal(ov2.head, null, name);
+      for (const ov of [ov1, ov2]) {
+        const text = ov.lines.map((/** @type {any} */ t) => t.text).join('');
+        assert.equal(squash(text), squash(c.title), name);
+      }
+      assert.ok(ov1.lines[0].h > c.titleLines[0].h, name);
+      assert.ok(ov2.lines[0].h > ov1.lines[0].h, name);
+    }
+    assert.equal(card(page, 3).overview[0].head.text, '第3章 このページ');
+    assert.equal(card(page, 10).overview[0].head.text, '第10章 未執筆');
+  });
+  test('札の高さに入らない章のタイトルは、末尾を「…」で省く', async () => {
+    const root = await rootWith((r) =>
+      edit(r, 'chapters/09-manifolds/index.md', (t) =>
+        replaceOnce(t, 'title: 多様体', 'title: 曲がった空間の上で微分と積分を行うための多様体の基礎'),
+      ),
+    );
+    const overall = overallOf(await siteOf(root));
+    for (const ov of card(overall, 9).overview) {
+      assert.ok(
+        ov.lines[ov.lines.length - 1].text.endsWith('…'),
+        ov.lines.map((/** @type {any} */ t) => t.text).join('/'),
+      );
+    }
+    assertNoOverlap('長い章のタイトル', overall);
   });
 });
 

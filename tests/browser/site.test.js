@@ -1369,21 +1369,142 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
       await context.close();
     });
 
-    test('章ページの図では、今の章の札を枠の縦と横の中央に置く(図の端を越えては動かさない)', async () => {
+    test('41. 拡大して、枠からはみ出した章の札を押すと、1回でその章のページへ移る', async () => {
       const { context, page } = await open();
-      // 第16章のある全体の図は枠より高い。第4章(上の段)の札を縦の中央に置ける
-      await page.goto(`${/** @type {any} */ (tall).url}chapters/norm-inner-product/`);
+      await page.goto(server.url);
+      for (let i = 0; i < 2; i++) await page.locator('.map-tools button[aria-label="拡大"]').first().click();
       const frame = frameOf(page);
+      await frame.scrollIntoViewIfNeeded();
+      // 札の上端が枠の中にあり、右端が枠の右の辺からはみ出した札を探し、枠の中に見えている部分の左上の余白を押す
+      const target = await frame.evaluate((fr) => {
+        const f = fr.getBoundingClientRect();
+        for (const a of fr.querySelectorAll('a.ch')) {
+          const r = /** @type {Element} */ (a.querySelector('rect.card')).getBoundingClientRect();
+          const visible = Math.min(r.right, f.right - 2) - Math.max(r.left, f.left);
+          if (r.right > f.right && r.top > f.top + 4 && r.top + 12 < f.bottom && visible > 12) {
+            return { href: a.getAttribute('href'), x: Math.max(r.left, f.left) + 6, y: r.top + 5 };
+          }
+        }
+        return null;
+      });
+      assert.ok(target, '枠の右の辺からはみ出した札がない');
+      await page.mouse.click(target.x, target.y);
+      await page.waitForURL((u) => u.pathname === target.href, { timeout: 5000 });
+      await context.close();
+    });
+
+    test('40. 章ページの図では、図の端の近くの札でも、今の章の札の中央を枠の中央に置く', async () => {
+      const { context, page } = await open();
+      const pages = [
+        `${server.url}chapters/reading-basics/`, // 図の左端の札
+        `${server.url}chapters/manifolds/`, // 図の下の段の札
+        `${/** @type {any} */ (tall).url}chapters/norm-inner-product/`,
+      ];
+      for (const url of pages) {
+        await page.goto(url);
+        const frame = frameOf(page);
+        const f = /** @type {any} */ (await frame.boundingBox());
+        const svg = await svgBox(page);
+        // 中央に置くのは、図が枠より大きい向きだけ。この3つの図は横にも縦にも大きい
+        assert.ok(svg.width > f.width && svg.height > f.height, `${url}: 図 ${svg.width}x${svg.height}`);
+        const card = /** @type {any} */ (await frame.locator('rect.card.current').boundingBox());
+        const dx = card.x + card.width / 2 - (f.x + f.width / 2);
+        const dy = card.y + card.height / 2 - (f.y + f.height / 2);
+        assert.ok(Math.abs(dx) <= 1 && Math.abs(dy) <= 1, `${url}: 中央からのずれ ${dx}, ${dy}`);
+      }
+      // トップページの図を右へ大きくドラッグすると、図の左端が枠の中央で止まる
+      await page.goto(server.url);
+      const frame = frameOf(page);
+      await frame.scrollIntoViewIfNeeded();
       const f = /** @type {any} */ (await frame.boundingBox());
-      const svg = await svgBox(page);
-      const card = /** @type {any} */ (await frame.locator('rect.card.current').boundingBox());
-      const dx = card.x + card.width / 2 - (f.x + f.width / 2);
-      const dy = card.y + card.height / 2 - (f.y + f.height / 2);
-      const clampedX = svg.x >= f.x || svg.x + svg.width <= f.x + f.width + 1;
-      const clampedY = svg.y >= f.y || svg.y + svg.height <= f.y + f.height + 1;
-      assert.ok(Math.abs(dx) <= 1 || clampedX, `横の中央からのずれ ${dx}`);
-      assert.ok(Math.abs(dy) <= 1 || clampedY, `縦の中央からのずれ ${dy}`);
-      assert.ok(Math.abs(dy) <= 1, `縦の中央からのずれ ${dy}(図の端で止まった)`);
+      await page.mouse.move(f.x + 20, f.y + f.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(f.x + f.width - 20, f.y + f.height / 2, { steps: 10 });
+      await page.mouse.up();
+      const b = await svgBox(page);
+      assert.ok(Math.abs(b.x - (f.x + f.width / 2)) <= 1, `図の左端 ${b.x}、枠の中央 ${f.x + f.width / 2}`);
+      await context.close();
+    });
+
+    test('38. ホイールで、ポインタの下の点を動かさずに拡大・縮小し、ページはスクロールしない', async () => {
+      const { context, page } = await open();
+      await page.goto(server.url);
+      const frame = frameOf(page);
+      await frame.scrollIntoViewIfNeeded();
+      const f = /** @type {any} */ (await frame.boundingBox());
+      const natural = Number(await frame.locator('svg.map').getAttribute('width'));
+      const px = f.x + f.width * 0.3;
+      const py = f.y + f.height * 0.4;
+      /** 倍率と、ポインタの下にある図の点(図の座標) */
+      const under = async () => {
+        const b = await svgBox(page);
+        const s = b.width / natural;
+        return { s, x: (px - b.x) / s, y: (py - b.y) / s };
+      };
+      /** @param {{ s: number, x: number, y: number }} a @param {{ s: number, x: number, y: number }} b */
+      const same = (a, b) => Math.abs((a.x - b.x) * b.s) <= 1 && Math.abs((a.y - b.y) * b.s) <= 1;
+      await page.mouse.move(px, py);
+      const scrollY = await page.evaluate(() => window.scrollY);
+      const p0 = await under();
+      // 縮小しても図が枠より大きいままの量にする(枠に収まる向きでは図を枠の中央に置くので、点が動く)
+      await page.mouse.wheel(0, 40);
+      await page.waitForTimeout(100);
+      const p1 = await under();
+      assert.ok(p1.s < p0.s, `手前に回して小さくならない(${p0.s} → ${p1.s})`);
+      assert.ok(same(p0, p1), `ポインタの下の点が動いた(${p0.x},${p0.y} → ${p1.x},${p1.y})`);
+      await page.mouse.wheel(0, -80);
+      await page.waitForTimeout(100);
+      const p2 = await under();
+      assert.ok(p2.s > p1.s, `奥に回して大きくならない(${p1.s} → ${p2.s})`);
+      assert.ok(same(p0, p2), `ポインタの下の点が動いた(${p0.x},${p0.y} → ${p2.x},${p2.y})`);
+      assert.equal(await page.evaluate(() => window.scrollY), scrollY, 'ページがスクロールした');
+      // 倍率は保存され、ほかのページの図も同じ倍率で開く
+      await page.goto(`${server.url}fields/physics/`);
+      const physics = frameOf(page).locator('svg.map');
+      const ratio =
+        /** @type {any} */ (await physics.boundingBox()).width / Number(await physics.getAttribute('width'));
+      assert.ok(Math.abs(ratio - p2.s) < 0.01, `理論物理の図の倍率 ${ratio}(期待 ${p2.s})`);
+      await context.close();
+    });
+
+    test('39. 倍率ごとに、駅の行・概要・章のタイトルだけを切り替える', async () => {
+      const { context, page } = await open({ viewport: { width: 400, height: 800 } });
+      await page.goto(server.url);
+      const frame = frameOf(page);
+      const a02 = frame.locator('a.st[aria-label="A02 完備性"]');
+      const ch3 = frame.locator('a.ch[aria-label="第3章 完備性と不動点"]');
+      const head1 = ch3.locator('text.ov1.card-head');
+      const title1 = ch3.locator('text.ov1.card-title');
+      const title2 = ch3.locator('text.ov2.card-title');
+      const detailTitle = ch3.locator('text.card-title:not(.ov)');
+      const branchLabel = frame.locator('text.branch-label').first();
+      const press = (/** @type {string} */ label) =>
+        page.locator(`.map-tools button[aria-label="${label}"]`).first().click();
+      /** @param {import('playwright').Locator} loc */
+      const font = (loc) => loc.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+      // 1 倍:駅の行の段階
+      assert.ok(await a02.isVisible());
+      assert.ok(await branchLabel.isVisible());
+      assert.ok(!(await title1.isVisible()) && !(await title2.isVisible()));
+      // 0.512 倍:概要
+      for (let i = 0; i < 3; i++) await press('縮小');
+      assert.ok(!(await a02.isVisible()), '駅のリンクが見える');
+      assert.ok(!(await branchLabel.isVisible()), '分岐の線のラベルが見える');
+      assert.ok(!(await detailTitle.isVisible()), '駅の行の段階のタイトルが見える');
+      assert.ok((await head1.isVisible()) && (await title1.isVisible()));
+      assert.equal(await head1.textContent(), '第3章');
+      assert.equal(await title1.textContent(), '完備性と不動点');
+      assert.ok((await font(title1)) > (await font(detailTitle)));
+      // 0.4096 倍:章のタイトルだけ
+      await press('縮小');
+      assert.ok(await title2.isVisible());
+      assert.ok(!(await head1.isVisible()) && !(await title1.isVisible()));
+      assert.equal(await title2.textContent(), '完備性と不動点');
+      assert.ok((await font(title2)) > (await font(title1)));
+      // 0.8 倍:駅の行の段階に戻る
+      for (let i = 0; i < 3; i++) await press('拡大');
+      assert.ok(await a02.isVisible());
+      assert.ok(!(await title1.isVisible()) && !(await title2.isVisible()));
       await context.close();
     });
 
