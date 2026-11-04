@@ -34,6 +34,7 @@ function expectError(errors, code, file) {
 /** テスト用原稿の路線ファイルにある、未執筆の第10章の行 */
 const PLANNED_10 = '    - chapter: 10\n';
 const STATIONS_10 = '      stations: [有界作用素, 双対空間, 随伴作用素]\n';
+const STATIONS_12 = '      stations: [接空間, ベクトル場, リー微分]\n';
 
 describe('content-format: 受け入れテスト', () => {
   test('1. banach 駅から proof-sketch を消すと E08 の1件だけで止まり、dist/ は変わらない', async () => {
@@ -426,6 +427,61 @@ describe('content-format: 注と参考文献', () => {
     );
     expectError(errors, 'E03', 'references.yml');
     expectError(errors, 'E15');
+  });
+  test('4.36 planned の駅ごとの requires の参照先がない → E05', async () => {
+    const errors = await errorsAfter((r) =>
+      edit(r, 'lines.yml', (t) =>
+        replaceOnce(
+          t,
+          STATIONS_12,
+          '      stations: [接空間, {name: ベクトル場, requires: [no-such-station]}, リー微分]\n',
+        ),
+      ),
+    );
+    const e = expectError(errors, 'E05', 'lines.yml');
+    assert.match(e.message, /ベクトル場/);
+  });
+  test('4.37 planned の章の requires と最初の駅の requires の両方 → E09', async () => {
+    const errors = await errorsAfter((r) =>
+      edit(r, 'lines.yml', (t) =>
+        replaceOnce(
+          t,
+          STATIONS_12,
+          '      stations: [{name: 接空間, requires: [banach]}, ベクトル場, リー微分]\n      requires: [banach]\n',
+        ),
+      ),
+    );
+    expectError(errors, 'E09', 'lines.yml');
+  });
+  test('4.38 planned の駅の知らない項目 → E02', async () => {
+    const errors = await errorsAfter((r) =>
+      edit(r, 'lines.yml', (t) =>
+        replaceOnce(t, STATIONS_12, '      stations: [{name: 接空間, color: red}, ベクトル場, リー微分]\n'),
+      ),
+    );
+    expectError(errors, 'E02', 'lines.yml');
+  });
+  test('planned の駅ごとの requires は、その駅の requires になる(章の requires は最初の駅)', async () => {
+    const root = await tempRoot();
+    roots.push(root);
+    await edit(root, 'lines.yml', (t) =>
+      replaceOnce(
+        t,
+        STATIONS_12,
+        '      stations: [接空間, {name: ベクトル場, requires: [banach]}, リー微分]\n      requires: [manifold]\n',
+      ),
+    );
+    const r = await analyzeIn(root);
+    assert.deepEqual(r.errors, []);
+    const pc = r.ctx.site.planned.find((/** @type {any} */ p) => p.number === 12);
+    assert.deepEqual(
+      pc.stations.map((/** @type {any} */ st) => [st.name, st.requires]),
+      [
+        ['接空間', ['manifold']],
+        ['ベクトル場', ['banach']],
+        ['リー微分', []],
+      ],
+    );
   });
   test('文献の一覧を書き換えたら、確認の記録の fingerprint が合わず E15(年を変える)', async () => {
     const errors = await errorsAfter((r) =>

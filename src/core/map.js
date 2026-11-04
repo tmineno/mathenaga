@@ -220,7 +220,7 @@ function planRows(site, branches, trunkIds, lastTrunk) {
  * (docs/spec/route-map.md「分岐駅」「配置」)。
  * Preconditions: site.planned は章番号の順。
  * Postconditions: 読む順の駅を返す。未執筆の駅は planned が true で、ID は `_planned-<章番号>-<順>`、
- *   表示番号は空、requires は章の最初の駅だけが planned の requires を持つ。
+ *   表示番号は空、requires は路線ファイルに書いたもの(章の requires は最初の駅のもの)。
  * Failure modes: なし。
  * Side effects: なし。
  * @param {import('./graph.js').Site} site
@@ -233,16 +233,16 @@ export function mapStations(site) {
   const out = [];
   const queue = [...planned];
   const push = (/** @type {import('./schema.js').PlannedChapter} */ pc) =>
-    pc.stations.forEach((name, i) =>
+    pc.stations.forEach((st, i) =>
       out.push(
         /** @type {any} */ ({
           id: `_planned-${pc.number}-${i + 1}`,
-          name,
+          name: st.name,
           chapter: { id: null, number: pc.number, title: pc.title, planned: true },
           model: null,
           lineId: pc.lineId,
           index: -1,
-          requires: i === 0 ? pc.requires : [],
+          requires: st.requires,
           code: '',
           planned: true,
         }),

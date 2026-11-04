@@ -123,7 +123,7 @@ export function buildSite(input) {
   }
   /** @type {import('./schema.js').PlannedChapter[]} */
   const planned = [];
-  /** 未執筆の章 → 書いた requires @type {Map<object, string[]>} */
+  /** 未執筆の駅 → 書いた requires @type {Map<object, string[]>} */
   const declared = new Map();
   for (const l of lines) {
     for (const pc of l.planned ?? []) {
@@ -138,8 +138,11 @@ export function buildSite(input) {
         );
       } else {
         numbers.set(pc.number, `${input.linesFile} の planned`);
-        const copy = { ...pc, requires: [] };
-        declared.set(copy, pc.requires);
+        const copy = {
+          ...pc,
+          stations: pc.stations.map((st) => ({ name: st.name, requires: /** @type {string[]} */ ([]) })),
+        };
+        copy.stations.forEach((st, i) => declared.set(st, pc.stations[i].requires));
         planned.push(copy);
       }
     }
@@ -233,34 +236,36 @@ export function buildSite(input) {
       info.requires.push(r);
     }
   }
-  // 未執筆の章の requires
+  // 未執筆の駅の requires(章に書いた requires は、最初の駅のもの)
   for (const pc of planned) {
-    const where = `planned の第${pc.number}章(${pc.title})`;
-    for (const r of declared.get(pc) ?? []) {
-      const kind = kinds.get(r);
-      if (!kind) {
-        errors.push(issue('E05', input.linesFile, null, `${where}の requires の参照先 ${r} がない`));
-        continue;
+    for (const [i, st] of pc.stations.entries()) {
+      const where = `planned の第${pc.number}章(${pc.title})${i === 0 ? '' : `の駅「${st.name}」`}`;
+      for (const r of declared.get(st) ?? []) {
+        const kind = kinds.get(r);
+        if (!kind) {
+          errors.push(issue('E05', input.linesFile, null, `${where}の requires の参照先 ${r} がない`));
+          continue;
+        }
+        if (kind !== 'station') {
+          errors.push(
+            issue('E05', input.linesFile, null, `${where}の requires の ${r} は駅ではない(${KIND_NAMES[kind]})`),
+          );
+          continue;
+        }
+        const target = /** @type {StationInfo} */ (stationById.get(r));
+        if (target.chapter.number > pc.number) {
+          errors.push(
+            issue(
+              'E06',
+              input.linesFile,
+              null,
+              `${where}の requires の ${r} は、章番号の大きい第${target.chapter.number}章の駅を指している`,
+            ),
+          );
+          continue;
+        }
+        st.requires.push(r);
       }
-      if (kind !== 'station') {
-        errors.push(
-          issue('E05', input.linesFile, null, `${where}の requires の ${r} は駅ではない(${KIND_NAMES[kind]})`),
-        );
-        continue;
-      }
-      const target = /** @type {StationInfo} */ (stationById.get(r));
-      if (target.chapter.number > pc.number) {
-        errors.push(
-          issue(
-            'E06',
-            input.linesFile,
-            null,
-            `${where}の requires の ${r} は、章番号の大きい第${target.chapter.number}章の駅を指している`,
-          ),
-        );
-        continue;
-      }
-      pc.requires.push(r);
     }
   }
   for (const cycle of findCycles(stations, stationById)) {
