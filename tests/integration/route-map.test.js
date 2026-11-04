@@ -748,6 +748,71 @@ describe('route-map: 前提の矢印', () => {
     const overall = overallOf(await siteOf(await rootWithRequires([COMPACT_COMPLETENESS, HAUSDORFF_CONTRACTION])));
     assert.deepEqual(arrowsOf(overall), [[3, 6, '縮小写像']]);
   });
+
+  test('47. 前提にされる駅が同じ矢印は、同じ札の辺から1本で出て、途中で枝分かれする', async () => {
+    /** 始発の確率線(第14章)。2番目の駅が completeness を前提にする @param {string} layout */
+    const probability = (layout) =>
+      `- id: probability\n  code: P\n  name: 確率線\n  color: "#B5562A"\n  layout: ${layout}\n  start: true\n  planned:\n` +
+      '    - chapter: 14\n      title: 測度と確率\n' +
+      '      stations: [{name: 測度空間, requires: [open-set]}, {name: 積分, requires: [completeness]}, 確率空間]\n';
+    /** @type {Array<[string, (t: string) => string]>} */
+    const variants = [
+      ['down', (t) => t + probability('down')],
+      ['up', (t) => replaceOnce(t, '- id: analysis\n', `${probability('up')}- id: analysis\n`)],
+    ];
+    for (const [name, fn] of variants) {
+      const root = await rootWith(async (r) => {
+        await edit(r, 'lines.yml', fn);
+        const [file, head, add] = COMPACT_COMPLETENESS;
+        await edit(r, `chapters/${file}/index.md`, (t) => replaceOnce(t, `{${head}}`, `{${head},${add}}`));
+      });
+      const overall = overallOf(await siteOf(root));
+      assert.deepEqual(
+        arrowsOf(overall),
+        [
+          [2, 14, '開集合'],
+          [3, 7, '完備性'],
+          [3, 14, '完備性'],
+        ],
+        name,
+      );
+      const [c3, c7, c14] = [3, 7, 14].map((n) => card(overall, n));
+      // up では、第14章の札の上の辺と第3章の札の下の辺が同じ段の溝に接する(終点の札の辺の上で枝分かれする)
+      if (name === 'up') assert.equal(c14.tier, c3.tier + 1, 'up: 第14章は第3章のすぐ下の段');
+      const pair = overall.links.filter((l) => l.kind === 'arrow' && l.from === 3);
+      assert.equal(pair.length, 2, name);
+      const startsOnEdge = (/** @type {any} */ l) =>
+        l.points[0][1] === c3.y + c3.h && l.points[0][0] > c3.x && l.points[0][0] < c3.x + c3.w;
+      const lead = pair.filter(startsOnEdge);
+      assert.equal(lead.length, 1, `${name}: 第3章の札の下の辺から始まる線の数`);
+      const other = /** @type {any} */ (pair.find((l) => l !== lead[0]));
+      const [sx, sy] = other.points[0];
+      const onLead = lead[0].points
+        .slice(1)
+        .some(
+          (/** @type {number[]} */ p, /** @type {number} */ i) =>
+            lead[0].points[i][1] === p[1] &&
+            sy === p[1] &&
+            sx >= Math.min(lead[0].points[i][0], p[0]) &&
+            sx <= Math.max(lead[0].points[i][0], p[0]),
+        );
+      assert.ok(onLead, `${name}: 枝分かれした線が、共通の区間の上の点から始まらない ${JSON.stringify(other.points)}`);
+      for (const [n, c] of /** @type {const} */ ([
+        [7, c7],
+        [14, c14],
+      ])) {
+        const end = pair.find((l) => l.to === n)?.points.at(-1);
+        assert.equal(end?.[1], c.y, `${name}: 第${n}章の札の上の辺で終わる`);
+        assert.ok(end[0] > c.x && end[0] < c.x + c.w, `${name}: 第${n}章の札の幅の中で終わる`);
+      }
+      assert.equal(overall.labels.filter((l) => l.kind === 'arrow' && l.text === '完備性').length, 1, name);
+      const desc = mapDescription(overall);
+      for (const t of ['第7章は、第3章の A02 完備性を前提にする。', '第14章は、第3章の A02 完備性を前提にする。']) {
+        assert.ok(desc.includes(t), `${name}: ${t}`);
+      }
+      assertNoOverlap(`47/${name}`, overall);
+    }
+  });
 });
 
 describe('route-map: 2段目より遠い段へ分かれる支線', () => {
