@@ -21,7 +21,7 @@
 
 - `content/` の原稿([content-format.md](content-format.md))。文献の一覧(`references.yml`)と確認の記録(`references.verified.json`)を含む。ビルドは確認の記録を読むだけで、問い合わせはしない([reference-check.md](reference-check.md))。
 - 環境変数 `MATHENAGA_BASE_PATH`:ベースパス。既定は `/`。`/` で始まり `/` で終わる。
-- 環境変数 `MATHENAGA_REPO_URL`:改善案を起票する GitHub のリポジトリの URL(`https://github.com/<owner>/<repo>`)。任意。渡せば章ページの各駅に起票のアイコンを出し、本文を選んだときの選択メニューに「起票」と「編集」を出す([site.md](site.md) の P-07・P-12)。そのために、章ページの段落ごとに、原稿のファイルの中の行の範囲を書き込む。
+- 環境変数 `MATHENAGA_REPO_URL`:改善案を起票する GitHub のリポジトリの URL(`https://github.com/<owner>/<repo>`)。任意。渡せば章ページの各駅に起票のアイコンを出し、本文を選んだときの選択メニューに「起票」と「編集」を出す([site.md](site.md) の P-07・P-12)。そのために、章ページの段落ごとに、原稿のファイルの中の行の範囲を書き込む。全ページの上端のバーには、リポジトリへのリンクを出す(P-13)。
 
 ### ビルドの流れ
 
@@ -121,14 +121,14 @@ dist/
 | `npm test` | 依存と、Playwright が使うブラウザをインストール済み | 単体テスト、テスト用原稿を使った結合テスト、Playwright でブラウザを動かす閲覧テスト([site.md](site.md))を実行し、すべて通れば終了コード 0 | 失敗したテストを出し、終了コードは 0 以外 | テストの出力は一時ディレクトリに書き、`dist/` には触れない |
 | `npm run refs:verify` | ネットワークにつながる | 文献の実在を検索 API で確かめ、確認の記録を書く([reference-check.md](reference-check.md)) | 同左 | `content/references.verified.json` を書き換える |
 | `MATHENAGA_BASE_PATH` | `/` で始まり `/` で終わる | すべてのリンクと読み込みに付く | 形式が違えば E13 で止まる | なし |
-| `MATHENAGA_REPO_URL` | 空か、`https://github.com/<owner>/<repo>` の形 | 空でなければ、章ページの各駅に、そのリポジトリの Issue 作成画面へのリンクを置く。段落ごとに原稿の行の範囲を書き込み、選択メニューから Issue 作成画面と原稿の行を開けるようにする | 形式が違えば E13 で止まる | なし |
+| `MATHENAGA_REPO_URL` | 空か、`https://github.com/<owner>/<repo>` の形 | 空でなければ、章ページの各駅に、そのリポジトリの Issue 作成画面へのリンクを置く。段落ごとに原稿の行の範囲を書き込み、選択メニューから Issue 作成画面と原稿の行を開けるようにする。全ページの上端のバーに、リポジトリへのリンクを置く | 形式が違えば E13 で止まる | なし |
 
 ### CI と公開
 
 - CI(GitHub Actions)は format → lint → typecheck → test の順に実行し、どれかが失敗したらマージできないようにする。型は JSDoc で書き、typecheck で検査する。使う道具は CI を作るときに決め、バージョンを固定する。
 - CI の test では閲覧テストも実行する。そのためにブラウザをインストールする手順を CI に入れる。
 - 文献の一覧(`references.yml`)か確認の記録(`references.verified.json`)を変えた PR では、今の原稿とテスト用原稿のそれぞれについて、変えた側に `npm run refs:verify -- --check --content <原稿の場所>` も実行し、失敗したらマージできないようにする。CI でネットワークを使うのはこの手順だけで、ほかの PR では実行しない([reference-check.md](reference-check.md))。
-- 公開は、main への push で `npm run build` を実行し、`dist/` を GitHub Pages のプロジェクトサイトに置く。ベースパスは `/<リポジトリ名>/` で、公開のワークフローがリポジトリ名から作って `MATHENAGA_BASE_PATH` に渡す。リポジトリの URL も `MATHENAGA_REPO_URL` に渡し、改善案の起票のアイコンを出す。手元のビルドとプレビューの既定は、ベースパスが `/`、`MATHENAGA_REPO_URL` は空(アイコンなし)のまま。
+- 公開は、main への push で `npm run build` を実行し、`dist/` を GitHub Pages のプロジェクトサイトに置く。ベースパスは `/<リポジトリ名>/` で、公開のワークフローがリポジトリ名から作って `MATHENAGA_BASE_PATH` に渡す。リポジトリの URL も `MATHENAGA_REPO_URL` に渡し、改善案の起票のアイコンとリポジトリへのリンクを出す。手元のビルドとプレビューの既定は、ベースパスが `/`、`MATHENAGA_REPO_URL` は空(アイコンとリンクなし)のまま。
 
 ## Failure modes
 
@@ -192,6 +192,7 @@ dist/
 29. テスト用原稿の第3章で、出発点の地の文に注を1つ、banach 駅の地の文に注を1つ、banach 駅の証明の詳細の中に注を1つ、この順に書いてビルドすると、注番号は書いた順に「注1」「注2」「注3」になる。banach 駅の情報科学の application の中に注を足すと、application は駅の末尾に並ぶので、その注は「注4」になる。`?field=physics` と `?field=cs` のどちらで開いても、番号は変わらない。
 30. テスト用原稿の第3章で、kreyszig-fa、lecun-deep-learning、kreyszig-fa の順に引くと、表示は「[1]」「[2]」「[1]」になり、章の参考文献は kreyszig-fa、lecun-deep-learning の順に並ぶ。第4章で lecun-deep-learning だけを引くと、第4章での表示は「[1]」になる。別の書き方として、第3章で引用を banach 駅の2か所だけにし、駅の最初の段落に置いた注の本文で lecun-deep-learning を、その後の段落の地の文で kreyszig-fa を引く。注の本文は章ページでは駅の末尾(kreyszig-fa の引用より後)に並ぶが、注の中の引用は注の印の位置で数えるので、lecun-deep-learning が「[1]」、kreyszig-fa が「[2]」になる。
 31. 文献の一覧に項目を足し、確認の記録を取らずにビルドすると、E15 の1件だけで止まり、`dist/` は変わらない。ビルドはネットワークに接続しない(テストでは、ネットワークへの接続を失敗させた状態でテスト用原稿をビルドし、終了コード 0 になることで確かめる)。
+32. `MATHENAGA_REPO_URL=https://github.com/example/mathenaga` でビルドすると、全ページの上端のバーに `https://github.com/example/mathenaga` へのリンク(`class="repo-link"`)が1つある。渡さずにビルドすると、どのページにもリンクも右端の塊(`bar-end`)もない。
 
 ## Open questions
 
