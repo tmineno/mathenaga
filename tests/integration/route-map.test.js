@@ -6,6 +6,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { after, describe, test } from 'node:test';
 import { layoutBoxes, layoutMap, mapDescription, wrapText } from '../../src/core/map.js';
+import { otherLineGuide } from '../../src/core/navigation.js';
 import {
   MERGE_LINE,
   addFinalGoal,
@@ -510,6 +511,120 @@ describe('route-map: 章の札と未執筆の章', () => {
   });
 });
 
+describe('route-map: 始発の路線', () => {
+  /** 幾何線の layout の行(テスト用原稿の路線ファイルで、layout が down の路線は幾何線だけ) */
+  const GEOMETRY_LAYOUT = '  layout: down\n  planned:\n    - chapter: 12\n';
+  /** @param {string} t */
+  const startGeometry = (t) =>
+    replaceOnce(t, GEOMETRY_LAYOUT, '  layout: down\n  start: true\n  planned:\n    - chapter: 12\n');
+  /** 45:始発の幾何線の多様体から分かれる路線(第14章、未執筆) */
+  const FRAME =
+    '- id: frame\n  code: F\n  name: 枠線\n  color: "#B5562A"\n  layout: down\n  planned:\n    - chapter: 14\n      title: ファイバー束\n      stations: [ファイバー束, 接続]\n      requires: [manifold]\n';
+
+  test('42. 幾何線を始発の路線にすると、分岐の線の代わりに第2章から第6章への前提の矢印ができる', async () => {
+    const r = await analyzeIn(await rootWithLines(startGeometry));
+    assert.deepEqual(
+      r.errors.map((e) => `${e.code} ${e.message}`),
+      [],
+    );
+    assert.deepEqual(
+      r.notices.filter((n) => n.code === 'N03').map((n) => n.message),
+      [],
+    );
+    const site = r.ctx.site;
+    const overall = overallOf(site);
+    assert.deepEqual(branchLinks(overall, 'geometry'), []);
+    assert.deepEqual(arrowsOf(overall), [[2, 6, '連続写像']]);
+    assert.equal(card(overall, 6).col, card(overall, 2).col + 1);
+    assert.ok(card(overall, 6).tier > 0, '幹線の下の段');
+    assert.ok(mapDescription(overall).includes('第6章は、第2章の M04 連続写像を前提にする。'));
+    const physics = layoutMap(site, site.scope.get('physics'), { goals: site.fieldById.get('physics').goals });
+    assert.deepEqual(arrowsOf(physics), [[2, 6, '連続写像']]);
+    assert.deepEqual(branchLinks(physics, 'geometry'), []);
+    const ch2 = site.chapters.find((/** @type {any} */ c) => c.number === 2);
+    assert.deepEqual(
+      otherLineGuide(site, ch2, 'physics').map((/** @type {any} */ x) => x.line.id),
+      ['analysis'],
+    );
+    assertNoOverlap('42/全体', overall);
+    assertNoOverlap('42/理論物理', physics);
+  });
+
+  test('43. 始発の路線の最初の駅が、路線ファイルで後ろにある路線の駅を前提にすると E12', async () => {
+    const root = await rootWith(async (r) => {
+      await edit(r, 'lines.yml', (t) => {
+        const t2 = startGeometry(t);
+        const block = t2.slice(t2.indexOf('- id: geometry'), t2.indexOf('- id: set-theory'));
+        return replaceOnce(t2.replace(block, ''), '- id: analysis', `${block}- id: analysis`);
+      });
+      await edit(r, 'chapters/06-topological-spaces/index.md', (t) =>
+        replaceOnce(
+          t,
+          '{#topological-space requires=continuous-map}',
+          '{#topological-space requires=continuous-map,completeness}',
+        ),
+      );
+    });
+    const r = await analyzeIn(root);
+    const e12 = r.errors.filter((e) => e.code === 'E12');
+    assert.ok(e12.length > 0, r.errors.map((e) => `${e.code} ${e.message}`).join('\n'));
+    assert.match(e12[0].message, /始発の路線 幾何線/);
+    assert.match(e12[0].message, /completeness/);
+  });
+
+  test('44. requires のない始発の路線は、左端の列から描き、線も矢印も引かない', async () => {
+    const start = PROBABILITY.replace('  layout: down\n', '  layout: down\n  start: true\n');
+    const overall = overallOf(await siteOf(await rootWithLines((t) => t + start)));
+    const [p] = cardsOf(overall, 'probability');
+    assert.equal(p.number, 14);
+    assert.equal(p.col, 0);
+    assert.ok(p.tier > card(overall, 6).tier, '幾何線より幹線から遠い下の段');
+    assert.deepEqual(branchLinks(overall, 'probability'), []);
+    assert.ok(!overall.links.some((/** @type {any} */ l) => l.to === 14 && l.kind !== 'line'));
+    assertNoOverlap('44/全体', overall);
+  });
+
+  test('45. 始発の路線の駅から、後ろの支線が分かれる', async () => {
+    const overall = overallOf(await siteOf(await rootWithLines((t) => startGeometry(t) + FRAME)));
+    // 幾何線は始発の路線のまま(分岐の線がない)で、その駅から枠線が分かれる
+    assert.deepEqual(branchLinks(overall, 'geometry'), []);
+    const [f] = cardsOf(overall, 'frame');
+    assert.equal(f.number, 14);
+    assert.deepEqual(branchLinks(overall, 'frame'), [[9, 14]]);
+    assert.equal(f.col, card(overall, 9).col + 1);
+    assert.ok(f.tier > card(overall, 9).tier, '幾何線より幹線から遠い下の段');
+    assertNoOverlap('45/全体', overall);
+  });
+
+  test('46. start の値と、start を書ける路線', async () => {
+    const bad = await errorsAfter((r) =>
+      edit(r, 'lines.yml', (t) =>
+        replaceOnce(t, GEOMETRY_LAYOUT, '  layout: down\n  start: yes\n  planned:\n    - chapter: 12\n'),
+      ),
+    );
+    assert.ok(
+      bad.some((e) => e.code === 'E03' && /start/.test(e.message)),
+      bad.map((e) => e.message).join('\n'),
+    );
+    const trunk = await errorsAfter((r) =>
+      edit(r, 'lines.yml', (t) => replaceOnce(t, '  name: 本線\n', '  name: 本線\n  start: true\n')),
+    );
+    assert.ok(
+      trunk.some((e) => e.code === 'E03' && /start/.test(e.message)),
+      trunk.map((e) => e.message).join('\n'),
+    );
+    const right = await errorsAfter((r) =>
+      edit(r, 'lines.yml', (t) =>
+        replaceOnce(t, GEOMETRY_LAYOUT, '  layout: right\n  start: true\n  planned:\n    - chapter: 12\n'),
+      ),
+    );
+    assert.ok(
+      right.some((e) => e.code === 'E03' && /start/.test(e.message)),
+      right.map((e) => e.message).join('\n'),
+    );
+  });
+});
+
 describe('route-map: 支線からの分岐と合流', () => {
   test('25. 幹線の候補は、ほかの路線の候補があれば分岐駅にしない', async () => {
     const overall = overallOf(await siteOf(await variationsRoot('normed-space,continuous-map')));
@@ -632,6 +747,71 @@ describe('route-map: 前提の矢印', () => {
   test('37. ほかの矢印をたどって届く前提は、矢印にしない', async () => {
     const overall = overallOf(await siteOf(await rootWithRequires([COMPACT_COMPLETENESS, HAUSDORFF_CONTRACTION])));
     assert.deepEqual(arrowsOf(overall), [[3, 6, '縮小写像']]);
+  });
+
+  test('47. 前提にされる駅が同じ矢印は、同じ札の辺から1本で出て、途中で枝分かれする', async () => {
+    /** 始発の確率線(第14章)。2番目の駅が completeness を前提にする @param {string} layout */
+    const probability = (layout) =>
+      `- id: probability\n  code: P\n  name: 確率線\n  color: "#B5562A"\n  layout: ${layout}\n  start: true\n  planned:\n` +
+      '    - chapter: 14\n      title: 測度と確率\n' +
+      '      stations: [{name: 測度空間, requires: [open-set]}, {name: 積分, requires: [completeness]}, 確率空間]\n';
+    /** @type {Array<[string, (t: string) => string]>} */
+    const variants = [
+      ['down', (t) => t + probability('down')],
+      ['up', (t) => replaceOnce(t, '- id: analysis\n', `${probability('up')}- id: analysis\n`)],
+    ];
+    for (const [name, fn] of variants) {
+      const root = await rootWith(async (r) => {
+        await edit(r, 'lines.yml', fn);
+        const [file, head, add] = COMPACT_COMPLETENESS;
+        await edit(r, `chapters/${file}/index.md`, (t) => replaceOnce(t, `{${head}}`, `{${head},${add}}`));
+      });
+      const overall = overallOf(await siteOf(root));
+      assert.deepEqual(
+        arrowsOf(overall),
+        [
+          [2, 14, '開集合'],
+          [3, 7, '完備性'],
+          [3, 14, '完備性'],
+        ],
+        name,
+      );
+      const [c3, c7, c14] = [3, 7, 14].map((n) => card(overall, n));
+      // up では、第14章の札の上の辺と第3章の札の下の辺が同じ段の溝に接する(終点の札の辺の上で枝分かれする)
+      if (name === 'up') assert.equal(c14.tier, c3.tier + 1, 'up: 第14章は第3章のすぐ下の段');
+      const pair = overall.links.filter((l) => l.kind === 'arrow' && l.from === 3);
+      assert.equal(pair.length, 2, name);
+      const startsOnEdge = (/** @type {any} */ l) =>
+        l.points[0][1] === c3.y + c3.h && l.points[0][0] > c3.x && l.points[0][0] < c3.x + c3.w;
+      const lead = pair.filter(startsOnEdge);
+      assert.equal(lead.length, 1, `${name}: 第3章の札の下の辺から始まる線の数`);
+      const other = /** @type {any} */ (pair.find((l) => l !== lead[0]));
+      const [sx, sy] = other.points[0];
+      const onLead = lead[0].points
+        .slice(1)
+        .some(
+          (/** @type {number[]} */ p, /** @type {number} */ i) =>
+            lead[0].points[i][1] === p[1] &&
+            sy === p[1] &&
+            sx >= Math.min(lead[0].points[i][0], p[0]) &&
+            sx <= Math.max(lead[0].points[i][0], p[0]),
+        );
+      assert.ok(onLead, `${name}: 枝分かれした線が、共通の区間の上の点から始まらない ${JSON.stringify(other.points)}`);
+      for (const [n, c] of /** @type {const} */ ([
+        [7, c7],
+        [14, c14],
+      ])) {
+        const end = pair.find((l) => l.to === n)?.points.at(-1);
+        assert.equal(end?.[1], c.y, `${name}: 第${n}章の札の上の辺で終わる`);
+        assert.ok(end[0] > c.x && end[0] < c.x + c.w, `${name}: 第${n}章の札の幅の中で終わる`);
+      }
+      assert.equal(overall.labels.filter((l) => l.kind === 'arrow' && l.text === '完備性').length, 1, name);
+      const desc = mapDescription(overall);
+      for (const t of ['第7章は、第3章の A02 完備性を前提にする。', '第14章は、第3章の A02 完備性を前提にする。']) {
+        assert.ok(desc.includes(t), `${name}: ${t}`);
+      }
+      assertNoOverlap(`47/${name}`, overall);
+    }
   });
 });
 

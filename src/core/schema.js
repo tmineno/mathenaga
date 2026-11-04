@@ -16,6 +16,7 @@ const LINE_CODE = /^[A-Z]+$/;
  * @property {string} colorDark
  * @property {'solid' | 'dotted'} style
  * @property {'up' | 'down' | 'right' | null} layout
+ * @property {boolean} start  始発の路線(route-map.md「始発の路線」)。layout が up か down の路線だけ
  * @property {number} order  路線ファイルでの順
  * @property {PlannedChapter[]} planned  未執筆の章(書いた順)
  */
@@ -68,7 +69,7 @@ export function checkLines(data, file) {
     errors.push(issue('E01', file, null, '路線ファイルは路線の配列で書く'));
     return { lines, errors };
   }
-  const allowed = ['id', 'code', 'name', 'color', 'color_dark', 'style', 'layout', 'planned'];
+  const allowed = ['id', 'code', 'name', 'color', 'color_dark', 'style', 'layout', 'start', 'planned'];
   const codes = new Map();
   data.forEach((item, index) => {
     const where = `${index + 1}番目の路線`;
@@ -105,6 +106,11 @@ export function checkLines(data, file) {
     if (item.layout !== undefined && !['up', 'down', 'right'].includes(item.layout)) {
       errors.push(issue('E02', file, null, `${where}の layout「${item.layout}」は up・down・right のどれか`));
     }
+    if (item.start !== undefined && typeof item.start !== 'boolean') {
+      errors.push(issue('E03', file, null, `${where}の start「${item.start}」は true か false で書く`));
+    } else if (item.start === true && item.layout !== 'up' && item.layout !== 'down') {
+      errors.push(issue('E03', file, null, `${where}は start が true なので、layout に up か down を書く`));
+    }
     const planned = nonEmptyString(item.id) ? checkPlanned(item.planned, item.id, file, where, errors) : [];
     if (!nonEmptyString(item.id)) return;
     lines.push({
@@ -120,6 +126,7 @@ export function checkLines(data, file) {
             : '#888888',
       style: item.style === 'dotted' ? 'dotted' : 'solid',
       layout: ['up', 'down', 'right'].includes(item.layout) ? item.layout : null,
+      start: item.start === true && (item.layout === 'up' || item.layout === 'down'),
       order: index,
       planned,
     });

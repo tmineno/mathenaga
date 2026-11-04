@@ -141,7 +141,8 @@ function clampLines(lines, max, width, font) {
 /**
  * 図ごとの分岐駅を決める(docs/spec/route-map.md「分岐駅」)。
  * Preconditions: drawn は requires をさかのぼって閉じた駅の集合。
- * Postconditions: 支線 → BranchInfo と、分岐駅が決まらない支線の一覧を返す。候補は幹線と、
+ * Postconditions: 支線 → BranchInfo と、分岐駅が決まらない支線の一覧を返す。始発の路線は BranchInfo を持たず、
+ *   starts(路線 → その図に描く最初の駅)と、最初の駅が後ろの路線の駅を前提にするもの(lateStarts、E12)に入る。候補は幹線と、
  *   路線ファイルでその支線より前にある支線の駅に限るので、支線の親子は循環しない。
  * Failure modes: なし。
  * Side effects: なし。
@@ -155,6 +156,13 @@ export function branchStations(site, drawn, all = site.stations) {
   const branches = new Map();
   /** @type {Array<{ line: import('./schema.js').Line, first: import('./graph.js').StationInfo }>} */
   const missing = [];
+  /** 始発の路線と、その図に描く最初の駅 @type {Map<string, import('./graph.js').StationInfo>} */
+  const starts = new Map();
+  /**
+   * 最初の駅が、路線ファイルで後ろにある路線の駅を前提にしている始発の路線(E12)
+   * @type {Array<{ line: import('./schema.js').Line, first: import('./graph.js').StationInfo, later: import('./graph.js').StationInfo[] }>}
+   */
+  const lateStarts = [];
   /** 駅から requires をさかのぼって届く駅の ID @type {Map<string, Set<string>>} */
   const memo = new Map();
   /** @param {string} id @returns {Set<string>} */
@@ -174,7 +182,14 @@ export function branchStations(site, drawn, all = site.stations) {
   for (const line of site.lines) {
     if (line.layout === null) continue;
     const first = all.find((s) => s.lineId === line.id && drawn.has(s.id));
-    if (first) {
+    if (first && line.start) {
+      // 始発の路線は分岐駅を持たない。最初の駅の前提は前提の矢印で描く(route-map.md「始発の路線」)
+      starts.set(line.id, first);
+      const later = first.requires
+        .map((id) => /** @type {import('./graph.js').StationInfo} */ (site.stationById.get(id)))
+        .filter((s) => s && drawn.has(s.id) && s.lineId !== line.id && !earlier.has(s.lineId));
+      if (later.length > 0) lateStarts.push({ line, first, later });
+    } else if (first) {
       let candidates = first.requires
         .map((id) => /** @type {import('./graph.js').StationInfo} */ (site.stationById.get(id)))
         .filter((s) => s && drawn.has(s.id) && earlier.has(s.lineId));
@@ -196,7 +211,7 @@ export function branchStations(site, drawn, all = site.stations) {
     }
     earlier.add(line.id);
   }
-  return { branches, missing };
+  return { branches, missing, starts, lateStarts };
 }
 
 /**
@@ -204,7 +219,8 @@ export function branchStations(site, drawn, all = site.stations) {
  * @property {import('./schema.js').Line} line
  * @property {'up' | 'down' | 'right' | 'merge'} dir  merge は上下の両方から合流し、幹線の高さで右に置く支線
  * @property {number} row      同じ向きの段のうち幹線から何番目か(0 が最も近い)。right と merge は 0
- * @property {BranchInfo} info
+ * @property {BranchInfo | null} info  始発の路線は null
+ * @property {import('./graph.js').StationInfo | null} start  始発の路線の、その図に描く最初の駅
  */
 
 /**
@@ -216,16 +232,17 @@ export function branchStations(site, drawn, all = site.stations) {
 
 /**
  * 支線の向きと段を決める(route-map.md「配置」3・4)。座標は使わない。
- * Preconditions: branches は branchStations の結果。親の路線は路線ファイルで前にある。
- * Postconditions: 路線ファイルの順に RowPlan を返す。親の路線が描けない支線は含めない。
+ * Preconditions: branches と starts は branchStations の結果。親の路線は路線ファイルで前にある。
+ * Postconditions: 路線ファイルの順に RowPlan を返す。親の路線が描けない支線は含めない。始発の路線は layout の向きに置く。
  * Failure modes: なし。
  * Side effects: なし。
  * @param {import('./graph.js').Site} site
  * @param {Map<string, BranchInfo>} branches
+ * @param {Map<string, import('./graph.js').StationInfo>} starts
  * @param {Set<string>} trunkIds
  * @param {import('./graph.js').StationInfo | undefined} lastTrunk  その図の幹線の最後の駅
  */
-function planRows(site, branches, trunkIds, lastTrunk) {
+function planRows(site, branches, starts, trunkIds, lastTrunk) {
   /** @type {RowPlan[]} */
   const rows = [];
   /** @type {Fallback[]} */
@@ -236,6 +253,14 @@ function planRows(site, branches, trunkIds, lastTrunk) {
   let downs = 0;
   let midUsed = false;
   for (const line of site.lines) {
+    const start = starts.get(line.id);
+    if (start && (line.layout === 'up' || line.layout === 'down')) {
+      // 始発の路線は親の路線を持たないので、layout で上か下の段に置く(配置 3)
+      const dir = line.layout;
+      rows.push({ line, dir, row: dir === 'up' ? ups++ : downs++, info: null, start });
+      side.set(line.id, dir);
+      continue;
+    }
     const info = branches.get(line.id);
     if (line.layout === null || !info) continue;
     const sides = info.stations.map((s) => side.get(s.lineId));
@@ -268,7 +293,7 @@ function planRows(site, branches, trunkIds, lastTrunk) {
       dir = side.get(info.branch.lineId) === 'up' ? 'up' : 'down';
       fallbacks.push({ line, reason: '幹線より右の場所をほかの支線が使った', drawn: '主な分岐駅の側に' });
     }
-    rows.push({ line, dir, row: dir === 'up' ? ups++ : dir === 'down' ? downs++ : 0, info });
+    rows.push({ line, dir, row: dir === 'up' ? ups++ : dir === 'down' ? downs++ : 0, info, start: null });
     side.set(line.id, dir === 'up' || dir === 'down' ? dir : 'mid');
   }
   return { rows, fallbacks };
@@ -457,7 +482,7 @@ export function prerequisiteArrows(lines, shown, branches) {
  * @property {number} from        章番号
  * @property {number} to          章番号
  * @property {string} [id]        分岐の線と前提の矢印の、溝の中の区間を区別する名前
- * @property {string} [group]     同じ支線の最初の札へ入る分岐の線どうしは同じ値
+ * @property {string} [group]     同じ支線の最初の札へ入る分岐の線どうし、束ねた前提の矢印どうしは同じ値
  */
 
 /**
@@ -480,6 +505,8 @@ export function prerequisiteArrows(lines, shown, branches) {
  * @property {Arrow[]} arrows
  * @property {{ minX: number, minY: number, maxX: number, maxY: number }} bounds
  * @property {Array<{ line: import('./schema.js').Line, first: import('./graph.js').StationInfo }>} missing  E12
+ * @property {Array<{ line: import('./schema.js').Line, first: import('./graph.js').StationInfo, later: import('./graph.js').StationInfo[] }>} lateStarts
+ *   E12:最初の駅が、路線ファイルで後ろにある路線の駅を前提にしている始発の路線
  * @property {Fallback[]} fallbacks  N03
  * @property {import('./schema.js').Line[]} linesShown
  */
@@ -629,11 +656,11 @@ export function layoutMap(site, drawn, opts = {}) {
   if (opts.planned) drawn = new Set([...drawn, ...all.filter((s) => s.planned).map((s) => s.id)]);
   const shown = all.filter((s) => drawn.has(s.id));
   const byLine = new Map(site.lines.map((l) => [l.id, shown.filter((s) => s.lineId === l.id)]));
-  const { branches, missing } = branchStations(site, drawn, all);
+  const { branches, missing, starts, lateStarts } = branchStations(site, drawn, all);
   const trunkLines = site.lines.filter((l) => l.layout === null);
   const trunkIds = new Set(trunkLines.map((l) => l.id));
   const trunk = trunkLines.flatMap((l) => byLine.get(l.id) ?? []);
-  const { rows: plans, fallbacks } = planRows(site, branches, trunkIds, trunk[trunk.length - 1]);
+  const { rows: plans, fallbacks } = planRows(site, branches, starts, trunkIds, trunk[trunk.length - 1]);
 
   // ---- 札を格子に置く(配置 1〜5) ----
   /** @param {import('./graph.js').StationInfo[]} list */
@@ -687,17 +714,31 @@ export function layoutMap(site, drawn, opts = {}) {
   const branchPlans = [];
   for (const r of plans) {
     const groups = chaptersOf(byLine.get(r.line.id) ?? []);
-    const parents = r.info.stations.map((s) => cards.get(s.chapter.number));
+    if (r.start) {
+      // 始発の路線:最初の駅が前提にする駅を含む札のうち、最も右の札の次の列から(配置 5)
+      if (groups.length === 0) continue;
+      const cols = r.start.requires.flatMap((id) => {
+        const s = site.stationById.get(id);
+        const c = s && drawn.has(s.id) ? cards.get(s.chapter.number) : undefined;
+        return c ? [c.col] : [];
+      });
+      const begin = cols.length > 0 ? Math.max(...cols) + 1 : 0;
+      const tier = r.dir === 'up' ? -(r.row + 1) : r.row + 1;
+      groups.forEach((c, i) => addCard(c.chapter, c.stations, r.line.id, begin + i, tier));
+      continue;
+    }
+    const info = /** @type {BranchInfo} */ (r.info);
+    const parents = info.stations.map((s) => cards.get(s.chapter.number));
     if (groups.length === 0 || parents.some((p) => !p)) continue;
     const parentCols = parents.map((p) => /** @type {Card} */ (p).col);
     let start;
     if (r.dir === 'right') start = lastTrunkCol + 1;
     else if (r.dir === 'merge') start = Math.max(lastTrunkCol, ...parentCols) + 1;
-    else start = /** @type {Card} */ (cards.get(r.info.branch.chapter.number)).col + 1;
+    else start = /** @type {Card} */ (cards.get(info.branch.chapter.number)).col + 1;
     const tier = r.dir === 'up' ? -(r.row + 1) : r.dir === 'down' ? r.row + 1 : 0;
     groups.forEach((c, i) => addCard(c.chapter, c.stations, r.line.id, start + i, tier));
-    placedBranches.set(r.line.id, r.info);
-    branchPlans.push({ line: r.line, info: r.info, dir: r.dir });
+    placedBranches.set(r.line.id, info);
+    branchPlans.push({ line: r.line, info, dir: r.dir });
   }
   const cardList = [...cards.values()].sort((a, b) => a.number - b.number);
   const placedStations = all.flatMap((s) => {
@@ -733,6 +774,7 @@ export function layoutMap(site, drawn, opts = {}) {
    * @property {boolean} main       分岐の線のうち、主な分岐駅からの線(札の左の辺まで引く)
    * @property {string} [label]
    * @property {import('./graph.js').StationInfo} [station]  分岐の線の分岐駅
+   * @property {string} [bundle]  前提の矢印の、始点の章と前提にされる駅。同じ値で同じ辺から出る矢印は束ねる
    */
   /** @type {Conn[]} */
   const conns = [];
@@ -809,6 +851,7 @@ export function layoutMap(site, drawn, opts = {}) {
       group: null,
       main: true,
       label: a.label,
+      bundle: `${a.from}:${a.stations.map((s) => s.id).join(',')}`,
     });
   }
 
@@ -875,11 +918,25 @@ export function layoutMap(site, drawn, opts = {}) {
      * @property {Piece[]} pieces
      * @property {number} [p1]  出る点の x
      * @property {number} [p2]  入る点の x
+     * @property {Bundle} [bundle]  束ねた前提の矢印の組
+     */
+    /**
+     * 束ねた前提の矢印(配置 9)。辺の1点から出て、出た段の溝の共通の区間(trunk)を進み、途中で枝分かれする
+     * @typedef {object} Bundle
+     * @property {string} id
+     * @property {Route[]} members
+     * @property {number} [p1]       出る点の x
+     * @property {Piece | null} trunk  共通の区間
+     * @property {number[]} prefs    矢印ごとの、共通の区間の溝の中の位置の好み
      */
     /** @type {Route[]} */
     const routes = [];
-    /** 札の辺ごとの、出入りする前提の矢印 @type {Map<string, Array<{ route: Route, end: 'p1' | 'p2', toward: number }>>} */
+    /** @type {Bundle[]} */
+    const bundles = [];
+    /** 札の辺ごとの、出入りする前提の矢印 @type {Map<string, Array<{ route: { p1?: number, p2?: number }, end: 'p1' | 'p2', toward: number }>>} */
     const ports = new Map();
+    /** 前提の矢印と、その両端の点を寄せる向き @type {Array<{ route: Route, towardFrom: number, towardTo: number }>} */
+    const arrowEnds = [];
     /** 札の辺ごとの、分岐の線の出る向き @type {Map<string, Set<number>>} */
     const diag = new Map();
     const portKey = (/** @type {Card} */ c, /** @type {string} */ edge) => `${c.number}:${edge}`;
@@ -943,14 +1000,33 @@ export function layoutMap(site, drawn, opts = {}) {
       if (g1 !== g2) route.c = to.col >= from.col ? to.col - 1 : to.col;
       const towardFrom = route.c === undefined ? cx(to) : mid('col', route.c);
       const towardTo = route.c === undefined ? cx(from) : mid('col', route.c);
-      for (const [card, edge, end, toward] of /** @type {const} */ ([
-        [from, es, 'p1', towardFrom],
-        [to, et, 'p2', towardTo],
-      ])) {
-        const k = portKey(card, edge);
-        ports.set(k, [...(ports.get(k) ?? []), { route, end, toward }]);
-      }
+      arrowEnds.push({ route, towardFrom, towardTo });
       routes.push(route);
+    }
+    // 前提にされる駅が同じで、同じ札の同じ辺から出る矢印は束ね、辺の上の1点から出す(配置 9)
+    /** @param {Card} card @param {string} edge @param {{ route: { p1?: number, p2?: number }, end: 'p1' | 'p2', toward: number }} entry */
+    const addPort = (card, edge, entry) => {
+      const k = portKey(card, edge);
+      ports.set(k, [...(ports.get(k) ?? []), entry]);
+    };
+    const sourceKey = (/** @type {Route} */ r) => `${r.conn.bundle}|${r.es}`;
+    /** @type {Map<string, Array<{ route: Route, towardFrom: number, towardTo: number }>>} */
+    const sameSource = new Map();
+    for (const e of arrowEnds) sameSource.set(sourceKey(e.route), [...(sameSource.get(sourceKey(e.route)) ?? []), e]);
+    for (const e of arrowEnds) {
+      const { route } = e;
+      const group = /** @type {Array<{ route: Route, towardFrom: number }>} */ (sameSource.get(sourceKey(route)));
+      if (group.length === 1)
+        addPort(route.conn.from, /** @type {string} */ (route.es), { route, end: 'p1', toward: e.towardFrom });
+      else if (group[0] === e) {
+        /** @type {Bundle} */
+        const b = { id: `arrows:${sourceKey(route)}`, members: group.map((x) => x.route), trunk: null, prefs: [] };
+        for (const x of group) x.route.bundle = b;
+        bundles.push(b);
+        const toward = group.reduce((sum, x) => sum + x.towardFrom, 0) / group.length;
+        addPort(route.conn.from, /** @type {string} */ (route.es), { route: b, end: 'p1', toward });
+      }
+      addPort(route.conn.to, /** @type {string} */ (route.et), { route, end: 'p2', toward: e.towardTo });
     }
     // 札の辺の上の、前提の矢印の出入りする点(配置 9:間をあけて並べる)
     for (const [k, list] of ports) {
@@ -966,6 +1042,7 @@ export function layoutMap(site, drawn, opts = {}) {
       L.forEach((p, i) => (p.route[p.end] = left0 + i * step));
       R.forEach((p, i) => (p.route[p.end] = right0 - (R.length - 1 - i) * step));
     }
+    for (const b of bundles) for (const m of b.members) m.p1 = b.p1;
     // 前提の矢印の、溝の中の区間
     for (const route of routes) {
       const conn = route.conn;
@@ -977,21 +1054,27 @@ export function layoutMap(site, drawn, opts = {}) {
       const side1 = route.es === 'bottom' ? -1 : 1; // 出る札は溝の上(-1)か下(+1)
       const side2 = route.et === 'bottom' ? -1 : 1;
       const base = { id: conn.id, group: null, track: 0, label: false };
+      const b = route.bundle;
+      /** 出た段の溝の区間。束ねた矢印は、1つの共通の区間を広げる @param {number} lo @param {number} hi @param {number} pref */
+      const firstRow = (lo, hi, pref) => {
+        if (!b) {
+          route.pieces.push({ ...base, axis: 'row', gap: g1, lo, hi, pref });
+          return;
+        }
+        b.prefs.push(pref);
+        const avg = b.prefs.reduce((sum, x) => sum + x, 0) / b.prefs.length;
+        if (!b.trunk)
+          b.trunk = { id: b.id, group: null, track: 0, label: true, axis: 'row', gap: g1, lo, hi, pref: avg };
+        else Object.assign(b.trunk, { lo: Math.min(b.trunk.lo, lo), hi: Math.max(b.trunk.hi, hi), pref: avg });
+      };
       if (route.c === undefined) {
-        route.pieces.push({
-          ...base,
-          axis: 'row',
-          gap: g1,
-          lo: Math.min(p1, p2),
-          hi: Math.max(p1, p2),
-          pref: (side1 + side2) / 2,
-        });
+        firstRow(Math.min(p1, p2), Math.max(p1, p2), (side1 + side2) / 2);
       } else {
         const cs = span('col', route.c);
         const cMid = (cs.lo + cs.hi) / 2;
         const down = g2 > g1 ? 1 : -1;
+        firstRow(Math.min(p1, cs.lo), Math.max(p1, cs.hi), (side1 + down) / 2);
         route.pieces.push(
-          { ...base, axis: 'row', gap: g1, lo: Math.min(p1, cs.lo), hi: Math.max(p1, cs.hi), pref: (side1 + down) / 2 },
           {
             ...base,
             axis: 'col',
@@ -1003,16 +1086,17 @@ export function layoutMap(site, drawn, opts = {}) {
           { ...base, axis: 'row', gap: g2, lo: Math.min(p2, cs.lo), hi: Math.max(p2, cs.hi), pref: (side2 - down) / 2 },
         );
       }
-      // ラベルは、横に進む区間のうち長いほう(見積もり)の上に置く
+      // ラベルは、横に進む区間のうち長いほう(見積もり)の上に置く。束ねた矢印は共通の区間の上に置く
+      if (b) continue;
       const rowPieces = route.pieces.filter((p) => p.axis === 'row');
-      rowPieces.sort((a, b) => b.hi - b.lo - (a.hi - a.lo))[0].label = true;
+      rowPieces.sort((x, y) => y.hi - y.lo - (x.hi - x.lo))[0].label = true;
     }
 
     // トラックの割り当て(配置 9:同じ溝で範囲が重なる区間は別のトラックに)
     /** @type {Map<string, Piece[]>} */
     const byGap = new Map();
-    for (const r of routes)
-      for (const p of r.pieces) byGap.set(`${p.axis}${p.gap}`, [...(byGap.get(`${p.axis}${p.gap}`) ?? []), p]);
+    const pieces = [...routes.flatMap((r) => r.pieces), ...bundles.flatMap((x) => (x.trunk ? [x.trunk] : []))];
+    for (const p of pieces) byGap.set(`${p.axis}${p.gap}`, [...(byGap.get(`${p.axis}${p.gap}`) ?? []), p]);
     const SEP = 8;
     /** @type {Map<string, { order: number[], lanes: number[], count: number }>} */
     const trackInfo = new Map();
@@ -1131,6 +1215,70 @@ export function layoutMap(site, drawn, opts = {}) {
     const diagStart = new Map();
     /** 前提の矢印の横の区間(ラベルの位置に使う) @type {Map<string, Array<{ x1: number, x2: number, y: number, label: boolean, gap: number }>>} */
     const rowSegs = new Map();
+    /** ラベルを置かない前提の矢印(束ねた矢印のうち、共通の区間を描かないもの) */
+    const quiet = new Set();
+    /** 束ねた矢印の線(組ごとに1回だけ計算する) @type {Map<object, Map<object, { pts: number[][], segs: Array<{ x1: number, x2: number, y: number, label: boolean, gap: number }>, lead: boolean }>>} */
+    const bundleDrawn = new Map();
+    /**
+     * 束ねた矢印の線の点(配置 9)。共通の区間は、最も遠くで枝分かれする矢印(lead)の線に含め、
+     * 反対の側へ枝分かれする矢印があれば、その側で最も遠いものの線を出る点の真下(真上)から始める。
+     * ほかの矢印の線は、枝分かれする点から始める。
+     * @param {NonNullable<(typeof routes)[number]['bundle']>} b
+     */
+    const bundlePaths = (b) => {
+      const trunk = /** @type {Piece} */ (b.trunk);
+      const T = trackPos('row', trunk.gap, trunk.track);
+      const p1 = /** @type {number} */ (b.p1);
+      const first = b.members[0];
+      const y1 = edgeY(first.conn.from, /** @type {'top' | 'bottom'} */ (first.es));
+      const info = b.members.map((m) => {
+        const p2 = /** @type {number} */ (m.p2);
+        const y2 = edgeY(m.conn.to, /** @type {'top' | 'bottom'} */ (m.et));
+        if (m.c === undefined) return { m, turn: p2, rest: [[p2, y2]], seg: null };
+        const [v, h2] = m.pieces;
+        const tx = trackPos('col', v.gap, v.track);
+        const t2 = trackPos('row', h2.gap, h2.track);
+        return {
+          m,
+          turn: tx,
+          rest: [
+            [tx, t2],
+            [p2, t2],
+            [p2, y2],
+          ],
+          seg: { x1: Math.min(p2, tx), x2: Math.max(p2, tx), y: t2, label: false, gap: h2.gap },
+        };
+      });
+      /** @typedef {(typeof info)[number]} Branch */
+      /** @type {Branch | null} */
+      let farR = null;
+      /** @type {Branch | null} */
+      let farL = null;
+      for (const i of info) {
+        if (i.turn >= p1 && (!farR || i.turn > farR.turn)) farR = i;
+        if (i.turn < p1 && (!farL || i.turn < farL.turn)) farL = i;
+      }
+      const lead = !farL || (farR && farR.turn - p1 >= p1 - farL.turn) ? farR : farL;
+      const trunkSeg = { x1: farL ? farL.turn : p1, x2: farR ? farR.turn : p1, y: T, label: true, gap: trunk.gap };
+      const out = new Map();
+      for (const i of info) {
+        const start =
+          i === lead
+            ? [
+                [p1, y1],
+                [p1, T],
+              ]
+            : i === farR || i === farL
+              ? [[p1, T]]
+              : [];
+        const pts = [...start, [i.turn, T], ...i.rest].filter(
+          (q, k, all) => k === 0 || q[0] !== all[k - 1][0] || q[1] !== all[k - 1][1],
+        );
+        const segs = i === lead ? [trunkSeg, ...info.flatMap((x) => (x.seg ? [x.seg] : []))] : [];
+        out.set(i.m, { pts, segs, lead: i === lead });
+      }
+      return out;
+    };
     for (const route of routes) {
       const conn = route.conn;
       const base = {
@@ -1144,7 +1292,8 @@ export function layoutMap(site, drawn, opts = {}) {
         ...(conn.group ? { group: conn.group } : {}),
       };
       const { from, to } = conn;
-      if (route.pieces.length === 0) {
+      // 区間のない線は、路線の線と同じ高さの横の線(束ねた矢印は、共通の区間を組が持つので区間がないことがある)
+      if (route.pieces.length === 0 && !route.bundle) {
         const y1 = headY(from);
         links.push({
           ...base,
@@ -1193,6 +1342,18 @@ export function layoutMap(site, drawn, opts = {}) {
         continue;
       }
       // 前提の矢印
+      if (route.bundle) {
+        let paths = bundleDrawn.get(route.bundle);
+        if (!paths) {
+          paths = bundlePaths(route.bundle);
+          bundleDrawn.set(route.bundle, paths);
+        }
+        const p = /** @type {{ pts: number[][], segs: any[], lead: boolean }} */ (paths.get(route));
+        links.push({ ...base, group: route.bundle.id, points: p.pts });
+        if (p.lead) rowSegs.set(conn.id, p.segs);
+        else quiet.add(conn.id);
+        continue;
+      }
       const p1 = /** @type {number} */ (route.p1);
       const p2 = /** @type {number} */ (route.p2);
       const y1 = edgeY(from, /** @type {'top' | 'bottom'} */ (route.es));
@@ -1255,7 +1416,7 @@ export function layoutMap(site, drawn, opts = {}) {
     const step = g.labelH + 2;
     for (const route of routes) {
       const conn = route.conn;
-      if (!conn.label) continue;
+      if (!conn.label || quiet.has(conn.id)) continue;
       const w = round(textWidth(conn.label, g.labelFont) + 2);
       const h = g.labelH;
       /** 候補と、近さの点数(小さいほど先に試す) @type {Array<Box & { score: number }>} */
@@ -1350,6 +1511,7 @@ export function layoutMap(site, drawn, opts = {}) {
       maxY: round(Math.max(...ys)),
     },
     missing,
+    lateStarts,
     fallbacks,
     linesShown: site.lines.filter((l) => cardList.some((c) => c.lineId === l.id)),
   };
