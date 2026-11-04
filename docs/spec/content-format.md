@@ -144,7 +144,7 @@ content/
 | description | 分野の入口ページに出す1〜3文の紹介文 | 必須 |
 | goals | 目標の配列。1つ以上で、kind が final のものを1つ以上含む | 必須 |
 | goals[].station | 目標の駅の ID | 必須 |
-| goals[].kind | `final`(終着駅)または `partial`(途中下車駅) | 必須 |
+| goals[].kind | `final`(最終目標)または `partial`(途中の目標) | 必須 |
 | goals[].label | 路線図と入口ページに出す目標の説明 | 必須 |
 
 - 同じ分野の goals に、同じ駅を2回書けない。

@@ -65,7 +65,7 @@
 
 | 状態 | 次の章 |
 |---|---|
-| F を選んでいて、C が F の章の順序に入る | F の章の順序で C の次にある章。なければなし(終着) |
+| F を選んでいて、C が F の章の順序に入る | F の章の順序で C の次にある章。なければなし(分野の最後の章) |
 | F を選んでいて、C が範囲外の章 | F の章の順序のうち、章番号が C より大きい最初の章。なければなし |
 | 分野を選んでいない | 全章を章番号の順に並べたとき、C の次にある章。なければなし |
 
@@ -164,7 +164,7 @@ dist/
 1. 表示番号:reading-symbols = Z01、sets-maps = Z03、metric-space = M02、continuous-map = M04、cauchy-sequence = A01、banach = A04、picard-lindelof = A05、hilbert-space = A08、torus = G06、manifold = G07。
 2. 乗換駅は reading-proofs、sets-maps、metric-space、continuous-map の4つだけ。
 3. 第3章の前提は第1章だけ。
-4. 情報科学の範囲は9駅(reading-symbols、reading-proofs、sets-maps、convergence、metric-space、cauchy-sequence、completeness、contraction、banach)で、章の順序は 0, 1, 3。第3章の次の章はなし(終着)。第4章は範囲外の章で、次の章はなし。
+4. 情報科学の範囲は9駅(reading-symbols、reading-proofs、sets-maps、convergence、metric-space、cauchy-sequence、completeness、contraction、banach)で、章の順序は 0, 1, 3。第3章の次の章はなし(分野の最後の章)。第4章は範囲外の章で、次の章はなし。
 5. 理論物理の範囲に compact-connected は入らず、章の順序は 0, 1, 2, 3, 4, 5, 6, 8, 9。第3章の次の章は第4章。第7章は範囲外の章で、次の章は第8章。
 6. 分野を選んでいないとき、第3章の次の章は第4章、第9章の次の章はなし。
 7. 乗換案内:理論物理の第3章は幾何線の1項目(分岐駅 continuous-map は第2章、最初の駅 topological-space は第6章)。理論物理の第1章は2項目(解析線:分岐駅 metric-space はこの章、最初の駅は第3章。幾何線:分岐駅は第2章、最初の駅は第6章)。情報科学の第3章は0項目。
@@ -188,7 +188,7 @@ dist/
 25. fig-one の画像のタイトルを `"点列 $(x_n)$ と集合 $\{x \mid x > 0\}$、\$5"` にしてビルドすると、図 3.1 のキャプションに KaTeX の数式が2つ出て、その TeX は `(x_n)` と `\{x \mid x > 0\}` であり、`\$` は文字の「$」になる。タイトルに閉じていない `$`、`$\frac{1}{$`、`$x \tag{1}$` のどれかを書くと E10 で止まる。fig-one を参照形式の画像(`![一枚目の説明][one]{#fig-one}` と `[one]: figures/a.svg "集合 $\{x \mid x > 0\}$、\$5"`)にしても、E10 にならず、キャプションの数式の TeX は `\{x \mid x > 0\}`、`\$` は文字の「$」になる。
 26. テスト用原稿をビルドすると、全ページの CSS・スクリプト・favicon・KaTeX の CSS・図の URL と、`data-defs` の `defs.json` の URL に `?v=` が付き、その値は `dist/` のそのファイルの中身の SHA-256 の先頭 10 文字と一致する。第3章に図を置いてビルドし、その図のファイルだけを変えてビルドし直すと、変わる印はその図の印だけである。
 27. テスト用原稿の各章で、application の札は「応用 章番号.k(〈分野名〉) · 〈title〉」で、k は章ページに並ぶ順(駅の順 → 分野の並び → 書いた順)に 1 から振られる(期待する並びは、テストが原稿から集める)。第3章の完備性の駅の理論物理の application に `#app-function-space` を付け、第4章に `[[@app-function-space]]` を書いてビルドすると、第4章のその参照は「応用 3.N」(N はその応用の番号)と表示され、`/chapters/completeness-fixed-point/#app-function-space` へのリンクになり、第3章のその応用の `<details>` の id は `app-function-space` である。`[[app-function-space]]`(`@` なし)と書くと E05 で止まり、メッセージに `[[@app-function-space]]` で指すことが書かれる。
-28. [route-map.md](route-map.md) の受け入れテスト 27 の路線を足し、その最後の駅を理論物理の目標(終着駅)にすると、理論物理の第5章の乗換案内にその路線の項目が1つでき、分岐駅は A08(この章にある)と G07(第9章、この章にない)の順に並び、最初の駅は第14章にある。
+28. [route-map.md](route-map.md) の受け入れテスト 27 の路線を足し、その最後の駅を理論物理の最終目標にすると、理論物理の第5章の乗換案内にその路線の項目が1つでき、分岐駅は A08(この章にある)と G07(第9章、この章にない)の順に並び、最初の駅は第14章にある。
 29. テスト用原稿の第3章で、出発点の地の文に注を1つ、banach 駅の地の文に注を1つ、banach 駅の証明の詳細の中に注を1つ、この順に書いてビルドすると、注番号は書いた順に「注1」「注2」「注3」になる。banach 駅の情報科学の application の中に注を足すと、application は駅の末尾に並ぶので、その注は「注4」になる。`?field=physics` と `?field=cs` のどちらで開いても、番号は変わらない。
 30. テスト用原稿の第3章で、kreyszig-fa、lecun-deep-learning、kreyszig-fa の順に引くと、表示は「[1]」「[2]」「[1]」になり、章の参考文献は kreyszig-fa、lecun-deep-learning の順に並ぶ。第4章で lecun-deep-learning だけを引くと、第4章での表示は「[1]」になる。別の書き方として、第3章で引用を banach 駅の2か所だけにし、駅の最初の段落に置いた注の本文で lecun-deep-learning を、その後の段落の地の文で kreyszig-fa を引く。注の本文は章ページでは駅の末尾(kreyszig-fa の引用より後)に並ぶが、注の中の引用は注の印の位置で数えるので、lecun-deep-learning が「[1]」、kreyszig-fa が「[2]」になる。
 31. 文献の一覧に項目を足し、確認の記録を取らずにビルドすると、E15 の1件だけで止まり、`dist/` は変わらない。ビルドはネットワークに接続しない(テストでは、ネットワークへの接続を失敗させた状態でテスト用原稿をビルドし、終了コード 0 になることで確かめる)。
