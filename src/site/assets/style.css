@@ -206,14 +206,31 @@ code {
   background: var(--paper);
   border-bottom: 1px solid var(--rule);
 }
+/* バーの中身は、折り返す左の塊(.bar-main)と、右上に置く塊(.bar-end。リポジトリへのリンク)に分ける
+   (site.md「リポジトリへのリンク」)。左の塊が何行に折り返しても、右の塊は1行目の右端にある。 */
 .bar-in {
   max-width: var(--page);
   margin: 0 auto;
   display: flex;
+  align-items: flex-start;
+  gap: 8px 14px;
+  padding: 10px 16px;
+}
+.bar-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 14px;
-  padding: 10px 16px;
+}
+.bar-end {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* 1行目の高さ(.mark の font-size × line-height)。リンクをその行の中央にそろえる */
+  min-height: calc(19px * 1.85);
 }
 .mark {
   display: inline-flex;
@@ -286,12 +303,42 @@ code {
 .mini a.off {
   opacity: 0.35;
 }
+/* リポジトリへのリンク(site.md「リポジトリへのリンク」)。文字は px で書く */
+.repo-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 4px 10px 4px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+  text-decoration: none;
+}
+.repo-link svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+.repo-link:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
 @media (max-width: 600px) {
   .crumb {
     display: none;
   }
   .mini {
     margin-left: 0;
+  }
+  /* 狭い画面ではマークだけにして、左の塊の幅を空ける */
+  .repo-link {
+    padding: 5px 7px;
+  }
+  .repo-link span {
+    display: none;
   }
 }
 

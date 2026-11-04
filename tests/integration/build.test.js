@@ -781,3 +781,27 @@ describe('build: 注と参考文献', () => {
     }
   });
 });
+
+// docs/spec/build.md 受け入れテスト 32(リポジトリへのリンク)
+describe('build: リポジトリへのリンク', () => {
+  test('32. MATHENAGA_REPO_URL を渡すと全ページにリンクが1つ、渡さなければない', async () => {
+    const root = await tempRoot();
+    roots.push(root);
+    const dist = path.join(root, 'dist');
+    const pages = async () => (await listFiles(dist)).filter((f) => f.endsWith('.html'));
+    assert.deepEqual((await buildIn(root, '/', 'https://github.com/example/mathenaga')).errors, []);
+    const files = await pages();
+    assert.ok(files.length > 3);
+    for (const f of files) {
+      const bar = capture(/<header class="bar">([\s\S]*?)<\/header>/, await readDist(dist, f));
+      const links = bar.match(/<a class="repo-link" href="https:\/\/github\.com\/example\/mathenaga"/g) ?? [];
+      assert.equal(links.length, 1, f);
+    }
+    assert.deepEqual((await buildIn(root, '/', '')).errors, []);
+    for (const f of await pages()) {
+      const html = await readDist(dist, f);
+      assert.ok(!html.includes('class="repo-link'), f);
+      assert.ok(!html.includes('bar-end'), f);
+    }
+  });
+});

@@ -9,6 +9,7 @@ import { chromium } from 'playwright';
 import {
   CH3 as CH3_SOURCE,
   CONTENT,
+  TEST_REPO_URL,
   addFigures,
   buildIn,
   edit,
@@ -1192,6 +1193,67 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
       assert.ok(chars.length > 500, `選んだ文が ${chars.length} 文字しかない`);
       assert.equal(excerpt, `${loc}\n${chars.slice(0, 500).join('')}…`);
       await context.close();
+    });
+  });
+
+  describe('site: リポジトリへのリンク(P-13)', () => {
+    test('58. 上端のバーの右上に、リポジトリへのリンクが鳥と同じ行にある', async () => {
+      for (const width of [1200, 400]) {
+        const { context, page, errors } = await open({ viewport: { width, height: 800 } });
+        for (const p of ['', 'fields/physics/', CH3]) {
+          const at = `${width}px ${p || 'トップ'}`;
+          await page.goto(`${server.url}${p}`);
+          const link = page.locator('.bar a.repo-link');
+          assert.equal(await link.count(), 1, at);
+          assert.equal(await link.getAttribute('href'), TEST_REPO_URL, at);
+          assert.equal(await link.getAttribute('target'), '_blank', at);
+          assert.equal(await link.getAttribute('aria-label'), 'GitHubのリポジトリ(新しいタブで開く)', at);
+          assert.equal(await link.locator('span').isVisible(), width > 600, `${at}: 「GitHub」の文字`);
+          const mark = await page.locator('.bar .mark').boundingBox();
+          const b = await link.boundingBox();
+          assert.ok(mark && b, at);
+          assert.ok(b.y >= mark.y - 1 && b.y + b.height <= mark.y + mark.height + 1, `${at}: 鳥と同じ行にない`);
+          const [right, inner] = await page.evaluate(() => {
+            const bar = /** @type {HTMLElement} */ (document.querySelector('.bar-in'));
+            const end = /** @type {HTMLElement} */ (document.querySelector('.bar-end'));
+            return [
+              end.getBoundingClientRect().right,
+              bar.getBoundingClientRect().right - parseFloat(getComputedStyle(bar).paddingRight),
+            ];
+          });
+          assert.ok(Math.abs(right - inner) <= 1, `${at}: 右端 ${right} と ${inner}`);
+          const [sw, cw] = await page.evaluate(() => [
+            document.documentElement.scrollWidth,
+            document.documentElement.clientWidth,
+          ]);
+          assert.ok(sw <= cw, `${at}: 横スクロール`);
+        }
+        assert.deepEqual(errors, []);
+        await context.close();
+      }
+      // スクリプトを止めても見える
+      const { context, page } = await open({ javaScriptEnabled: false });
+      await page.goto(`${server.url}${CH3}`);
+      assert.ok(await page.locator('.bar a.repo-link').isVisible());
+      await context.close();
+      // MATHENAGA_REPO_URL を渡さなければ、リンクも右端の塊もない
+      const root = await tempRoot();
+      try {
+        assert.deepEqual((await buildIn(root, '/', '')).errors, []);
+        const s = await serve(path.join(root, 'dist'));
+        try {
+          const { context: ctx, page: p } = await open();
+          for (const u of ['', 'fields/physics/', CH3]) {
+            await p.goto(`${s.url}${u}`);
+            assert.equal(await p.locator('.bar .bar-end, .bar a.repo-link').count(), 0, u);
+          }
+          await ctx.close();
+        } finally {
+          await s.close();
+        }
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
     });
   });
 
