@@ -197,7 +197,7 @@ $$
 **4.** $(x + z) - (y + z) = x - y$ なので $d(x + z, y + z) = d(x, y)$ です。また $\alpha x - \alpha y = \alpha(x - y)$(分配法則 5、実数倍の結合法則 7、[[@zero-inverse]] の 4 から)と斉次性から、$d(\alpha x, \alpha y) = |\alpha|\,\|x - y\| = |\alpha|\, d(x, y)$ です。
 :::
 
-以下、ノルム空間は、この距離で距離空間とみなします。点列の収束も[[completeness|完備性]]も、この距離で考えます。
+以下、ノルム空間は、この距離で距離空間とみなします。点列の収束も[[def-completeness|完備性]]も、この距離で考えます。
 
 ::: examples
 **$\mathbb{R}^m$ のノルム。** $x = (x_1, \dots, x_m)$ について
@@ -221,8 +221,8 @@ $$
 
 完備なノルム空間には、名前が付いています。
 
-::: definition {#banach-space name="バナッハ空間" en="Banach space"}
-ノルム空間 $(V, \|\cdot\|)$ が、ノルムから決まる距離 $d(x, y) = \|x - y\|$ について[[completeness|完備]]であるとき、$V$ をバナッハ空間という。
+::: definition {#def-banach-space name="バナッハ空間" en="Banach space"}
+ノルム空間 $(V, \|\cdot\|)$ が、ノルムから決まる距離 $d(x, y) = \|x - y\|$ について[[def-completeness|完備]]であるとき、$V$ をバナッハ空間という。
 :::
 
 ::: examples
@@ -305,7 +305,7 @@ $V$ を[[ベクトル空間]]とする。関数 $\langle \cdot, \cdot \rangle: V
 3. $\langle \alpha x + \beta y, z \rangle = \alpha \langle x, z \rangle + \beta \langle y, z \rangle$(線形性)
 :::
 
-::: definition {#orthogonal name="直交" en="orthogonal"}
+::: definition {#def-orthogonal name="直交" en="orthogonal"}
 内積空間の二つのベクトル $x, y$ が直交するとは、$\langle x, y \rangle = 0$ となることをいう。
 :::
 

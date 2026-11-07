@@ -66,7 +66,7 @@ $0$ と $1$ の無限列の全体を $\Sigma$、有限の列 $w$ で始まる無
 距離空間の開集合はこの条件をみたすので、距離空間は新しい意味の空間の例になります。出発点のランプのように距離が出てこない場面でも、この条件ならみたすかどうかを確かめられます。
 :::
 
-::: definition {#topology name="位相" en="topology"}
+::: definition {#def-topology name="位相" en="topology"}
 集合 $X$ の部分集合を要素とする集合 $\mathcal{O}$(つまり $\mathcal{O} \subset \mathcal{P}(X)$。$\mathcal{P}(X)$ は $X$ の[[冪集合]])が次の三つをみたすとき、$\mathcal{O}$ を $X$ の位相という。
 
 1. $\emptyset \in \mathcal{O}$ かつ $X \in \mathcal{O}$ である。
@@ -82,7 +82,7 @@ $0$ と $1$ の無限列の全体を $\Sigma$、有限の列 $w$ で始まる無
 
 距離空間の開集合の全体は、[[@open-set-operations]] の三つの性質をみたすので、位相になります。
 
-::: definition {#metric-topology name="距離位相" en="metric topology"}
+::: definition {#def-metric-topology name="距離位相" en="metric topology"}
 [[距離空間]] $(X, d)$ の[[開集合]]の全体 $\mathcal{O}_d$ を、$d$ から決まる位相、または距離位相という。
 :::
 
@@ -134,7 +134,7 @@ $$
 
 連続性は、[[@continuity-open-preimage]] の条件 2 をそのまま定義にします。
 
-::: definition {#topological-continuity name="位相空間の連続写像" en="continuous map"}
+::: definition {#def-topological-continuity name="位相空間の連続写像" en="continuous map"}
 位相空間 $(X, \mathcal{O}_X)$ から $(Y, \mathcal{O}_Y)$ への写像 $f: X \to Y$ が連続であるとは、$Y$ のどの開集合 $V$ についても、[[逆像]] $f^{-1}(V)$ が $X$ の開集合であることをいう。連続な写像を、連続写像という。
 :::
 
@@ -148,7 +148,7 @@ $X$ と $Y$ が距離空間で、どちらにも距離位相を入れるとき�
 
 [[@open-set]] の落とし穴では、距離空間の部分集合 $Y$ に、2点の距離を元の距離のまま測る距離を入れて、部分空間としました。位相空間の部分集合には、開集合を $Y$ との共通部分で切り取って位相を入れます。
 
-::: definition {#relative-topology name="相対位相" en="relative topology" aliases="部分空間位相"}
+::: definition {#def-relative-topology name="相対位相" en="relative topology" aliases="部分空間位相"}
 位相空間 $(X, \mathcal{O})$ の部分集合 $Y$ について、$\mathcal{O}_Y := \{U \cap Y \mid U \in \mathcal{O}\}$ を、$Y$ の相対位相という。$(Y, \mathcal{O}_Y)$ を、$(X, \mathcal{O})$ の部分空間 (subspace) という。
 :::
 
@@ -367,13 +367,13 @@ $$
 [[@limit-unique]] で、距離空間の点列の極限はただ一つであることを示しました。証明には、距離の正値性、対称性、三角不等式を使いました。位相空間には距離がないので、点列の収束は開集合で定めます。そうすると、[[@topological-space]] と [[@cofinite-topology]] で挙げた空間のなかに、一つの点列が二つ以上の点に収束するものが出てきます。極限を一つの点として扱えるように、異なる2点を開集合で分けられることを、空間の条件として別に課します。この条件は極限がただ一つに決まることを保証しますが、極限がただ一つに決まる空間がどれもこの条件をみたすわけではありません(下の補足)。
 :::
 
-::: definition {#neighborhood name="近傍" en="neighborhood"}
+::: definition {#def-neighborhood name="近傍" en="neighborhood"}
 位相空間 $X$ の点 $x$ と部分集合 $N$ について、$x \in U \subset N$ となる開集合 $U$ があるとき、$N$ を $x$ の近傍という。開集合である近傍を、開近傍 (open neighborhood) という。
 :::
 
 $x$ の近傍とは、$x$ を含む開集合を内側に含む集合のことです^[近傍を開集合に限って定める本もあります。この駅の点列の収束とハウスドルフ空間は、どちらの定め方でも同じになります。]。距離空間では、$N$ が $x$ の近傍であることは、ある $r > 0$ で $B(x, r) \subset N$ となることと同じです。開球 $B(x, r)$ は $x$ を含む開集合で([[@open-ball-is-open]])、逆に $x \in U \subset N$ となる開集合 $U$ があれば、$B(x, r) \subset U$ となる $r$ がとれるからです。
 
-::: definition {#topological-convergence name="位相空間での点列の収束" en="convergence in a topological space"}
+::: definition {#def-topological-convergence name="位相空間での点列の収束" en="convergence in a topological space"}
 位相空間 $X$ の[[点列]] $(x_n)$ が点 $x \in X$ に収束するとは、$x$ を含むどの開集合 $U$ についても、ある番号 $N$ があって、すべての $n \ge N$ について $x_n \in U$ となることをいう。このとき、$x$ を $(x_n)$ の極限 (limit) という。
 :::
 

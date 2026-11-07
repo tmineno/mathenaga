@@ -50,7 +50,7 @@ line: main
 $d_1$、$d_2$、$d_\infty$ のように、互いに定数倍で上から抑え合う距離のあいだで変わらないものを取り出すために、点のまわりの範囲に開球という名前を付け、どの点のまわりにも開球が収まる集合を開集合と呼びます。どんな距離に変えても変わらないわけではありません(下の [[@discrete-metric-open]] の離散距離)。出発点の「少しずらしても条件が保たれる」を、距離空間の言葉で書いたものです。
 :::
 
-::: definition {#open-ball name="開球" en="open ball"}
+::: definition {#def-open-ball name="開球" en="open ball"}
 [[距離空間]] $(X, d)$ の点 $a$ と実数 $r > 0$ について、集合
 
 $$
@@ -171,7 +171,7 @@ $$
 
 ### 閉集合
 
-::: definition {#closed-set name="閉集合" en="closed set"}
+::: definition {#def-closed-set name="閉集合" en="closed set"}
 距離空間 $(X, d)$ の部分集合 $F$ が閉集合であるとは、[[補集合]] $X \setminus F$ が開集合であることをいう。
 :::
 
@@ -250,7 +250,7 @@ $X$ の距離と $Y$ の距離を区別するため、$d_X$、$d_Y$ と書きま
 
 この最後の形を、$Y$ の部分集合を $f$ で $X$ へ引き戻した集合で書くために、逆像を定めます。
 
-::: definition {#preimage name="逆像" en="preimage"}
+::: definition {#def-preimage name="逆像" en="preimage"}
 写像 $f: X \to Y$ と $Y$ の部分集合 $V$ について、$f(x)$ が $V$ に入る点 $x$ の集合 $f^{-1}(V) := \{x \in X \mid f(x) \in V\}$ を、$f$ による $V$ の逆像という。
 :::
 

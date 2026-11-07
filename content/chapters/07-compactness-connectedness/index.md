@@ -48,7 +48,7 @@ line: geometry
 点が空間の外へ近づいていく様子は、開集合の族で捉えられます。$(0, 1)$ は、開区間 $U_n := (0, 1 - 1/n)$($n \ge 2$)をすべて合わせた和集合です。$(0, 1)$ のどの点も、どれかの $U_n$ に入ります。ところが、$U_n$ を有限個だけ選ぶと、その和集合は選んだうちで $n$ がいちばん大きい $U_n$ になり、$1 - 1/n$ 以上の点が残ります。1 に近い点ほど $n$ の大きい $U_n$ が要るので、有限個では足りません。$[0, 1]$ では、どんな開集合の族でおおっても、そのうちの有限個でおおえることを、この駅で示します。
 :::
 
-::: definition {#open-cover name="開被覆" en="open cover"}
+::: definition {#def-open-cover name="開被覆" en="open cover"}
 位相空間 $X$ の開集合の族 $(U_\lambda)_{\lambda \in \Lambda}$ が $\bigcup_{\lambda \in \Lambda} U_\lambda = X$ をみたすとき、この族を $X$ の開被覆という。$\Lambda$ の有限個の要素 $\lambda_1, \dots, \lambda_k$ について $U_{\lambda_1} \cup \dots \cup U_{\lambda_k} = X$ となるとき、$U_{\lambda_1}, \dots, U_{\lambda_k}$ を、この開被覆の有限部分被覆 (finite subcover) という。$k = 0$ でもよく、そのときの和集合は $\emptyset$ とする。
 :::
 
@@ -95,7 +95,7 @@ $X$ はコンパクトなので、$X = f^{-1}(V_{\lambda_1}) \cup \dots \cup f^{
 
 $\mathbb{R}^m$ では、どの集合がコンパクトかを、開被覆を調べずに判定できます。そのために、距離空間の部分集合が有界であることを定めます。
 
-::: definition {#bounded name="有界" en="bounded"}
+::: definition {#def-bounded name="有界" en="bounded"}
 [[距離空間]] $(X, d)$ の部分集合 $A$ が有界であるとは、ある実数 $M$ があって、$A$ のどの2点 $x, y$ についても $d(x, y) \le M$ となることをいう。
 :::
 
@@ -277,7 +277,7 @@ $$
 
 $\mathbb{R}$ の部分集合のうち、連結なのは区間です。
 
-::: definition {#interval name="区間" en="interval"}
+::: definition {#def-interval name="区間" en="interval"}
 $\mathbb{R}$ の部分集合 $I$ が区間であるとは、次が成り立つことをいう。
 
 $$
