@@ -586,7 +586,7 @@ $V$ をヒルベルト空間、$(e_n)_{n \ge 1}$ を $V$ の正規直交系と�
 ::: proof-sketch
 1. 部分和 $s_N := \sum_{n=1}^{N} c_n e_n$ は、$M < N$ なら $\|s_N - s_M\|^2 = \sum_{n=M+1}^{N} c_n^2$ をみたす([[@orthonormal-length]] を使う)。
 2. $\sum c_n^2$ が収束すれば、1 の右辺はいくらでも小さくなり、$(s_N)$ はコーシー列なので収束する($V$ の完備性を使う)。
-3. 逆に $s_N \to x$ なら、$\|s_N\|^2 = \sum_{n=1}^{N} c_n^2$ は $\|x\|^2$ に収束する(三角不等式から導く $|\|s_N\| - \|x\|| \le \|s_N - x\|$ を使う)。
+3. 逆に $s_N \to x$ なら、$\|s_N\|^2 = \sum_{n=1}^{N} c_n^2$ は $\|x\|^2$ に収束する(三角不等式から導く $|\|s_N\| - \|x\|| \le \|s_N - x\|$ と、[[@orthonormal-length]] を使う)。
 4. $\langle x, e_m \rangle = \lim_{N \to \infty} \langle s_N, e_m \rangle = c_m$(コーシー=シュワルツの不等式 $|\langle s_N - x, e_m \rangle| \le \|s_N - x\|$ を使う)。
 :::
 

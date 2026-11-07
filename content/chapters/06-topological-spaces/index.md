@@ -165,7 +165,7 @@ $Y$ の部分集合が相対位相の開集合であるとは、$X$ のある開
 :::
 
 ::: proof-sketch
-1. $\emptyset = \emptyset \cap Y$、$Y = X \cap Y$ で、和集合と共通部分は $\bigcup_{\lambda} (U_\lambda \cap Y) = \bigl(\bigcup_{\lambda} U_\lambda\bigr) \cap Y$、$(U_1 \cap Y) \cap \dots \cap (U_k \cap Y) = (U_1 \cap \dots \cap U_k) \cap Y$ と書き直せる($\mathcal{O}$ が位相であることを使う)。
+1. $\emptyset = \emptyset \cap Y$、$Y = X \cap Y$ で、和集合と共通部分は $\bigcup_{\lambda} (U_\lambda \cap Y) = \bigl(\bigcup_{\lambda} U_\lambda\bigr) \cap Y$、$(U_1 \cap Y) \cap \dots \cap (U_k \cap Y) = (U_1 \cap \dots \cap U_k) \cap Y$ と書き直せるので、$\mathcal{O}_Y$ は位相の三つの条件をみたす(相対位相の定義と、$\mathcal{O}$ が位相であることを使う)。
 2. $Y$ の点 $a$ を中心とする $d_Y$ の開球は、$B(a, r) \cap Y$ に等しい(開球と $d_Y$ の定義を使う)。
 3. $U$ が $X$ の開集合なら、$U \cap Y$ の各点 $a$ で $B(a, r) \subset U$ となる $r$ をとると $B(a, r) \cap Y \subset U \cap Y$ なので、$U \cap Y$ は $d_Y$ の開集合である(開集合の定義を使う)。
 4. $W$ が $d_Y$ の開集合なら、各点 $a \in W$ で $B(a, r_a) \cap Y \subset W$ となる $r_a$ をとり、$U = \bigcup_{a \in W} B(a, r_a)$ とおくと、$U$ は $X$ の開集合で $U \cap Y = W$ である(開球は開集合であることと、開集合の和集合は開集合であることを使う)。
@@ -334,7 +334,7 @@ $$
 
 ::: proof-sketch
 1. 1 を仮定する。$\mathcal{O}_{\mathrm{cof}}$ の要素 $U$ が空なら、$U \in \mathcal{O}$ である(位相の条件 1 を使う)。
-2. 空でなければ、補集合 $X \setminus U$ は有限個の閉集合 $\{c_i\}$ の和集合なので閉集合で、$U$ は $\mathcal{O}$ の開集合である(1 と、閉集合の性質の 1 と 3 を使う)。
+2. 空でなければ、補集合 $X \setminus U$ は空集合か、有限個の閉集合 $\{c_i\}$ の和集合なので閉集合である。よって $U$ は $\mathcal{O}$ の開集合である(1 の仮定と、[[@closed-set-properties]] の 1 と 3 と、閉集合の定義を使う)。
 3. 2 を仮定する。$X \setminus \{x\}$ は補集合 $\{x\}$ が有限集合なので $\mathcal{O}_{\mathrm{cof}}$ に属し、2 から $\mathcal{O}$ に属するので、$\{x\}$ は閉集合である(余有限位相の定義と、閉集合の定義を使う)。
 :::
 
