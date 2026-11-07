@@ -5,6 +5,7 @@ import fs from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DEF_PREFIX } from '../core/ids.js';
 import { layoutMap, renderMapSvg } from '../core/map.js';
 import {
   chapterInField,
@@ -271,8 +272,7 @@ class Renderer {
         return `<a class="cite" href="#${h(r.id)}" data-cite="${h(r.id)}" aria-haspopup="dialog" aria-expanded="false">${text}</a>`;
       }
       const cls = r.kind === 'equation' ? 'eqref' : 'num';
-      const anchor = r.kind === 'definition' ? `def-${r.id}` : r.id;
-      return `<a class="${cls}" href="${this.anchorUrl(r.chapterId, anchor, chapter)}">${text}</a>`;
+      return `<a class="${cls}" href="${this.anchorUrl(r.chapterId, r.id, chapter)}">${text}</a>`;
     }
     if (r.kind === 'definition') {
       return `<button type="button" class="term" data-def="${h(r.id)}" aria-haspopup="dialog" aria-expanded="false">${text}</button>`;
@@ -358,7 +358,7 @@ class Renderer {
   blockHtml(chapter, b, proofs = []) {
     const body = this.inner(chapter, b);
     if (b.name === 'definition') {
-      return `<div class="box def" id="def-${h(b.id)}"><p class="tag">定義 ${this.ctx.statements.labels.get(b)} · ${h(b.attrs.name)}<span class="tag-en">${h(b.attrs.en)}</span></p><div class="flow">${body}</div></div>`;
+      return `<div class="box def" id="${h(b.id)}"><p class="tag">定義 ${this.ctx.statements.labels.get(b)} · ${h(b.attrs.name)}<span class="tag-en">${h(b.attrs.en)}</span></p><div class="flow">${body}</div></div>`;
     }
     if (b.name === 'theorem') {
       // 証明の骨格と証明の詳細は、定理の枠の中に入れる(site.md「駅の表示」)
@@ -715,7 +715,8 @@ ${aheadSec}
   stationSection(c, st) {
     const site = this.site;
     const out = site.fields.filter((f) => !site.scope.get(f.id)?.has(st.id)).map((f) => f.id);
-    const shared = site.definitions.get(st.id);
+    const own = site.definitions.get(`${DEF_PREFIX}${st.id}`);
+    const shared = own?.station.id === st.id ? own : undefined;
     const heading = this.md.renderer.renderInline(
       c.tokens[st.model.headingStart + 1].children ?? [],
       this.md.options,
@@ -925,7 +926,7 @@ ${notes}${items.join('')}${appHtml}${this.notesList(
         stationName: d.station.name,
         chapter: c.number,
         chapterTitle: c.title,
-        url: `${this.base}chapters/${c.id}/#def-${id}`,
+        url: `${this.base}chapters/${c.id}/#${id}`,
         html: this.inner(c, d.block, true),
       };
     }

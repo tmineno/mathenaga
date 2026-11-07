@@ -58,7 +58,7 @@ export function displayRanges(chapter, fieldOrder) {
  * 定義と定理をまとめて、原稿に書いた順に 1 から数える。式番号とは別に数える。
  * Preconditions: chapters は章グラフの章(章番号を持つ)。
  * Postconditions: ブロック → 「3.1」の形の番号と、[[@ID]] で指せる ID → { label, kind, chapter } を返す。
- *   [[@ID]] で指せるのは、定理と、駅と ID を共有しない定義(駅と共有する ID は駅の番号を指す)。
+ *   [[@ID]] で指せるのは、定理と定義(定義の ID は def- で始まり、駅と ID を共有しない。ADR-008)。
  * Failure modes: なし。
  * Side effects: なし。
  * @param {import('./chapter.js').ChapterModel[]} chapters
@@ -77,7 +77,7 @@ export function numberStatements(chapters) {
         if (b.name !== 'definition' && b.name !== 'theorem') continue;
         const label = `${chapter.number}.${++k}`;
         labels.set(b, label);
-        if (b.id === null || (b.name === 'definition' && b.id === st.id) || byId.has(b.id)) continue;
+        if (b.id === null || byId.has(b.id)) continue;
         byId.set(b.id, { label, kind: b.name, chapter });
       }
     }

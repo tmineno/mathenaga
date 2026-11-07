@@ -1,6 +1,7 @@
 // 参照 [[キー]]・[[キー|文字]]・[[@ID]] の解決(docs/spec/content-format.md「参照」)。
 
 import { closure, KIND_NAMES } from './graph.js';
+import { DEF_PREFIX } from './ids.js';
 import { issue } from './issues.js';
 
 /**
@@ -142,11 +143,12 @@ function resolveKey(site, names, scope, key, label) {
   const candidates = new Map();
   for (const c of all) {
     if (!scope.has(c.stationId)) continue;
-    const prev = candidates.get(c.id);
-    if (!prev || c.kind === 'definition') candidates.set(c.id, c);
+    const k = candidateKey(site, c);
+    const prev = candidates.get(k);
+    if (!prev || c.kind === 'definition') candidates.set(k, c);
   }
   if (candidates.size === 0) {
-    const outside = [...new Set(all.map((c) => c.id))];
+    const outside = [...new Set(all.map((c) => candidateKey(site, c)))];
     const hint = outside.length > 0 ? `。参照範囲の外に候補がある(${outside.join('、')})。ID で書く` : '';
     return `E07 [[${key}]] の候補が参照範囲にない${hint}`;
   }
@@ -160,6 +162,19 @@ function resolveKey(site, names, scope, key, label) {
   }
   const s = /** @type {any} */ (site.stationById.get(only.id));
   return { kind: 'station', id: only.id, text: label ?? key, chapterId: s.chapter.id };
+}
+
+/**
+ * 名前で探した候補を数えるときのキー。駅と、その駅の中の ID が def-<駅ID> の定義は1つの候補として数え、
+ * 定義の ID をキーにする(docs/spec/content-format.md「参照」の 4。ADR-008)。
+ * @param {import('./graph.js').Site} site
+ * @param {{ id: string, kind: 'definition' | 'station', stationId: string }} c
+ * @returns {string}
+ */
+function candidateKey(site, c) {
+  if (c.kind !== 'station') return c.id;
+  const id = `${DEF_PREFIX}${c.id}`;
+  return site.definitions.get(id)?.station.id === c.id ? id : c.id;
 }
 
 /**

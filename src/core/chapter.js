@@ -3,7 +3,7 @@
 // トークンは markdown-it が作ったものを、ただのデータとして読む(このモジュールは markdown-it に依存しない)。
 
 import { parseAttrs, splitList } from './attrs.js';
-import { idProblem } from './ids.js';
+import { DEF_PREFIX, idProblem } from './ids.js';
 import { issue } from './issues.js';
 
 const BLOCK_OPEN = 'container_mathenaga_open';
@@ -321,7 +321,7 @@ function makeBlock(tokens, node, fail, lineOf) {
   }
   if (tokens[node.end]?.type !== BLOCK_CLOSE) fail('E09', open, `ブロック ${name} が閉じていない`);
   if (parsed.id !== null) {
-    const problem = idProblem(parsed.id);
+    const problem = idProblem(parsed.id, name === 'definition');
     if (problem) fail('E03', open, problem);
   }
   return {
@@ -371,15 +371,13 @@ function checkStation(st, tokens, fail) {
   if (st.theorems.length > 0 && !blocks.some((b) => b.name === 'proof-sketch')) {
     fail('E08', heading, `駅「${st.name}」には定理があるのに proof-sketch がない`);
   }
-  let shared = 0;
   for (const d of st.definitions) {
     const open = tokens[d.start];
     if (!d.attrs.name) fail('E08', open, 'definition に name がない');
     if (!d.attrs.en) fail('E08', open, 'definition に en がない');
-    if (d.id === null) d.id = st.id;
-    if (d.id !== null && d.id === st.id) shared++;
+    // ID を省略した定義は def-<駅ID>。2つ目は名前空間の重複(E04)になる(ADR-008)
+    if (d.id === null && st.id !== null) d.id = `${DEF_PREFIX}${st.id}`;
   }
-  if (shared > 1) fail('E04', heading, `駅「${st.name}」と同じ ID の定義が2つ以上ある(ID を省略できる定義は1つまで)`);
   for (const t of st.theorems) {
     const open = tokens[t.start];
     if (t.id === null) fail('E08', open, 'theorem に #ID がない(定理の ID は省略できない)');

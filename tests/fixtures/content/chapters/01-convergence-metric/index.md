@@ -42,7 +42,7 @@ $1, \frac{1}{2}, \frac{1}{3}, \frac{1}{4}, \dots$ は 0 に「限りなく近づ
 「限りなく近づく」を言葉のままにしておくと、冒頭の $1, \frac{1}{2}, 1, \frac{1}{3}, \dots$ のような列で判断がつきません。許容誤差を先に決めて、それを満たし続ける番号があるかを問う形にすれば、収束するかどうかを確かめられるようになります。
 :::
 
-::: definition {#sequence name="点列" en="sequence"}
+::: definition {#def-sequence name="点列" en="sequence"}
 集合 $X$ の点列とは、正の整数 $n = 1, 2, 3, \dots$ のそれぞれに、$X$ の点 $x_n$ をちょうど一つ対応させたもの、つまり正の整数全体から $X$ への写像をいう。$(x_n)$ と書き、$x_n$ を第 $n$ 項と呼ぶ。$X$ が数の集合のときは、数列とも呼ぶ。
 :::
 
@@ -122,7 +122,7 @@ $d_2$ はふつうの直線距離(ユークリッド距離)、$d_1$ は碁盤の
 
 有界な関数の列が $d_\infty$ について収束することには、名前が付いています。
 
-::: definition {#uniform-convergence name="一様収束" en="uniform convergence"}
+::: definition {#def-uniform-convergence name="一様収束" en="uniform convergence"}
 集合 $S$ 上の関数列 $(f_n)$ が関数 $f$ に一様収束するとは、任意の $\varepsilon > 0$ に対してある番号 $N$ があり、すべての $n \ge N$ とすべての $t \in S$ について $|f_n(t) - f(t)| < \varepsilon$ となることをいう。これは $\sup_{t \in S} |f_n(t) - f(t)| \to 0$ と同じ意味で、$f_n$ と $f$ がどれも有界なら、sup 距離 $d_\infty$ で $f_n \to f$ となることと同じである。
 :::
 

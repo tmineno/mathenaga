@@ -89,11 +89,23 @@ describe('content-format: 受け入れテスト', () => {
       assert.ok(ref, `参照 [[${content}]] がない`);
       return ctx.resolved.get(ref.token);
     };
-    assert.deepEqual(pick(find('コーシー列')), { kind: 'definition', id: 'cauchy-sequence' });
+    assert.deepEqual(pick(find('コーシー列')), { kind: 'definition', id: 'def-cauchy-sequence' });
     assert.deepEqual(pick(find('banach|バナッハの不動点定理')), { kind: 'station', id: 'banach' });
-    assert.deepEqual(pick(find('completeness|完備')), { kind: 'definition', id: 'completeness' });
-    assert.deepEqual(pick(find('一様収束')), { kind: 'definition', id: 'uniform-convergence' });
+    assert.deepEqual(pick(find('def-completeness|完備')), { kind: 'definition', id: 'def-completeness' });
+    assert.deepEqual(pick(find('一様収束')), { kind: 'definition', id: 'def-uniform-convergence' });
     assert.equal(find('一様収束').chapterId, 'convergence-metric');
+  });
+
+  test('3. [[駅ID]] は、駅の中に定義があっても駅へのリンクになる', async () => {
+    const root = await tempRoot();
+    roots.push(root);
+    await edit(root, CH3, (t) => replaceOnce(t, '## 完備性', '[[cauchy-sequence]] の続きです。\n\n## 完備性'));
+    const r = await analyzeIn(root);
+    assert.deepEqual(r.errors, []);
+    const ch3 = r.ctx.site.chapterById.get('completeness-fixed-point');
+    const ref = ch3.refs.find((/** @type {any} */ x) => x.token.content === 'cauchy-sequence');
+    assert.ok(ref, '参照 [[cauchy-sequence]] がない');
+    assert.deepEqual(pick(r.ctx.resolved.get(ref.token)), { kind: 'station', id: 'cauchy-sequence' });
   });
 
   describe('4. 壊した原稿でそれぞれのエラーが出る', () => {
@@ -271,6 +283,28 @@ describe('content-format: 受け入れテスト', () => {
         'E02',
         (r) => edit(r, 'lines.yml', (t) => replaceOnce(t, PLANNED_10, `${PLANNED_10}      id: operators\n`)),
       ],
+      [
+        'def- で始まらない定義の ID',
+        'E03',
+        (r) => edit(r, CH3, (t) => replaceOnce(t, '{#def-lipschitz ', '{#lipschitz ')),
+      ],
+      [
+        'def- で始まる定理の ID',
+        'E03',
+        (r) => edit(r, CH3, (t) => replaceOnce(t, '{#banach-fixed-point ', '{#def-banach-fixed-point ')),
+      ],
+      [
+        'ID を省略した定義が1つの駅に2つ',
+        'E04',
+        (r) =>
+          edit(r, CH3, (t) =>
+            replaceOnce(
+              t,
+              '::: definition {name="コーシー列"',
+              '::: definition {name="基本列" en="fundamental sequence"}\n基本列。\n:::\n\n::: definition {name="コーシー列"',
+            ),
+          ),
+      ],
     ];
     for (const [name, code, mutate] of cases) {
       test(`${name} → ${code}`, async () => {
@@ -339,7 +373,16 @@ describe('content-format: 受け入れテスト', () => {
     await edit(root, CH3, (t) => replaceOnce(t, 'この章では、1 を防ぐ', '[[位相空間]]。この章では、1 を防ぐ'));
     const r = await analyzeIn(root);
     const e = expectError(r.errors, 'E07', CH3);
-    assert.match(e.message, /topological-space/);
+    assert.match(e.message, /参照範囲の外に候補がある\(topological-space\)/);
+  });
+  test('駅と、その駅の def-<駅ID> の定義は、参照範囲の外の候補でも1つに数える', async () => {
+    const root = await tempRoot();
+    roots.push(root);
+    await edit(root, CH3, (t) => replaceOnce(t, 'この章では、1 を防ぐ', '[[ノルム空間]]。この章では、1 を防ぐ'));
+    const r = await analyzeIn(root);
+    const e = expectError(r.errors, 'E07', CH3);
+    // 駅 normed-space(駅名)と定義 def-normed-space(別名)の両方が名前に一致する
+    assert.match(e.message, /参照範囲の外に候補がある\(def-normed-space\)/);
   });
 });
 
@@ -525,7 +568,7 @@ describe('content-format: 注と参考文献', () => {
         ['wikiref', '距離空間'],
       ],
     );
-    assert.equal(r.ctx.resolved.get(kids[2]).id, 'metric-space');
+    assert.equal(r.ctx.resolved.get(kids[2]).id, 'def-metric-space');
     const html = await (async () => {
       const b = await buildIn(root);
       assert.deepEqual(b.errors, []);
