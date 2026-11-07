@@ -92,7 +92,7 @@
 | stationName | その駅の駅名 |
 | chapter | 定義を含む章の章番号 |
 | chapterTitle | その章のタイトル |
-| url | 定義の場所。`<ベースパス>chapters/<章ID>/#def-<定義ID>` |
+| url | 定義の場所。`<ベースパス>chapters/<章ID>/#<定義ID>`(定義の ID は `def-` で始まる) |
 | html | 定義の本文を描画した HTML。数式は KaTeX で描画済みで、別行立ての式には章ページと同じ式番号を付ける。`[[…]]` はボタンやリンクにせず表示する文字だけに、`[[@…]]` は表示番号の文字だけにする |
 
 ### 出力(dist/)
@@ -170,7 +170,7 @@ dist/
 6. 分野を選んでいないとき、第3章の次の章は第4章、第9章の次の章はなし。
 7. ほかの路線への案内:理論物理の第3章は幾何線の1項目(分岐駅 continuous-map は第2章、最初の駅 topological-space は第6章)。理論物理の第1章は2項目(解析線:分岐駅 metric-space はこの章、最初の駅は第3章。幾何線:分岐駅は第2章、最初の駅は第6章)。情報科学の第3章は0項目。
 8. 第3章のすべての `[[…]]` と `[[@…]]` が解決する。各章で、原稿の数式(行内の `$…$` と別行立ての `$$…$$`)の数、ビルドが読み取った数式の数、章のページで KaTeX が描画した数式の数が一致する。
-9. `defs.json` には、原稿のすべての定義(definition)が1項目ずつあり、ID の文字コード順に並ぶ(期待する ID は、テストが原稿から集める)。cauchy-sequence の項目は code が A01、chapter が 3、url が `/chapters/completeness-fixed-point/#def-cauchy-sequence` で、number は第3章の原稿で定義と定理を書いた順に数えたときの cauchy-sequence の位置(3.N)である。html の中の「距離空間」はボタンでもリンクでもない文字である。
+9. `defs.json` には、原稿のすべての定義(definition)が1項目ずつあり、ID の文字コード順に並ぶ(期待する ID は、テストが原稿から集める)。def-cauchy-sequence の項目は station が cauchy-sequence、code が A01、chapter が 3、url が `/chapters/completeness-fixed-point/#def-cauchy-sequence` で、number は第3章の原稿で定義と定理を書いた順に数えたときの def-cauchy-sequence の位置(3.N)である。html の中の「距離空間」はボタンでもリンクでもない文字である。
 10. `[[@hilbert-spaces]]` は「第5章」、`[[@banach]]` は「A04」と表示され、それぞれ第5章のページと banach 駅へのリンクになる。
 11. 各章の別行立ての式に、(N.1) から、その章の原稿にある別行立ての式の数だけ、重複なく式番号が振られる(N は章番号)。別行立ての式のない章には振られない。第3章では、(3.1) は cauchy-sequence の定義の式、(3.4) は contraction の定義の式、最後の番号は picard-lindelof 駅の理論物理の応用の最後の式(ノートンのドームの解)である。
 12. 第3章の banach 駅の情報科学の応用にある誤差評価の式に `{#value-iteration-error}` を付け、第4章に `[[@value-iteration-error]]` と書くと、「(3.10)」と表示され、`/chapters/completeness-fixed-point/#value-iteration-error` へのリンクになる。
@@ -183,7 +183,7 @@ dist/
 19. `npm run dev` で章ページを開いたまま原稿を保存すると、5 秒以内にブラウザの表示が変わる。原稿を壊して保存すると端末にエラーが出て、ブラウザは前の表示のまま。
 20. `MATHENAGA_REPO_URL=github.com/example/mathenaga` でビルドすると E13 で止まる。
 21. 各章のページの定義と定理の札には、原稿に書いた順に「定義 N.1」「定理 N.2」…の番号が、その章の定義と定理の数だけ付く(N は章番号。期待する並びはテストが原稿から集める)。
-22. 第4章に `[[@banach-fixed-point]]`・`[[@lipschitz]]`・`[[@cauchy-sequence]]` と書くと、それぞれ「定理 3.N」(banach-fixed-point の番号)、「定義 3.N」(lipschitz の番号)、「A01」と表示され、`#banach-fixed-point`・`#def-lipschitz`・`#cauchy-sequence` へのリンクになる。第3章に路線の ID を `[[@main]]` と書くと E05 の1件だけで止まる。
+22. 第4章に `[[@banach-fixed-point]]`・`[[@def-lipschitz]]`・`[[@def-cauchy-sequence]]`・`[[@cauchy-sequence]]` と書くと、それぞれ「定理 3.N」(banach-fixed-point の番号)、「定義 3.N」(def-lipschitz の番号)、「定義 3.N」(def-cauchy-sequence の番号)、「A01」と表示され、`#banach-fixed-point`・`#def-lipschitz`・`#def-cauchy-sequence`・`#cauchy-sequence` へのリンクになる。第3章に路線の ID を `[[@main]]` と書くと E05 の1件だけで止まる。
 23. 第3章の banach 駅に、タイトル付きの画像1つの段落(`{#fig-one}`)、タイトル付きの画像2つの段落(`{#fig-two}`)、文の中の画像を書いてビルドすると、前の2つが `<figure>` になり、「図 3.1 〈タイトル〉」「図 3.2 (a) 〈タイトル〉 (b) 〈タイトル〉」のキャプションが付き、2つ目の画像には (a)・(b) の札が付く。文の中の画像は図にならない。第4章の `[[@fig-two]]` は「図 3.2」と表示され、`/chapters/completeness-fixed-point/#fig-two` へのリンクになる。
 24. 図の `{…}` に ID 以外の属性を書くと E02、ID の形が誤っていると E03 で止まる。
 25. fig-one の画像のタイトルを `"点列 $(x_n)$ と集合 $\{x \mid x > 0\}$、\$5"` にしてビルドすると、図 3.1 のキャプションに KaTeX の数式が2つ出て、その TeX は `(x_n)` と `\{x \mid x > 0\}` であり、`\$` は文字の「$」になる。タイトルに閉じていない `$`、`$\frac{1}{$`、`$x \tag{1}$` のどれかを書くと E10 で止まる。fig-one を参照形式の画像(`![一枚目の説明][one]{#fig-one}` と `[one]: figures/a.svg "集合 $\{x \mid x > 0\}$、\$5"`)にしても、E10 にならず、キャプションの数式の TeX は `\{x \mid x > 0\}`、`\$` は文字の「$」になる。
