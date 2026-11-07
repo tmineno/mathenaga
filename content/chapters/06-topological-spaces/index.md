@@ -66,7 +66,7 @@ $0$ と $1$ の無限列の全体を $\Sigma$、有限の列 $w$ で始まる無
 距離空間の開集合はこの条件をみたすので、距離空間は新しい意味の空間の例になります。出発点のランプのように距離が出てこない場面でも、この条件ならみたすかどうかを確かめられます。
 :::
 
-::: definition {#topology name="位相" en="topology"}
+::: definition {#def-topology name="位相" en="topology"}
 集合 $X$ の部分集合を要素とする集合 $\mathcal{O}$(つまり $\mathcal{O} \subset \mathcal{P}(X)$。$\mathcal{P}(X)$ は $X$ の[[冪集合]])が次の三つをみたすとき、$\mathcal{O}$ を $X$ の位相という。
 
 1. $\emptyset \in \mathcal{O}$ かつ $X \in \mathcal{O}$ である。
@@ -82,7 +82,7 @@ $0$ と $1$ の無限列の全体を $\Sigma$、有限の列 $w$ で始まる無
 
 距離空間の開集合の全体は、[[@open-set-operations]] の三つの性質をみたすので、位相になります。
 
-::: definition {#metric-topology name="距離位相" en="metric topology"}
+::: definition {#def-metric-topology name="距離位相" en="metric topology"}
 [[距離空間]] $(X, d)$ の[[開集合]]の全体 $\mathcal{O}_d$ を、$d$ から決まる位相、または距離位相という。
 :::
 
@@ -109,12 +109,15 @@ $0$ と $1$ の無限列の全体を $\Sigma$、有限の列 $w$ で始まる無
 :::
 
 ::: proof-sketch
-1. $X \setminus \emptyset = X$ と $X \setminus X = \emptyset$ は開集合である(位相の条件 1 を使う)。
-2. 閉集合の族 $(F_\lambda)_{\lambda \in \Lambda}$ の共通部分の補集合は、開集合 $X \setminus F_\lambda$ の和集合に等しいので、開集合である(ド・モルガンの法則と位相の条件 2 を使う)。
-3. 閉集合 $F_1, \dots, F_k$ の和集合の補集合は、開集合 $X \setminus F_i$ の共通部分に等しいので、開集合である(ド・モルガンの法則と位相の条件 3 を使う)。
+1. 閉集合であることは、補集合が開集合であることと同じなので、三つの主張は、それぞれの補集合が開集合であることを示せばよい([[@def-topological-space]] の、閉集合の定義を使う)。
+2. $\emptyset$ と $X$ の補集合は $X$ と $\emptyset$ で、開集合である(位相の条件 1 を使う)。
+3. 閉集合の族 $(F_\lambda)_{\lambda \in \Lambda}$ の共通部分の補集合は、開集合 $X \setminus F_\lambda$ の和集合に等しいので、開集合である(ド・モルガンの法則と位相の条件 2 を使う)。
+4. 有限個の閉集合 $F_1, \dots, F_k$ の和集合の補集合は、有限個の開集合 $X \setminus F_i$ の共通部分に等しいので、開集合である(ド・モルガンの法則と位相の条件 3 を使う)。
 :::
 
 ::: proof
+[[@def-topological-space]] で、閉集合は補集合が開集合である部分集合として定めました。部分集合 $F$ が閉集合であることは、補集合 $X \setminus F$ が開集合であることと同じです。そこで、定理の 1〜3 のそれぞれについて、閉集合であると言いたい集合の補集合が開集合であることを示します。
+
 **1.** $\emptyset$ の補集合は $X$、$X$ の補集合は $\emptyset$ で、位相の条件 1 からどちらも開集合です。よって $\emptyset$ と $X$ は閉集合です。
 
 **2.** $(F_\lambda)_{\lambda \in \Lambda}$ を閉集合の族とします。[[@de-morgan-sets]] から
@@ -129,12 +132,12 @@ $$
 :::
 
 ::: drop-assumption
-**「有限個」を外す。** $\mathbb{R}$ の通常の位相で、閉区間 $F_n = [1/n, 1]$($n$ は正の整数)はどれも閉集合です。補集合 $(-\infty, 1/n) \cup (1, \infty)$ が開集合だからです。ところが、すべての $n$ についての和集合は $(0, 1]$ で、閉集合ではありません([[@closed-set-limits]] の「仮定を外すと」)。$0 < x \le 1$ なら $n \ge 1/x$ となる $n$ で $x \in F_n$ となり、0 以下の数と 1 より大きい数はどの $F_n$ にも入らないからです。証明の3段目で、補集合 $(-\infty, 1/n) \cup (1, \infty)$ の無限個の共通部分 $(-\infty, 0] \cup (1, \infty)$ が、点 $0$ のまわりに開球が収まらないので開集合にならないことが原因です。
+**「有限個」を外す。** $\mathbb{R}$ の通常の位相で、閉区間 $F_n = [1/n, 1]$($n$ は正の整数)はどれも閉集合です。補集合 $(-\infty, 1/n) \cup (1, \infty)$ が開集合だからです。ところが、すべての $n$ についての和集合は $(0, 1]$ で、閉集合ではありません([[@closed-set-limits]] の「仮定を外すと」)。$0 < x \le 1$ なら $n \ge 1/x$ となる $n$ で $x \in F_n$ となり、0 以下の数と 1 より大きい数はどの $F_n$ にも入らないからです。証明の4段目で、補集合 $(-\infty, 1/n) \cup (1, \infty)$ の無限個の共通部分 $(-\infty, 0] \cup (1, \infty)$ が、点 $0$ のまわりに開球が収まらないので開集合にならないことが原因です。
 :::
 
 連続性は、[[@continuity-open-preimage]] の条件 2 をそのまま定義にします。
 
-::: definition {#topological-continuity name="位相空間の連続写像" en="continuous map"}
+::: definition {#def-topological-continuity name="位相空間の連続写像" en="continuous map"}
 位相空間 $(X, \mathcal{O}_X)$ から $(Y, \mathcal{O}_Y)$ への写像 $f: X \to Y$ が連続であるとは、$Y$ のどの開集合 $V$ についても、[[逆像]] $f^{-1}(V)$ が $X$ の開集合であることをいう。連続な写像を、連続写像という。
 :::
 
@@ -148,7 +151,7 @@ $X$ と $Y$ が距離空間で、どちらにも距離位相を入れるとき�
 
 [[@open-set]] の落とし穴では、距離空間の部分集合 $Y$ に、2点の距離を元の距離のまま測る距離を入れて、部分空間としました。位相空間の部分集合には、開集合を $Y$ との共通部分で切り取って位相を入れます。
 
-::: definition {#relative-topology name="相対位相" en="relative topology" aliases="部分空間位相"}
+::: definition {#def-relative-topology name="相対位相" en="relative topology" aliases="部分空間位相"}
 位相空間 $(X, \mathcal{O})$ の部分集合 $Y$ について、$\mathcal{O}_Y := \{U \cap Y \mid U \in \mathcal{O}\}$ を、$Y$ の相対位相という。$(Y, \mathcal{O}_Y)$ を、$(X, \mathcal{O})$ の部分空間 (subspace) という。
 :::
 
@@ -367,13 +370,13 @@ $$
 [[@limit-unique]] で、距離空間の点列の極限はただ一つであることを示しました。証明には、距離の正値性、対称性、三角不等式を使いました。位相空間には距離がないので、点列の収束は開集合で定めます。そうすると、[[@topological-space]] と [[@cofinite-topology]] で挙げた空間のなかに、一つの点列が二つ以上の点に収束するものが出てきます。極限を一つの点として扱えるように、異なる2点を開集合で分けられることを、空間の条件として別に課します。この条件は極限がただ一つに決まることを保証しますが、極限がただ一つに決まる空間がどれもこの条件をみたすわけではありません(下の補足)。
 :::
 
-::: definition {#neighborhood name="近傍" en="neighborhood"}
+::: definition {#def-neighborhood name="近傍" en="neighborhood"}
 位相空間 $X$ の点 $x$ と部分集合 $N$ について、$x \in U \subset N$ となる開集合 $U$ があるとき、$N$ を $x$ の近傍という。開集合である近傍を、開近傍 (open neighborhood) という。
 :::
 
 $x$ の近傍とは、$x$ を含む開集合を内側に含む集合のことです^[近傍を開集合に限って定める本もあります。この駅の点列の収束とハウスドルフ空間は、どちらの定め方でも同じになります。]。距離空間では、$N$ が $x$ の近傍であることは、ある $r > 0$ で $B(x, r) \subset N$ となることと同じです。開球 $B(x, r)$ は $x$ を含む開集合で([[@open-ball-is-open]])、逆に $x \in U \subset N$ となる開集合 $U$ があれば、$B(x, r) \subset U$ となる $r$ がとれるからです。
 
-::: definition {#topological-convergence name="位相空間での点列の収束" en="convergence in a topological space"}
+::: definition {#def-topological-convergence name="位相空間での点列の収束" en="convergence in a topological space"}
 位相空間 $X$ の[[点列]] $(x_n)$ が点 $x \in X$ に収束するとは、$x$ を含むどの開集合 $U$ についても、ある番号 $N$ があって、すべての $n \ge N$ について $x_n \in U$ となることをいう。このとき、$x$ を $(x_n)$ の極限 (limit) という。
 :::
 

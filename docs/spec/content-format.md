@@ -12,7 +12,6 @@
 
 - 章の本文を分野ごとに書き分けること。分野版を書けるのはゴール・出発点・分野での応用の3つだけで、確認問題などは全分野で共通にする。
 - md に HTML を直接書くこと。md の中の HTML タグは解釈せず、文字のまま表示する。
-- 定義・定理への番号付け(「定義 3.1」など)。表示番号を振るのは駅・章・別行立ての式だけ。
 - 式番号を個別に外すこと、1つの別行立ての中で行ごとに番号を振ること。別行立ての式には必ず番号が1つ付く。
 - 複数の執筆者が分野ごとに分担すること。全分野を同じ執筆者が書く前提で形式を決めている。
 - 英語版などの多言語化。
@@ -47,10 +46,11 @@ content/
 
 ### ID
 
-- ID は英小文字・数字・ハイフンで書く(`^[a-z0-9]+(-[a-z0-9]+)*$`)。`def-` で始まる ID は使えない(定義のアンカー `#def-<ID>` と衝突させないため)。
-- 路線・分野・章・駅・定義・定理・式・図・応用・文献の ID は、サイト全体で1つの名前空間に属する。重複はエラーにする。例外は、駅と、その駅の中の定義1つが同じ ID を共有する場合だけである。
+- ID は英小文字・数字・ハイフンで書く(`^[a-z0-9]+(-[a-z0-9]+)*$`)。
+- 定義の ID は `def-` で始める(`def-cauchy-sequence`)。定義のほかの ID は `def-` で始められない。こうして、駅と定義はいつも別の ID を持つ([ADR-008](../adr/ADR-008-definition-id-prefix.md))。
+- 路線・分野・章・駅・定義・定理・式・図・応用・文献の ID は、サイト全体で1つの名前空間に属する。重複はエラーにする。
 - 章の ID はフォルダ名から章番号とハイフンを除いた部分、分野の ID はファイル名(拡張子を除く)で決まる。ファイルの中に ID を書く項目はない。
-- 定義の ID を省略すると、その定義を含む駅の ID になる。駅と同じ ID を持てる定義は駅ごとに1つまでで、省略した定義と、駅の ID を明示した定義の両方を数える。
+- 定義の ID を省略すると、その定義を含む駅の ID に `def-` を付けた ID(`def-<駅ID>`)になる。ID を省略できる定義は駅ごとに1つまでで、2つ目は ID の重複になる。`def-<駅ID>` を明示した定義も同じに数える。
 - 定理の ID は省略できない。定理の ID はページ内のアンカーに使い、`[[…]]` の参照先にはならない。
 - 式の ID は任意で、ページ内のアンカーと `[[@ID]]` に使う(下の「式番号」)。
 - 図の ID は任意で、ページ内のアンカーと `[[@ID]]` に使う(下の「図」)。
@@ -267,12 +267,12 @@ goals:
 1. キーが定義または駅の ID と一致すれば、その ID に解決する。参照範囲は問わない。
 2. キーがそれ以外の種類(路線・分野・章・定理・式・図・応用)の ID と一致すれば、E05 にする。
 3. どの ID とも一致しなければ、名前で探す。探す範囲は参照範囲(その章の駅と、そこから requires をたどれる駅)である。参照範囲の駅に属する定義の name・aliases と、参照範囲の駅の駅名を、キーと完全に一致するかで比べる。
-4. 同じ ID を共有する駅と定義は1つの候補として数え、定義に解決する。
+4. 駅と、その駅の中の ID が `def-<駅ID>` の定義は1つの候補として数え、定義に解決する。
 5. 候補がなければ E07、2つ以上あっても E07(曖昧さ)にして、ID での指定を求める。参照範囲の外にだけ候補があるときは、その ID をエラーの中で示す。
 
 - 交わらない路線どうしの同名の定義は衝突しない。同名の定義を後から足しても、影響はそれをたどれる章だけにとどまる。
 - 章・路線・分野・定理・式・図・応用・文献の ID は `[[キー]]` の参照先にならない。章・式・図・応用・文献を指すときは `[[@ID]]` を使う。
-- `[[@ID]]` に書けるのは駅・章・式・定理・定義・図・応用・文献の ID だけである。駅と ID を共有する定義の ID は駅を指し、駅の表示番号になる。参照範囲に関係なく、ほかの章の駅・式・定理・定義・図・応用も指せる。文献はどの章からも引ける。表示する文字は変えられない。
+- `[[@ID]]` に書けるのは駅・章・式・定理・定義・図・応用・文献の ID だけである。`[[@cauchy-sequence]]` は駅の表示番号(A01)、`[[@def-cauchy-sequence]]` は定義の番号(定義 3.1)になる。参照範囲に関係なく、ほかの章の駅・式・定理・定義・図・応用も指せる。文献はどの章からも引ける。表示する文字は変えられない。
 - 駅・章・式・定理・定義・図・応用の番号は、章や駅やブロックを挿入するとずれる。本文には番号を直接書かず、`[[@ID]]` で書く。
 - 参照を書けるのは本文・ブロックの中・リスト・表である。駅の見出し・属性・YAML には書けない。
 - 定義の本文の中の参照も、その定義がある章の範囲で解決する。
@@ -395,7 +395,7 @@ $$\forall \varepsilon > 0,\ \exists N,\ \forall m, n \ge N: d(x_m, x_n) < \varep
 :::
 ```
 
-この例では、`[[コーシー列]]` は駅 cauchy-sequence と、その駅の定義(ID を省略したので cauchy-sequence)の両方の名前に一致する。同じ ID を共有するので1つの候補として数え、定義に解決する。`[[@cauchy-sequence]]` は A01 になる。コーシー列の定義の別行立ての式には、ID がなくても式番号 (3.1) が付く。完成した章の全体は `content/chapters/03-completeness-fixed-point/index.md` にある。
+この例では、`[[コーシー列]]` は駅 cauchy-sequence と、その駅の定義(ID を省略したので def-cauchy-sequence)の両方の名前に一致する。駅と、その駅の ID に `def-` を付けた定義なので1つの候補として数え、定義に解決する。`[[@cauchy-sequence]]` は A01 になり、`[[@def-cauchy-sequence]]` と書けば定義の番号「定義 3.1」になる。コーシー列の定義の別行立ての式には、ID がなくても式番号 (3.1) が付く。完成した章の全体は `content/chapters/03-completeness-fixed-point/index.md` にある。
 
 ## Failure modes
 
@@ -405,8 +405,8 @@ $$\forall \varepsilon > 0,\ \exists N,\ \forall m, n \ge N: d(x_m, x_n) < \varep
 |---|---|---|
 | E01 | 読み取りの失敗 | YAML・front matter が解釈できない。章フォルダに index.md がない |
 | E02 | 知らない名前 | 表にないブロック名・属性・YAML の項目(planned の中と文献の一覧を含む)。kind・layout・style・文献の type の値の誤り |
-| E03 | 値の形式 | ID の形式、`def-` で始まる ID、「章番号-章の ID」の形でない章フォルダ名、color・color_dark・code の形式、start が true でも false でもない、layout が `up` でも `down` でもない路線の `start: true`、planned の形(配列でない、chapter が 0 以上の整数でない、stations の要素が文字列でも name を持つ項目でもない、requires が文字列の配列でない、stations が空)、文献の形(year が4桁の整数でない、isbn の桁数かチェックディジットの誤り、`10.` で始まらない doi、authors が空、book でない文献の isbn、article でない文献の journal・issue・pages) |
-| E04 | 重複 | 名前空間での ID の重複、章番号の重複(planned の章番号を含む)、路線記号の重複、同じ分野の goals での駅の重複、駅と ID を共有する定義が2つ以上 |
+| E03 | 値の形式 | ID の形式、`def-` で始まらない定義の ID、`def-` で始まる定義のほかの ID、「章番号-章の ID」の形でない章フォルダ名、color・color_dark・code の形式、start が true でも false でもない、layout が `up` でも `down` でもない路線の `start: true`、planned の形(配列でない、chapter が 0 以上の整数でない、stations の要素が文字列でも name を持つ項目でもない、requires が文字列の配列でない、stations が空)、文献の形(year が4桁の整数でない、isbn の桁数かチェックディジットの誤り、`10.` で始まらない doi、authors が空、book でない文献の isbn、article でない文献の journal・issue・pages) |
+| E04 | 重複 | 名前空間での ID の重複(ID を省略した定義が1つの駅に2つ以上ある場合を含む)、章番号の重複(planned の章番号を含む)、路線記号の重複、同じ分野の goals での駅の重複 |
 | E05 | 参照先の誤り | 存在しない ID や種類の違う ID を指している。requires(planned の章と駅の requires を含む)、line、goals の station、field 属性、`[[ID]]`、`[[@ID]]` が対象 |
 | E06 | 前提の順序 | requires が、読む順で後ろの駅か自分自身を指している。planned の requires(駅ごとの requires を含む)が、その章より章番号の大きい章の駅を指している。循環があれば循環の一覧も出す |
 | E07 | 名前の解決 | `[[名前]]` の候補が参照範囲にない、または2つ以上ある |
@@ -445,14 +445,14 @@ $$\forall \varepsilon > 0,\ \exists N,\ \forall m, n \ge N: d(x_m, x_n) < \varep
 
 1. テスト用原稿の第3章の banach 駅から proof-sketch を消すと、エラーは E08 の1件だけ(`chapters/03-completeness-fixed-point/index.md` の banach 駅に proof-sketch がない)で、終了コードは 1、`dist/` は変わらない。
 2. テスト用原稿をビルドすると、エラーはなく終了コードは 0 である。通知は N01 が理論物理で9駅(cauchy-sequence と contraction を含む)、情報科学で1駅(cauchy-sequence)で、どちらにも第0章の駅は入らない。N02 が第0〜4章以外の5章である。
-3. テスト用原稿の第3章で、completeness 駅の定義の中の `[[コーシー列]]` は定義 cauchy-sequence に、章頭の `[[banach|バナッハの不動点定理]]` は駅 banach へのリンクに、banach 駅の定理の中の `[[completeness|完備]]` は定義 completeness に、picard-lindelof 駅の定理の中の `[[一様収束]]` は第1章の定義 uniform-convergence に解決する。
+3. テスト用原稿の第3章で、completeness 駅の定義の中の `[[コーシー列]]` は定義 def-cauchy-sequence に、章頭の `[[banach|バナッハの不動点定理]]` は駅 banach へのリンクに、banach 駅の定理の中の `[[def-completeness|完備]]` は定義 def-completeness に、picard-lindelof 駅の定理の中の `[[一様収束]]` は第1章の定義 def-uniform-convergence に解決する。第3章に `[[cauchy-sequence]]` と書くと、定義ではなく駅 cauchy-sequence へのリンクになる。
 4. テスト用原稿を次のように壊すと、括弧の中のコードのエラーが、壊したファイルと行で出る。
    1. ある駅の requires に存在しない ID を書く(E05)。
    2. 2つの章に同じ駅の ID を書く(E04)。
    3. 第3章の completeness に `requires=banach` を足す(E06。循環の一覧に completeness と banach が入る)。
    4. 第3章の cauchy-sequence に `requires=topological-space` を足す(E06。第6章の駅を指している)。
    5. 第3章に、参照範囲の別の定義と同じ name を持つ定義を足し、その名前で `[[…]]` を書く(E07。候補が2つ)。
-   6. 第3章に `[[位相空間]]` を書く(E07。候補 topological-space が参照範囲の外にあることを示す)。
+   6. 第3章に `[[位相空間]]` を書く(E07。候補 topological-space が参照範囲の外にあることを示す)。`[[ノルム空間]]` を書くと、駅 normed-space と、別名がノルム空間の定義 def-normed-space を1つの候補として数え、参照範囲の外の候補として def-normed-space だけを示す(E07)。
    7. 第3章に `[[banach-fixed-point]]`(定理の ID)と `[[hilbert-spaces]]`(章の ID)を書く(どちらも E05)。
    8. 章の共通版の goal を消す(E08)。
    9. `::: lemma` のブロックを書く(E02)。
@@ -485,10 +485,12 @@ $$\forall \varepsilon > 0,\ \exists N,\ \forall m, n \ge N: d(x_m, x_n) < \varep
    36. planned の第12章の stations の2番目の要素を `{name: ベクトル場, requires: [no-such-station]}` にする(E05)。
    37. planned の第12章の stations の最初の要素を `{name: 接空間, requires: [banach]}` にし、第12章にも `requires: [banach]` を書く(E09)。
    38. planned の第12章の stations の最初の要素を `{name: 接空間, color: red}` にする(E02)。
+   39. 第3章の picard-lindelof 駅の定義の `#def-lipschitz` を `#lipschitz` にする(E03。定義の ID が `def-` で始まらない)。banach 駅の定理の `#banach-fixed-point` を `#def-banach-fixed-point` にする(E03。定理の ID が `def-` で始まる)。
+   40. 第3章の cauchy-sequence 駅に、ID を省略した2つ目の定義を書く(E04。ID def-cauchy-sequence の重複)。
 5. 4 の誤りのうち、別々のファイルにある2つを同時に入れると、1回のビルドで両方が出る。
 6. 本文に `<script>alert(1)</script>` と書いた章をビルドすると、ページにはその文字列が文字として出て、script 要素はできない。
 7. テスト用原稿の文献の一覧には kreyszig-fa と lecun-deep-learning があり、どちらにも確認の記録がある。テスト用原稿の章から lecun-deep-learning の引用をすべて消してビルドすると、エラーはなく、N04 で lecun-deep-learning が出る。
-8. 第3章の地の文に `^[区間 $[0, 1]$ と、文字の \] と、[[距離空間]]。]` と書いてビルドすると、エラーはなく、注は1つで、その本文には行内の数式 `[0, 1]`、文字の「]」、定義 metric-space への用語がこの順に入る。同じ段落に `\^[` と書いた箇所は、注にならず「^[」の文字になる。
+8. 第3章の地の文に `^[区間 $[0, 1]$ と、文字の \] と、[[距離空間]]。]` と書いてビルドすると、エラーはなく、注は1つで、その本文には行内の数式 `[0, 1]`、文字の「]」、定義 def-metric-space への用語がこの順に入る。同じ段落に `\^[` と書いた箇所は、注にならず「^[」の文字になる。
 
 ## Open questions
 

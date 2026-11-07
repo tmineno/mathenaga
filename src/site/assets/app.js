@@ -298,10 +298,10 @@
         '定義の場所:第' + d.chapter + '章 ' + d.chapterTitle + ' · ' + d.code + ' ' + d.stationName + ' ',
       ),
     );
-    if (document.getElementById('def-' + id)) {
+    if (document.getElementById(id)) {
       var go = document.createElement('a');
       go.className = 'pop-go';
-      go.href = '#def-' + id;
+      go.href = '#' + id;
       go.textContent = 'この定義へ移動';
       foot.appendChild(go);
     } else {

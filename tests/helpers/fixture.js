@@ -46,7 +46,7 @@ export function countMath(text) {
 
 /**
  * 原稿の定義(definition)の ID を書いた順に集める。defs.json の期待値を手で書かずに原稿から作るためのもの。
- * `{#ID}` のない定義は、その駅の ID を使う(content-format.md)。
+ * `{#ID}` のない定義は、def-<駅の ID> を使う(content-format.md「ID」、ADR-008)。
  * @param {string} text 章の Markdown
  * @returns {string[]}
  */
@@ -58,7 +58,7 @@ export function definitionIds(text) {
     if (h) station = h[1];
     const d = /^:::\s*definition\b(?:\s*\{([^}]*)\})?/.exec(line);
     if (!d) continue;
-    const id = /(?:^|\s)#([^\s}]+)/.exec(d[1] ?? '')?.[1] ?? station;
+    const id = /(?:^|\s)#([^\s}]+)/.exec(d[1] ?? '')?.[1] ?? (station ? `def-${station}` : null);
     if (!id) throw new Error(`ID の決まらない定義: ${line}`);
     ids.push(id);
   }
@@ -67,7 +67,7 @@ export function definitionIds(text) {
 
 /**
  * 原稿の定義(definition)と定理(theorem)を、書いた順に集める。番号の期待値を手で書かずに原稿から作るためのもの。
- * ID は、書いてあればその ID、定義で書いていなければ駅の ID(content-format.md)。
+ * ID は、書いてあればその ID、定義で書いていなければ def-<駅の ID>(content-format.md「ID」、ADR-008)。
  * @param {string} text 章の Markdown
  * @returns {{ kind: 'definition' | 'theorem', id: string, station: string | null }[]}
  */
@@ -80,7 +80,8 @@ export function statements(text) {
     const b = /^:::\s*(definition|theorem)(?![\w-])(?:\s*\{([^}]*)\})?/.exec(line);
     if (!b) continue;
     const kind = /** @type {'definition' | 'theorem'} */ (b[1]);
-    const id = /(?:^|\s)#([^\s}]+)/.exec(b[2] ?? '')?.[1] ?? (kind === 'definition' ? station : null);
+    const id =
+      /(?:^|\s)#([^\s}]+)/.exec(b[2] ?? '')?.[1] ?? (kind === 'definition' && station ? `def-${station}` : null);
     if (!id) throw new Error(`ID の決まらない${kind === 'theorem' ? '定理' : '定義'}: ${line}`);
     out.push({ kind, id, station });
   }

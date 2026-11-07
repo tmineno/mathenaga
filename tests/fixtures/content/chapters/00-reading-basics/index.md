@@ -204,7 +204,7 @@ $A \cup B$ を和集合 (union)、$A \cap B$ を共通部分 (intersection)、$A
 
 集合をいくつも、ときには無限個集めて扱うときは、集めた集合に名札を付けます。集合 $\Lambda$ の各要素 $\lambda$ に、$X$ の部分集合 $A_\lambda$ が一つずつ決まっているとき、これを集合族 (family of sets) と呼び、$(A_\lambda)_{\lambda \in \Lambda}$ と書きます。$\Lambda$ を添字の集合 (index set) と呼び、無限集合でもかまいません。
 
-::: definition {#union name="和集合" en="union"}
+::: definition {#def-union name="和集合" en="union"}
 集合族 $(A_\lambda)_{\lambda \in \Lambda}$ について、
 
 $$
@@ -214,7 +214,7 @@ $$
 をその和集合という。
 :::
 
-::: definition {#intersection name="共通部分" en="intersection"}
+::: definition {#def-intersection name="共通部分" en="intersection"}
 集合族 $(A_\lambda)_{\lambda \in \Lambda}$ について、
 
 $$
@@ -224,7 +224,7 @@ $$
 をその共通部分という。
 :::
 
-::: definition {#complement name="補集合" en="complement"}
+::: definition {#def-complement name="補集合" en="complement"}
 $X$ の部分集合 $A$ について、$X \setminus A = \{x \in X \mid x \notin A\}$ を $A$ の補集合という。
 :::
 
@@ -261,7 +261,7 @@ $x \in X$ を任意にとります。和集合と補集合の定義から、$x \
 
 ### 直積と冪集合
 
-::: definition {#product name="直積" en="Cartesian product" aliases="直積集合"}
+::: definition {#def-product name="直積" en="Cartesian product" aliases="直積集合"}
 集合 $X$、$Y$ について、$x \in X$ と $y \in Y$ の組 $(x, y)$ の全体
 
 $$
@@ -273,7 +273,7 @@ $$
 
 組 $(x, y)$ は並び順を区別します。$X = Y$ のときも、$x \ne y$ なら $(x, y) \ne (y, x)$ です。平面 $\mathbb{R}^2 = \mathbb{R} \times \mathbb{R}$ は実数の組の集合で、同じように $m$ 個の実数の組を集めた集合が $\mathbb{R}^m$ です。[[@metric-space]] の距離 $d: X \times X \to \mathbb{R}$ は、点の組に実数を一つ対応させる写像です。
 
-::: definition {#power-set name="冪集合" en="power set"}
+::: definition {#def-power-set name="冪集合" en="power set"}
 集合 $X$ について、$X$ の部分集合の全体
 
 $$
@@ -289,23 +289,23 @@ $X = \{1, 2\}$ なら、$\mathcal{P}(X) = \{\emptyset, \{1\}, \{2\}, \{1, 2\}\}$
 
 写像 (map) $f: X \to Y$ は、$X$ の各要素 $x$ に、$Y$ の要素 $f(x)$ を一つずつ対応させます。$X$ を定義域 (domain)、$Y$ を終域 (codomain) と呼びます。写像は、定義域・終域・対応のさせ方の三つで決まります。対応のさせ方が同じでも、定義域か終域が違えば別の写像とみなします。
 
-::: definition {#image name="像" en="image"}
+::: definition {#def-image name="像" en="image"}
 写像 $f: X \to Y$ と $X$ の部分集合 $A$ について、$f(A) := \{y \in Y \mid \exists x \in A: y = f(x)\}$ を、$f$ による $A$ の像という。
 :::
 
-反対向きに、$Y$ の部分集合を $X$ へ引き戻す逆像は、[[@preimage]] で定めます。
+反対向きに、$Y$ の部分集合を $X$ へ引き戻す逆像は、[[@def-preimage]] で定めます。
 
-::: definition {#composition name="合成" en="composition"}
+::: definition {#def-composition name="合成" en="composition"}
 写像 $f: X \to Y$ と $g: Y \to Z$ について、$x \in X$ を $g(f(x))$ に写す写像 $g \circ f: X \to Z$ を、$f$ と $g$ の合成という。
 :::
 
-::: definition {#identity-map name="恒等写像" en="identity map"}
+::: definition {#def-identity-map name="恒等写像" en="identity map"}
 集合 $X$ の各要素 $x$ を $x$ 自身に写す写像を、$X$ の恒等写像といい、$\mathrm{id}_X$ と書く。
 :::
 
 $g \circ f$ は「$f$ を施してから $g$ を施す」写像で、右に書いた写像が先です。合成が定まるのは、$f$ の終域が $g$ の定義域と一致するときです。
 
-::: definition {#injection name="単射" en="injection"}
+::: definition {#def-injection name="単射" en="injection"}
 写像 $f: X \to Y$ が単射であるとは、次が成り立つことをいう。
 
 $$
@@ -313,7 +313,7 @@ $$
 $$
 :::
 
-::: definition {#surjection name="全射" en="surjection"}
+::: definition {#def-surjection name="全射" en="surjection"}
 写像 $f: X \to Y$ が全射であるとは、次が成り立つことをいう。
 
 $$
@@ -321,7 +321,7 @@ $$
 $$
 :::
 
-::: definition {#bijection name="全単射" en="bijection"}
+::: definition {#def-bijection name="全単射" en="bijection"}
 単射かつ全射である写像を、全単射という。
 :::
 
@@ -338,7 +338,7 @@ $$
 
 ### 逆写像
 
-::: definition {#inverse-map name="逆写像" en="inverse map"}
+::: definition {#def-inverse-map name="逆写像" en="inverse map"}
 写像 $f: X \to Y$ について、写像 $g: Y \to X$ が
 
 $$
@@ -379,7 +379,7 @@ $g$ は、$f$ で写した点をもとに戻し、$f$ も、$g$ で写した点�
 逆写像は、あればただ一つです。$g$ と $g'$ がどちらも $f$ の逆写像なら、$g = g \circ \mathrm{id}_Y = g \circ (f \circ g') = (g \circ f) \circ g' = \mathrm{id}_X \circ g' = g'$ だからです(3つ目の等号は、どちらの辺も $y$ を $g(f(g'(y)))$ に写すことによる)。そこで、全単射 $f$ の逆写像を $f^{-1}$ と書きます。
 
 ::: pitfall
-- 記号 $f^{-1}$ には二つの意味があります。逆像 $f^{-1}(V)$([[@preimage]])はどんな写像にも定まりますが、逆写像 $f^{-1}$ は全単射にしかありません。$f$ が全単射なら、逆像 $f^{-1}(V)$ と、逆写像 $f^{-1}$ による $V$ の像は同じ集合になるので、記号が重なっても食い違いは起きません。
+- 記号 $f^{-1}$ には二つの意味があります。逆像 $f^{-1}(V)$([[@def-preimage]])はどんな写像にも定まりますが、逆写像 $f^{-1}$ は全単射にしかありません。$f$ が全単射なら、逆像 $f^{-1}(V)$ と、逆写像 $f^{-1}$ による $V$ の像は同じ集合になるので、記号が重なっても食い違いは起きません。
 - 単射か、全射かは、定義域と終域によって変わります。上の例の $x \mapsto x^2$ は、$\mathbb{R} \to \mathbb{R}$ では単射でも全射でもなく、$[0, \infty) \to [0, \infty)$ では全単射です。写像が全射かどうかを問うときは、終域を確かめます。
 - 「1対1の写像」(one-to-one map)は単射の意味で、「1対1対応」(one-to-one correspondence)は全単射の意味で使われます。紛らわしいので、このサイトでは単射・全射・全単射と書きます。
 - 添字の集合 $\Lambda$ が空集合のとき、和集合は $\emptyset$、共通部分は $X$ になります。$\exists \lambda \in \emptyset$ の主張はいつも偽で、$\forall \lambda \in \emptyset$ の主張はいつも真だからです([[@reading-symbols]] の落とし穴)。

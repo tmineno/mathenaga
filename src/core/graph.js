@@ -178,9 +178,7 @@ export function buildSite(input) {
   for (const info of stations) {
     const c = info.chapter;
     for (const d of info.model.definitions) {
-      if (d.id === null) continue;
-      if (d.id !== info.id && !register(d.id, 'definition', c.file, d.line)) continue;
-      if (d.id === info.id && definitions.has(d.id)) continue;
+      if (d.id === null || !register(d.id, 'definition', c.file, d.line)) continue;
       definitions.set(d.id, {
         id: d.id,
         name: d.attrs.name ?? '',

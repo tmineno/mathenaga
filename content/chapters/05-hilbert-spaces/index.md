@@ -65,7 +65,7 @@ $$ {#orthonormal-length}
 
 $x$ が $e_1, \dots, e_N$ の線形結合 $x = \sum_{n=1}^{N} a_n e_n$ なら、両辺と $e_m$ の内積をとると $\langle x, e_m \rangle = \sum_{n=1}^{N} a_n \langle e_n, e_m \rangle = a_m$ となり、係数は内積で取り出せます。この内積には名前が付いています。
 
-::: definition {#fourier-coefficient name="フーリエ係数" en="Fourier coefficient"}
+::: definition {#def-fourier-coefficient name="フーリエ係数" en="Fourier coefficient"}
 $(e_n)$ を内積空間 $V$ の正規直交系とする。$x \in V$ について、実数 $\langle x, e_n \rangle$ を、$x$ の $e_n$ に関するフーリエ係数という。
 :::
 
@@ -139,13 +139,13 @@ $$
 
 [[@norm-inner-product]] の理論物理の応用で、箱の中の粒子の確率について示した不等式は、この定理の特別な場合です。等号が成り立つのはどんなときかを調べるために、まず無限個のベクトルの和の意味を決めます。
 
-::: definition {#series name="級数" en="series"}
+::: definition {#def-series name="級数" en="series"}
 [[ノルム空間]] $V$ のベクトルの列 $(x_n)_{n \ge 1}$ について、部分和 $s_N := x_1 + x_2 + \dots + x_N$ の列 $(s_N)$ が $x \in V$ に収束するとき、級数 $\sum_{n=1}^{\infty} x_n$ は $x$ に収束するといい、$x = \sum_{n=1}^{\infty} x_n$ と書く。
 :::
 
 収束は、ノルムから決まる距離で考えます([[@normed-space]])。同じ級数でも、ノルムを変えると、収束するかどうかが変わることがあります。
 
-::: definition {#complete-orthonormal-system name="完全正規直交系" en="complete orthonormal system" aliases="正規直交基底"}
+::: definition {#def-complete-orthonormal-system name="完全正規直交系" en="complete orthonormal system" aliases="正規直交基底"}
 内積空間 $V$ の正規直交系 $(e_n)_{n \ge 1}$ で、無限個のベクトルからなるものが完全であるとは、すべての $x \in V$ について次が成り立つことをいう。このとき $(e_n)$ を $V$ の完全正規直交系、または正規直交基底 (orthonormal basis) という。
 
 $$
@@ -226,7 +226,7 @@ $$ {#trig-system}
 :::
 
 ::: pitfall
-**「完全」と「完備」。** 英語ではどちらも complete です。完全は正規直交系の性質で、直交する方向が足りていることです。[[completeness|完備]]は空間の性質で、コーシー列の行き先が空間の中にあることです。二つは別の性質で、[[@fourier-series]] の区分的に連続な関数の空間は、三角関数系という完全正規直交系をもちますが、完備ではありません([[@hilbert-space]])。完全正規直交系を「完備正規直交系」と呼ぶ本もあるので、どちらの意味かは定義で確かめてください。
+**「完全」と「完備」。** 英語ではどちらも complete です。完全は正規直交系の性質で、直交する方向が足りていることです。[[def-completeness|完備]]は空間の性質で、コーシー列の行き先が空間の中にあることです。二つは別の性質で、[[@fourier-series]] の区分的に連続な関数の空間は、三角関数系という完全正規直交系をもちますが、完備ではありません([[@hilbert-space]])。完全正規直交系を「完備正規直交系」と呼ぶ本もあるので、どちらの意味かは定義で確かめてください。
 
 **直交していない列では、項を足すと前の係数も変わる。** $C[0, 1]$ の内積 $\langle f, g \rangle = \int_0^1 f(t) g(t)\,dt$ で、$f(t) = t^2$ を定数で最もよく近似すると、定数関数 1 の長さは 1 なので、[[@best-approximation]] から $\langle t^2, 1 \rangle = 1/3$ です。ここに $t$ を足して $a + bt$ の形で最もよく近似すると $t - 1/6$ になり、定数項が $1/3$ から $-1/6$ に変わります。1 と $t$ は直交していない($\int_0^1 t\,dt = 1/2$)からです。1 と直交する長さ 1 の関数 $\sqrt{3}(2t - 1)$ を使うと、1 と $\sqrt{3}(2t - 1)$ の線形結合の全体は $a + bt$ の全体と同じで、$\langle t^2, \sqrt{3}(2t - 1) \rangle = \sqrt{3}/6$ なので、最良近似は $1/3 + (\sqrt{3}/6) \cdot \sqrt{3}(2t - 1) = t - 1/6$ です。正規直交系を使えば、項を足しても、それまでの係数 $1/3$ は変わりません。
 :::
@@ -236,7 +236,7 @@ $$ {#trig-system}
 :::
 
 ::: application {field=physics title="測定による状態の射影"}
-[[@completeness-fixed-point]] の理論物理の応用で見た、幅 $L$ の箱の左半分で見つかった直後の状態 $\chi$ を考えます。エネルギー固有関数を $u_n(x) = \sqrt{2/L}\,\sin(n\pi x/L)$ として、$\chi$ は $0 \le x < L/2$ で $\sqrt{2}\, u_1(x)$、$L/2 < x \le L$ で 0 をとり、$x = L/2$ では両側の極限 $2/\sqrt{L}$ と 0 の平均 $1/\sqrt{L}$ をとる関数で、$\|\chi\|_2 = 1$ です。$\chi$ はとびのある関数なので、$[0, L]$ 上の区分的に連続な関数で、とびのある点では両側の極限の平均をとるものの全体に、内積 $\langle f, g \rangle = \int_0^L f(x) g(x)\,dx$ を入れた内積空間で考えます([[@piecewise-continuous]] と同じ作り方です)。
+[[@completeness-fixed-point]] の理論物理の応用で見た、幅 $L$ の箱の左半分で見つかった直後の状態 $\chi$ を考えます。エネルギー固有関数を $u_n(x) = \sqrt{2/L}\,\sin(n\pi x/L)$ として、$\chi$ は $0 \le x < L/2$ で $\sqrt{2}\, u_1(x)$、$L/2 < x \le L$ で 0 をとり、$x = L/2$ では両側の極限 $2/\sqrt{L}$ と 0 の平均 $1/\sqrt{L}$ をとる関数で、$\|\chi\|_2 = 1$ です。$\chi$ はとびのある関数なので、$[0, L]$ 上の区分的に連続な関数で、とびのある点では両側の極限の平均をとるものの全体に、内積 $\langle f, g \rangle = \int_0^L f(x) g(x)\,dx$ を入れた内積空間で考えます([[@def-piecewise-continuous]] と同じ作り方です)。
 
 エネルギーを測って、$E_1$ か $E_2$ のどちらかが出たかどうかだけを調べる測定を考えます(どちらが出たかは区別しません)。測定の射影仮説では、その結果が出る確率は、$\chi$ を $u_1, u_2$ の線形結合の全体へ正射影したものの長さの2乗で、測定の直後の状態は、その正射影を長さ 1 にしたものです。フーリエ係数は $c_1 = \langle \chi, u_1 \rangle = 1/\sqrt{2}$ と、$\theta = \pi x/L$ と置き換えて
 
@@ -277,7 +277,7 @@ $t$ の値が 0 を中心に対称でないときは、定数の列と $t$ の�
 [[@convergence-metric]] の理論物理の応用では、方形波のフーリエ級数の部分和 $S_N$ が、不連続点の近くで方形波から離れたままになり、一様には収束しないことを見ました。一方、そこでは2乗誤差 $\int_{-\pi}^{\pi} |S_N(t) - f(t)|^2\,dt$ は 0 に近づくと述べました。これを示すには、[[@parseval]] から、三角関数系が完全であることを示せばよいはずです。ただし方形波は連続ではないので、[[@orthonormal-system]] の $C[-\pi, \pi]$ には入りません。そこで、とびのある関数も入る内積空間を用意するところから始めます。積分は1点での値の違いを区別しないので、とびのある点での値の決め方に約束が要ります。
 :::
 
-::: definition {#piecewise-continuous name="区分的に連続" en="piecewise continuous"}
+::: definition {#def-piecewise-continuous name="区分的に連続" en="piecewise continuous"}
 関数 $f: [-\pi, \pi] \to \mathbb{R}$ が区分的に連続であるとは、有限個の点 $-\pi = t_0 < t_1 < \dots < t_k = \pi$ があって、各開区間 $(t_{j-1}, t_j)$ で $f$ が連続であり、各 $t_j$ での区間の内側からの極限(片側極限)が有限の値で存在することをいう。右からの極限を $f(t + 0) := \lim_{s \to t,\, s > t} f(s)$、左からの極限を $f(t - 0)$ と書く。区分的に連続な関数で、さらに次をみたすものの全体を $\mathrm{PC}[-\pi, \pi]$ と書く。
 
 $$
@@ -339,7 +339,7 @@ $$ {#parseval-trig}
 
 完全であることは、[[@parseval]] の 3 で確かめます。つまり、どの $f$ も三角多項式でいくらでもよく近似できることを示します。そのための道具が、部分和の平均です。部分和 $S_N g$ そのものは、$g$ が連続でも一様に収束するとは限りません(下の落とし穴)。しかし部分和の平均(チェザロ平均、Cesàro mean)をとると、連続関数なら必ず一様に収束します。証明には、次の性質を使います。
 
-::: definition {#uniformly-continuous name="一様連続" en="uniformly continuous"}
+::: definition {#def-uniformly-continuous name="一様連続" en="uniformly continuous"}
 $I$ を実数の区間とする。関数 $g: I \to \mathbb{R}$ が一様連続であるとは、次が成り立つことをいう。
 
 $$
@@ -356,7 +356,7 @@ $$
 \sigma_N g := \frac{S_0 g + S_1 g + \dots + S_N g}{N + 1}
 $$
 
-と定めると、$\sigma_N g$ は $N \to \infty$ で $g$ に[[uniform-convergence|一様収束]]する。
+と定めると、$\sigma_N g$ は $N \to \infty$ で $g$ に[[def-uniform-convergence|一様収束]]する。
 :::
 
 ::: proof-sketch
@@ -539,16 +539,16 @@ JPEG などの画像圧縮では、三角関数の仲間である離散コサイ
 :::
 
 ::: why
-[[@trig-complete]] から、$\mathrm{PC}[-\pi, \pi]$ のどの関数も、三角関数系に関するフーリエ係数で決まり、係数の2乗の和は有限です。では逆に、2乗の和が有限な実数列 $(c_n)$ を勝手に決めたとき、それをフーリエ係数にもつ関数はあるでしょうか。部分和 $s_N = \sum_{n=1}^{N} c_n e_n$ は、[[@orthonormal-length]] から $M < N$ なら $\|s_N - s_M\|^2 = \sum_{n=M+1}^{N} c_n^2$ をみたすので、[[コーシー列]]です。しかし $\mathrm{PC}[-\pi, \pi]$ は完備ではなく(下の例)、コーシー列の行き先が空間の中にあるとは限りません。[[@completeness-fixed-point]] で見た、$\mathbb{Q}$ に穴があるのと同じ状況です。係数の列がいつもベクトルを決めるようにするには、空間が[[completeness|完備]]であることが要ります。
+[[@trig-complete]] から、$\mathrm{PC}[-\pi, \pi]$ のどの関数も、三角関数系に関するフーリエ係数で決まり、係数の2乗の和は有限です。では逆に、2乗の和が有限な実数列 $(c_n)$ を勝手に決めたとき、それをフーリエ係数にもつ関数はあるでしょうか。部分和 $s_N = \sum_{n=1}^{N} c_n e_n$ は、[[@orthonormal-length]] から $M < N$ なら $\|s_N - s_M\|^2 = \sum_{n=M+1}^{N} c_n^2$ をみたすので、[[コーシー列]]です。しかし $\mathrm{PC}[-\pi, \pi]$ は完備ではなく(下の例)、コーシー列の行き先が空間の中にあるとは限りません。[[@completeness-fixed-point]] で見た、$\mathbb{Q}$ に穴があるのと同じ状況です。係数の列がいつもベクトルを決めるようにするには、空間が[[def-completeness|完備]]であることが要ります。
 :::
 
 ::: definition {name="ヒルベルト空間" en="Hilbert space"}
-内積空間 $(V, \langle \cdot, \cdot \rangle)$ が、内積から決まるノルム $\|x\| = \sqrt{\langle x, x \rangle}$ の距離 $d(x, y) = \|x - y\|$ について[[completeness|完備]]であるとき、$V$ をヒルベルト空間という。
+内積空間 $(V, \langle \cdot, \cdot \rangle)$ が、内積から決まるノルム $\|x\| = \sqrt{\langle x, x \rangle}$ の距離 $d(x, y) = \|x - y\|$ について[[def-completeness|完備]]であるとき、$V$ をヒルベルト空間という。
 :::
 
 内積から決まるノルムをもつ[[バナッハ空間]]、と言っても同じです^[無限次元のものや、可分(下の補足)なものだけをヒルベルト空間と呼ぶ本もあります。]。$\mathbb{R}^m$ に標準内積を入れた空間は、[[@normed-space]] で見たとおり完備なので、ヒルベルト空間です。無限次元の代表例は、次の数列の空間です。
 
-::: definition {#l2 name="2乗総和可能な数列の空間" en="space of square-summable sequences"}
+::: definition {#def-l2 name="2乗総和可能な数列の空間" en="space of square-summable sequences"}
 実数列 $x = (x_n)_{n \ge 1}$ で、級数 $\sum_{n=1}^{\infty} x_n^2$ が収束するものの全体を $\ell^2$ と書く。$\ell^2$ には、項ごとの足し算と実数倍と、内積 $\langle x, y \rangle := \sum_{n=1}^{\infty} x_n y_n$ を入れる。
 :::
 
@@ -625,7 +625,7 @@ $$
 です。したがって $(c^{(k)})$ は $\ell^2$ のコーシー列で、[[@l2-complete]] からある $c \in \ell^2$ に収束します。仮定から、すべての $n$ で $\langle x, e_n \rangle = c_n$ となる $x \in V$ があります。$x_k - x$ のフーリエ係数の列は $c^{(k)} - c$ なので、同じくパーセヴァルの等式から $\|x_k - x\| = \|c^{(k)} - c\| \to 0$ です。$V$ のコーシー列はすべて収束するので、$V$ は完備です。
 :::
 
-ヒルベルト空間 $V$ が完全正規直交系 $(e_n)$ をもてば、$x$ にフーリエ係数の列 $(\langle x, e_n \rangle)_{n \ge 1}$ を対応させる写像は、$V$ から $\ell^2$ への[[bijection|全単射]]です。[[@completeness-coefficients]] から全射で、パーセヴァルの等式から、フーリエ係数がすべて等しい二つのベクトルは差のノルムが 0 なので単射です。さらに、パーセヴァルの等式から長さを保ち、$\langle x, y \rangle = \frac{1}{4}(\|x + y\|^2 - \|x - y\|^2)$ から内積も保ちます。この意味で、そうしたヒルベルト空間は、どれも $\ell^2$ と同じ形をしています。
+ヒルベルト空間 $V$ が完全正規直交系 $(e_n)$ をもてば、$x$ にフーリエ係数の列 $(\langle x, e_n \rangle)_{n \ge 1}$ を対応させる写像は、$V$ から $\ell^2$ への[[def-bijection|全単射]]です。[[@completeness-coefficients]] から全射で、パーセヴァルの等式から、フーリエ係数がすべて等しい二つのベクトルは差のノルムが 0 なので単射です。さらに、パーセヴァルの等式から長さを保ち、$\langle x, y \rangle = \frac{1}{4}(\|x + y\|^2 - \|x - y\|^2)$ から内積も保ちます。この意味で、そうしたヒルベルト空間は、どれも $\ell^2$ と同じ形をしています。
 
 ::: examples
 - ヒルベルト空間である例:標準内積を入れた $\mathbb{R}^m$ と、$\ell^2$([[@l2-complete]])。
