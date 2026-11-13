@@ -19,9 +19,10 @@
 
 ### 入力
 
-- `content/` の原稿([content-format.md](content-format.md))。文献の一覧(`references.yml`)と確認の記録(`references.verified.json`)を含む。ビルドは確認の記録を読むだけで、問い合わせはしない([reference-check.md](reference-check.md))。
-- 環境変数 `MATHENAGA_BASE_PATH`:ベースパス。既定は `/`。`/` で始まり `/` で終わる。
-- 環境変数 `MATHENAGA_REPO_URL`:改善案を起票する GitHub のリポジトリの URL(`https://github.com/<owner>/<repo>`)。任意。渡せば章ページの各駅に起票のアイコンを出し、本文を選んだときの選択メニューに「起票」と「編集」を出す([site.md](site.md) の P-07・P-12)。そのために、章ページの段落ごとに、原稿のファイルの中の行の範囲を書き込む。
+- `content/` の原稿([content-format.md](content-format.md))。サイトの設定(`site.yml`)とロゴ(`assets/logo.txt`)、文献の一覧(`references.yml`)と確認の記録(`references.verified.json`)を含む。ビルドは確認の記録を読むだけで、問い合わせはしない([reference-check.md](reference-check.md))。
+- 環境変数 `SITE_BASE_PATH`:ベースパス。既定は `/`。`/` で始まり `/` で終わる。
+- 環境変数 `SITE_REPO_URL`:改善案を起票する GitHub のリポジトリの URL(`https://github.com/<owner>/<repo>`)。任意。渡せば章ページの各駅に起票のアイコンを出し、本文を選んだときの選択メニューに「起票」と「編集」を出す([site.md](site.md) の P-07・P-12)。そのために、章ページの段落ごとに、原稿のファイルの中の行の範囲を書き込む。
+- 古い名前の `MATHENAGA_BASE_PATH`・`MATHENAGA_REPO_URL` も受け付ける([ADR-009](../adr/ADR-009-site-independent-ui.md))。古い名前だけを渡したときはその値を使い、通知 N05(古い名前の環境変数を使った)を出す。新しい名前と古い名前に違う値を渡したときは E13 で止まる。同じ値なら新しい名前の値を使い、N05 を出す。
 
 ### ビルドの流れ
 
@@ -107,6 +108,9 @@ dist/
   assets/                           CSS、閲覧時のスクリプト、favicon、KaTeX の CSS とフォント
 ```
 
+- 閲覧時のスクリプト `assets/app.js` は、`src/ui/client/` のモジュールを esbuild で1つの即時関数にまとめたものである。サイトの文言と保存キーの接頭辞(`site.yml`)は、まとめるときに埋め込む。
+- CSS `assets/style.css` は、`src/ui/theme/` のファイルを決まった順につなぎ、最後に `content/assets/theme.css`(あれば)を足したものである。路線の色は、これまでどおり `assets/lines.css` に書く。
+
 - ページの中のリンク、CSS・スクリプト・図の参照、`defs.json` の読み込みは、ベースパスを付けて書く(ベースパスが `/mathenaga/` なら `/mathenaga/chapters/…`)。
 - ページが読み込むファイル(CSS・スクリプト・favicon・KaTeX の CSS・図)と `defs.json` の URL には、版の印 `?v=〈中身の SHA-256 の16進の先頭 10 文字〉` を付ける。公開の配信はファイルをしばらくブラウザに残させる(GitHub Pages は 10 分)ので、公開した直後に、新しいページが残っていた古い CSS・スクリプト・定義索引と組み合わさらないようにするためである。`defs.json` の URL は、ページの `<html>` の `data-defs` 属性で閲覧時のスクリプトに渡す。KaTeX のフォントには付けない(KaTeX の版を上げない限り変わらない)。
 - 路線図の SVG は、使うページの HTML に埋め込み、別のファイルにはしない。
@@ -121,15 +125,15 @@ dist/
 | `npm run dev` | `npm run build` と同じ | `127.0.0.1` で `dist/` をベースパスの下に配信する(ポートの既定は 8000、環境変数 `PORT` で変える)。`content/` と `src/` の変更のたびに全体を作り直し、開いているブラウザを再読み込みする | ビルドのエラーは端末に出し、ブラウザは前回成功した出力のまま。サーバーは止めない | `dist/` を書き換える |
 | `npm test` | 依存と、Playwright が使うブラウザをインストール済み | 単体テスト、テスト用原稿を使った結合テスト、Playwright でブラウザを動かす閲覧テスト([site.md](site.md))を実行し、すべて通れば終了コード 0 | 失敗したテストを出し、終了コードは 0 以外 | テストの出力は一時ディレクトリに書き、`dist/` には触れない |
 | `npm run refs:verify` | ネットワークにつながる | 文献の実在を検索 API で確かめ、確認の記録を書く([reference-check.md](reference-check.md)) | 同左 | `content/references.verified.json` を書き換える |
-| `MATHENAGA_BASE_PATH` | `/` で始まり `/` で終わる | すべてのリンクと読み込みに付く | 形式が違えば E13 で止まる | なし |
-| `MATHENAGA_REPO_URL` | 空か、`https://github.com/<owner>/<repo>` の形 | 空でなければ、章ページの各駅に、そのリポジトリの Issue 作成画面へのリンクを置く。段落ごとに原稿の行の範囲を書き込み、選択メニューから Issue 作成画面と原稿の行を開けるようにする | 形式が違えば E13 で止まる | なし |
+| `SITE_BASE_PATH` | `/` で始まり `/` で終わる | すべてのリンクと読み込みに付く | 形式が違えば E13 で止まる | なし |
+| `SITE_REPO_URL` | 空か、`https://github.com/<owner>/<repo>` の形 | 空でなければ、章ページの各駅に、そのリポジトリの Issue 作成画面へのリンクを置く。段落ごとに原稿の行の範囲を書き込み、選択メニューから Issue 作成画面と原稿の行を開けるようにする | 形式が違えば E13 で止まる | なし |
 
 ### CI と公開
 
 - CI(GitHub Actions)は format → lint → typecheck → test の順に実行し、どれかが失敗したらマージできないようにする。型は JSDoc で書き、typecheck で検査する。使う道具は CI を作るときに決め、バージョンを固定する。
 - CI の test では閲覧テストも実行する。そのためにブラウザをインストールする手順を CI に入れる。
 - 文献の一覧(`references.yml`)か確認の記録(`references.verified.json`)を変えた PR では、今の原稿とテスト用原稿のそれぞれについて、変えた側に `npm run refs:verify -- --check --content <原稿の場所>` も実行し、失敗したらマージできないようにする。CI でネットワークを使うのはこの手順だけで、ほかの PR では実行しない([reference-check.md](reference-check.md))。
-- 公開は、main への push で `npm run build` を実行し、`dist/` を GitHub Pages のプロジェクトサイトに置く。ベースパスは `/<リポジトリ名>/` で、公開のワークフローがリポジトリ名から作って `MATHENAGA_BASE_PATH` に渡す。リポジトリの URL も `MATHENAGA_REPO_URL` に渡し、改善案の起票のアイコンを出す。手元のビルドとプレビューの既定は、ベースパスが `/`、`MATHENAGA_REPO_URL` は空(アイコンなし)のまま。
+- 公開は、main への push で `npm run build` を実行し、`dist/` を GitHub Pages のプロジェクトサイトに置く。ベースパスは `/<リポジトリ名>/` で、公開のワークフローがリポジトリ名から作って `SITE_BASE_PATH` に渡す。リポジトリの URL も `SITE_REPO_URL` に渡し、改善案の起票のアイコンを出す。手元のビルドとプレビューの既定は、ベースパスが `/`、`SITE_REPO_URL` は空(アイコンなし)のまま。
 
 ## Failure modes
 
@@ -137,11 +141,12 @@ dist/
 |---|---|---|---|
 | 原稿の誤り | 1段目の検査([content-format.md](content-format.md) の E01〜E11・E14・E15、[route-map.md](route-map.md) の E12) | エラーの一覧、終了コード 1、`dist/` は変わらない | 原稿を直して再実行する |
 | 文献を足した・書き換えたが、実在を確かめていない | 1段目の検査(E15) | 同上 | `npm run refs:verify` を実行し、確認の記録をコミットする |
-| `MATHENAGA_BASE_PATH` の形式が違う(`mathenaga` など) | 1段目の前の設定の読み取り(E13) | 同上 | 値を直す |
-| `MATHENAGA_REPO_URL` の形式が違う(`github.com/example/mathenaga` など) | 1段目の前の設定の読み取り(E13) | 同上 | 値を直すか、空にする |
+| `SITE_BASE_PATH` の形式が違う(`mathenaga` など) | 1段目の前の設定の読み取り(E13) | 同上 | 値を直す |
+| `SITE_REPO_URL` の形式が違う(`github.com/example/mathenaga` など) | 1段目の前の設定の読み取り(E13) | 同上 | 値を直すか、空にする |
+| 新しい名前と古い名前の環境変数に違う値を渡した(`SITE_BASE_PATH=/a/` と `MATHENAGA_BASE_PATH=/b/` など) | 1段目の前の設定の読み取り(E13) | 同上 | 古い名前を消す |
 | 依存がインストールされていない | Node のモジュール解決 | Node のエラーで止まり、終了コードは 0 以外 | `npm ci` を実行する |
 | Playwright が使うブラウザがインストールされていない | `npm test` の閲覧テストの起動 | 閲覧テストが失敗し、ブラウザがないことを出す | Playwright のブラウザをインストールする |
-| ロゴのドットマップ(`src/site/assets/logo.txt`)の形式が違う | 2段目のページの生成([site.md](site.md)「ロゴと favicon」) | ファイル名と行番号を出し、終了コード 1。`dist/` は変わらない | ドットマップを直す |
+| ロゴのドットマップ(`content/assets/logo.txt`)の形式が違う | 2段目のページの生成([site.md](site.md)「ロゴと favicon」) | ファイル名と行番号を出し、終了コード 1。`dist/` は変わらない | ドットマップを直す |
 | `dist/` を消せない・書けない | 2段目のファイル操作 | 原因のパスを出し、終了コード 1。`dist/` が途中までになることがある | 権限を直して再実行する |
 | `npm run dev` が書きかけのファイルを読む | 1段目の検査 | エラーを端末に出し、次の保存で作り直す | 保存し直す |
 | ベースパスの付け忘れ(忘れやすい) | 受け入れテスト 14 | ベースパスが `/` のときは気づけず、`/リポジトリ名/` の下に置くとリンクが切れる | リンクを作る関数を1つにまとめ、テストで確かめる |
@@ -175,13 +180,13 @@ dist/
 11. 各章の別行立ての式に、(N.1) から、その章の原稿にある別行立ての式の数だけ、重複なく式番号が振られる(N は章番号)。別行立ての式のない章には振られない。第3章では、(3.1) は cauchy-sequence の定義の式、(3.4) は contraction の定義の式、最後の番号は picard-lindelof 駅の理論物理の応用の最後の式(ノートンのドームの解)である。
 12. 第3章の banach 駅の情報科学の応用にある誤差評価の式に `{#value-iteration-error}` を付け、第4章に `[[@value-iteration-error]]` と書くと、「(3.10)」と表示され、`/chapters/completeness-fixed-point/#value-iteration-error` へのリンクになる。
 13. `defs.json` の cauchy-sequence の html にある別行立ての式には、式番号 (3.1) が付く。
-14. `MATHENAGA_BASE_PATH=/mathenaga/` でビルドすると、全ページの内部リンク・CSS・スクリプト・図・KaTeX のフォントの参照と、`defs.json` の読み込み先が `/mathenaga/` で始まり、`dist/` の中の実在するファイルを指す。
+14. `SITE_BASE_PATH=/mathenaga/` でビルドすると、全ページの内部リンク・CSS・スクリプト・図・KaTeX のフォントの参照と、`defs.json` の読み込み先が `/mathenaga/` で始まり、`dist/` の中の実在するファイルを指す。
 15. ビルドの後に章フォルダを1つ消して再ビルドすると、その章のページは `dist/` に残らない。
 16. 同じ原稿を2回ビルドすると、`dist/` はバイト単位で一致する。
 17. 壊した原稿でビルドすると、終了コードは 1 で、ビルドの前から `dist/` にあったファイルはそのまま残る。
-18. `MATHENAGA_BASE_PATH=mathenaga` でビルドすると E13 で止まる。
+18. `SITE_BASE_PATH=mathenaga` でビルドすると E13 で止まる。
 19. `npm run dev` で章ページを開いたまま原稿を保存すると、5 秒以内にブラウザの表示が変わる。原稿を壊して保存すると端末にエラーが出て、ブラウザは前の表示のまま。
-20. `MATHENAGA_REPO_URL=github.com/example/mathenaga` でビルドすると E13 で止まる。
+20. `SITE_REPO_URL=github.com/example/mathenaga` でビルドすると E13 で止まる。
 21. 各章のページの定義と定理の札には、原稿に書いた順に「定義 N.1」「定理 N.2」…の番号が、その章の定義と定理の数だけ付く(N は章番号。期待する並びはテストが原稿から集める)。
 22. 第4章に `[[@banach-fixed-point]]`・`[[@def-lipschitz]]`・`[[@def-cauchy-sequence]]`・`[[@cauchy-sequence]]` と書くと、それぞれ「定理 3.N」(banach-fixed-point の番号)、「定義 3.N」(def-lipschitz の番号)、「定義 3.N」(def-cauchy-sequence の番号)、「A01」と表示され、`#banach-fixed-point`・`#def-lipschitz`・`#def-cauchy-sequence`・`#cauchy-sequence` へのリンクになる。第3章に路線の ID を `[[@main]]` と書くと E05 の1件だけで止まる。
 23. 第3章の banach 駅に、タイトル付きの画像1つの段落(`{#fig-one}`)、タイトル付きの画像2つの段落(`{#fig-two}`)、文の中の画像を書いてビルドすると、前の2つが `<figure>` になり、「図 3.1 〈タイトル〉」「図 3.2 (a) 〈タイトル〉 (b) 〈タイトル〉」のキャプションが付き、2つ目の画像には (a)・(b) の札が付く。文の中の画像は図にならない。第4章の `[[@fig-two]]` は「図 3.2」と表示され、`/chapters/completeness-fixed-point/#fig-two` へのリンクになる。
@@ -193,6 +198,9 @@ dist/
 29. テスト用原稿の第3章で、出発点の地の文に注を1つ、banach 駅の地の文に注を1つ、banach 駅の証明の詳細の中に注を1つ、この順に書いてビルドすると、注番号は書いた順に「注1」「注2」「注3」になる。banach 駅の情報科学の application の中に注を足すと、application は駅の末尾に並ぶので、その注は「注4」になる。`?field=physics` と `?field=cs` のどちらで開いても、番号は変わらない。
 30. テスト用原稿の第3章で、kreyszig-fa、lecun-deep-learning、kreyszig-fa の順に引くと、表示は「[1]」「[2]」「[1]」になり、章の参考文献は kreyszig-fa、lecun-deep-learning の順に並ぶ。第4章で lecun-deep-learning だけを引くと、第4章での表示は「[1]」になる。別の書き方として、第3章で引用を banach 駅の2か所だけにし、駅の最初の段落に置いた注の本文で lecun-deep-learning を、その後の段落の地の文で kreyszig-fa を引く。注の本文は章ページでは駅の末尾(kreyszig-fa の引用より後)に並ぶが、注の中の引用は注の印の位置で数えるので、lecun-deep-learning が「[1]」、kreyszig-fa が「[2]」になる。
 31. 文献の一覧に項目を足し、確認の記録を取らずにビルドすると、E15 の1件だけで止まり、`dist/` は変わらない。ビルドはネットワークに接続しない(テストでは、ネットワークへの接続を失敗させた状態でテスト用原稿をビルドし、終了コード 0 になることで確かめる)。
+32. `MATHENAGA_BASE_PATH=/mathenaga/` だけを渡してビルドすると、`dist/` は 14 とバイト単位で一致し、通知に N05 が1件出る。`SITE_BASE_PATH=/a/` と `MATHENAGA_BASE_PATH=/b/` を渡すと E13 で止まる。
+33. 一時ディレクトリに写したテスト用原稿の `site.yml` で、name を「TestSite」、storage_prefix を `testsite` にし、`assets/theme.css` に `:root{--ink:#123456}` を書いてビルドすると、全ページのタイトルと上端のバーのサイト名が TestSite になり、`assets/app.js` の保存キーは `testsite-` で始まり、`dist/` の HTML と `assets/app.js` に `mathenaga-` は出てこない。`assets/style.css` は `:root{--ink:#123456}` で終わる。
+34. テスト用原稿でビルドした章ページが読み込むスクリプトは、head の中のスクリプトと `assets/app.js` の2つだけで、`assets/app.js` には `import` 文がない。
 
 ## Open questions
 
