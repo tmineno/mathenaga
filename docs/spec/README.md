@@ -4,7 +4,7 @@
 > **Owner:** Taiki Mineno
 > **Related:** [ADR-001](../adr/ADR-001-handmade-build-tool.md)、[ADR-002](../adr/ADR-002-definition-index.md)、[ADR-003](../adr/ADR-003-branch-and-merge-lines.md)
 
-MathEnaga は、大学数学を他分野の学生に届ける静的ウェブサイトと、それを原稿から作るオーサリングツールである。この README は仕様書一式の入口で、コンセプトと用語を定める。個々の振る舞いは下の仕様書に書く。この `docs/spec/` が仕様の正本である。
+MathEnaga は、大学数学を他分野の学生に届ける静的ウェブサイトである。原稿からサイトを作るオーサリングツールを enaga と呼ぶ([ADR-009](../adr/ADR-009-site-independent-ui.md))。enaga は、`content/` を差し替えれば同じ形の別サイトも作れる。この README は仕様書一式の入口で、コンセプトと用語を定める。個々の振る舞いは下の仕様書に書く。この `docs/spec/` が仕様の正本である。
 
 ## 仕様書の一覧
 
@@ -15,10 +15,12 @@ MathEnaga は、大学数学を他分野の学生に届ける静的ウェブサ�
 | [route-map.md](route-map.md) | 路線図の SVG:描く駅、配置、印、リンク、代替テキスト |
 | [site.md](site.md) | 生成するページ:構成、分野の切り替え、閲覧時の機能、非機能要件 |
 | [reference-check.md](reference-check.md) | 文献の実在確認:検索 API への問い合わせ、照合、確認の記録 |
+| [ui-contract.md](ui-contract.md) | 画面の部品の取り決め:ページを組む部分・閲覧時のスクリプト・CSS をつなぐ名前 |
 | [ADR-001](../adr/ADR-001-handmade-build-tool.md) | ビルドツールをフレームワークなしで自作する |
 | [ADR-002](../adr/ADR-002-definition-index.md) | 用語の定義を定義索引から一括で取得する |
 | [ADR-003](../adr/ADR-003-branch-and-merge-lines.md) | 支線が前の支線から分かれることと、複数の路線から合流することを許す |
 | [ADR-005](../adr/ADR-005-notes-and-references.md) | 注・補足・参考文献を足し、文献は検索 API で実在を確かめてから使う |
+| [ADR-009](../adr/ADR-009-site-independent-ui.md) | 画面の部品からサイト固有の値を外に出し、同じ形の別サイトを作れるようにする |
 
 ## 概要
 

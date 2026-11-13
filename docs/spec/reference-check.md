@@ -70,7 +70,7 @@
 - どの入口も `--content <dir>` で原稿の場所を指定できる。既定はリポジトリの `content/` で、テスト用原稿の文献は `--content tests/fixtures/content` で確かめる。
 - 問い合わせ直した文献が一致しなかったときは、その文献の古い記録を消す。確かめられなかったときは、fingerprint が今の項目と一致する記録があれば残す。
 - 引数の誤り(知らないオプションなど)は、問い合わせずに終了コード 64 で止める。
-- 問い合わせは1件ずつ順に行い、あいだを 1 秒あける。User-Agent は `mathenaga-reference-check` とし、連絡先は入れない。
+- 問い合わせは1件ずつ順に行い、あいだを 1 秒あける。User-Agent は `enaga-reference-check` とし、連絡先は入れない。
 - CI は、文献の一覧か確認の記録を変えた PR でだけ `--check` を実行し、失敗したらマージできないようにする([build.md](build.md)「CI と公開」)。
 
 ## Failure modes

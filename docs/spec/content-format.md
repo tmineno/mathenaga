@@ -25,6 +25,10 @@
 
 ```text
 content/
+  site.yml                      サイトの設定(下の「サイトの設定」)
+  assets/
+    logo.txt                    ロゴのドット絵([site.md](site.md)「ロゴと favicon」)
+    theme.css                   色と書体のトークンの上書き(任意)
   lines.yml                     路線ファイル
   references.yml                文献の一覧(任意。下の「参考文献」)
   references.verified.json      文献の確認の記録(`npm run refs:verify` が書く。手で書かない)
@@ -165,6 +169,29 @@ goals:
   - station: picard-lindelof
     kind: partial
     label: 微分方程式の解の存在が目的ならここまで
+```
+
+### サイトの設定(site.yml)
+
+サイトごとに変える値を書く([ADR-009](../adr/ADR-009-site-independent-ui.md))。同じ形の別サイトは、`content/` を差し替えて作る。
+
+| 項目 | 内容 | 必須 |
+|---|---|---|
+| name | サイト名。上端のバー、ページのタイトル、ロゴの代替テキストに出す | 必須 |
+| lang | ページの言語。言語ごとの処理(`src/ui/locales/<言語>.js`)がある言語の ID だけを書ける。今は `ja` だけ。文言の辞書、書誌の形、路線図の折り返しの規則と文字幅の見積もりを、この値で選ぶ | 必須 |
+| storage_prefix | 閲覧者のブラウザに保存するキーの接頭辞([site.md](site.md)「ブラウザに保存するもの」)。英小文字で始め、英小文字・数字・`-` だけで書く | 必須 |
+| fonts | 書体の CSS の URL。`https://fonts.googleapis.com/` で始まる。書かなければ書体を読み込まず、システムの書体で表示する | 任意 |
+| repo_branch | 原稿のファイルの URL(選択メニューの「編集」)に使うブランチ名。既定は `main` | 任意 |
+| messages | 文言の上書き。キーは言語ごとの処理の辞書の項目、値は文字列。値の中の `{n}` などの差し込みは、辞書のその項目と同じものだけを使える | 任意 |
+
+- `content/assets/logo.txt`(必須)は、ロゴのドット絵である。形式は [site.md](site.md)「ロゴと favicon」に書く。
+- `content/assets/theme.css`(任意)は、ビルドが CSS の最後に足す。色と書体のトークン(`--ink`・`--font-body` など)を上書きするのに使う。中身は検査しない。
+
+```yaml
+name: MathEnaga
+lang: ja
+storage_prefix: mathenaga
+fonts: https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Zen+Kaku+Gothic+New:wght@500;700&family=Barlow+Semi+Condensed:wght@600&display=swap
 ```
 
 ### 章の md:front matter
@@ -399,25 +426,25 @@ $$\forall \varepsilon > 0,\ \exists N,\ \forall m, n \ge N: d(x_m, x_n) < \varep
 
 ## Failure modes
 
-ビルドの1段目は原稿をすべて読んでから検査し、見つけた誤りをまとめて出す。エラーが1つでもあれば終了コード 1 で止まり、`dist/` を書き換えない。各エラーは、コード・ファイル(`content/` からの相対パス)・行番号(わかるとき)・内容を1行で出す。直し方は原稿を直して再実行することである。
+ビルドの1段目は原稿をすべて読んでから検査し、見つけた誤りをまとめて出す。エラーが1つでもあれば終了コード 1 で止まり、`dist/` を書き換えない。各エラーは、コード・ファイル(`content/` からの相対パス)・行番号(わかるとき)・内容を1行で出す。内容は、サイトの言語によらず英語で書く。通知も同じである([ADR-009](../adr/ADR-009-site-independent-ui.md))。直し方は原稿を直して再実行することである。
 
 | コード | 種類 | 対象 |
 |---|---|---|
-| E01 | 読み取りの失敗 | YAML・front matter が解釈できない。章フォルダに index.md がない |
-| E02 | 知らない名前 | 表にないブロック名・属性・YAML の項目(planned の中と文献の一覧を含む)。kind・layout・style・文献の type の値の誤り |
-| E03 | 値の形式 | ID の形式、`def-` で始まらない定義の ID、`def-` で始まる定義のほかの ID、「章番号-章の ID」の形でない章フォルダ名、color・color_dark・code の形式、start が true でも false でもない、layout が `up` でも `down` でもない路線の `start: true`、planned の形(配列でない、chapter が 0 以上の整数でない、stations の要素が文字列でも name を持つ項目でもない、requires が文字列の配列でない、stations が空)、文献の形(year が4桁の整数でない、isbn の桁数かチェックディジットの誤り、`10.` で始まらない doi、authors が空、book でない文献の isbn、article でない文献の journal・issue・pages) |
+| E01 | 読み取りの失敗 | YAML・front matter が解釈できない。章フォルダに index.md がない。`site.yml` か `assets/logo.txt` がない |
+| E02 | 知らない名前 | 表にないブロック名・属性・YAML の項目(planned の中と文献の一覧を含む)。kind・layout・style・文献の type の値の誤り。言語ごとの処理がない `lang`、辞書にない `messages` の項目 |
+| E03 | 値の形式 | ID の形式、`def-` で始まらない定義の ID、`def-` で始まる定義のほかの ID、「章番号-章の ID」の形でない章フォルダ名、color・color_dark・code の形式、start が true でも false でもない、layout が `up` でも `down` でもない路線の `start: true`、planned の形(配列でない、chapter が 0 以上の整数でない、stations の要素が文字列でも name を持つ項目でもない、requires が文字列の配列でない、stations が空)、文献の形(year が4桁の整数でない、isbn の桁数かチェックディジットの誤り、`10.` で始まらない doi、authors が空、book でない文献の isbn、article でない文献の journal・issue・pages)、`site.yml` の形(name が空、storage_prefix・fonts の形式、`messages` の値の中の、辞書のその項目にない差し込み) |
 | E04 | 重複 | 名前空間での ID の重複(ID を省略した定義が1つの駅に2つ以上ある場合を含む)、章番号の重複(planned の章番号を含む)、路線記号の重複、同じ分野の goals での駅の重複 |
 | E05 | 参照先の誤り | 存在しない ID や種類の違う ID を指している。requires(planned の章と駅の requires を含む)、line、goals の station、field 属性、`[[ID]]`、`[[@ID]]` が対象 |
 | E06 | 前提の順序 | requires が、読む順で後ろの駅か自分自身を指している。planned の requires(駅ごとの requires を含む)が、その章より章番号の大きい章の駅を指している。循環があれば循環の一覧も出す |
 | E07 | 名前の解決 | `[[名前]]` の候補が参照範囲にない、または2つ以上ある |
-| E08 | 必須の欠落 | front matter と YAML の必須項目、駅のない章、駅の summary、定理のある駅の proof-sketch、共通版の goal と motivation、review、definition の name と en、theorem の ID と name、application の field と title、answer のない question、final の目標がない分野、幹線のない路線ファイル、文献の必須項目(doi と isbn がどちらもない文献を含む) |
+| E08 | 必須の欠落 | front matter と YAML の必須項目、駅のない章、駅の summary、定理のある駅の proof-sketch、共通版の goal と motivation、review、definition の name と en、theorem の ID と name、application の field と title、answer のない question、final の目標がない分野、幹線のない路線ファイル、文献の必須項目(doi と isbn がどちらもない文献を含む)、`site.yml` の必須項目 |
 | E09 | 個数・位置の誤り | summary・review・共通版が2つ以上、同じ分野の分野版が2つ以上、章頭の外の goal と motivation、駅の外の駅のブロック、章末の後の駅や地の文、question のない answer、ブロックの入れ子、1段目の見出し、ID のない2段目の見出し、駅の見出しの数式・参照・注、planned の章の requires と最初の駅の requires の両方を書いた |
 | E10 | 数式 | 閉じていない `$`、KaTeX が解釈できない数式、`\tag`・`\label`・`\eqref` などの番号と参照の命令 |
 | E11 | 図 | 参照先のファイルがない |
 | E14 | 注と引用 | 閉じていない `^[`、空の注(`^[]`)、注の中の注、注の中の別行立ての数式、definition の本文の中の注と文献の引用(`[[@文献ID]]`) |
 | E15 | 文献の確認 | 確認の記録がない文献、記録を取った後に書き換えた文献(記録の fingerprint が今の項目と一致しない)、確認の記録が読めない、一覧にない文献の記録([reference-check.md](reference-check.md)) |
 
-路線図に関わるエラー(E12)は [route-map.md](route-map.md)、ビルドの設定のエラー(E13)は [build.md](build.md) で定める。
+路線図に関わるエラー(E12)は [route-map.md](route-map.md)、ビルドの設定のエラー(E13)と通知(N05)は [build.md](build.md) で定める。
 
 次の通知は、一覧で知らせるだけでビルドを止めない(終了コード 0)。
 
@@ -487,6 +514,10 @@ $$\forall \varepsilon > 0,\ \exists N,\ \forall m, n \ge N: d(x_m, x_n) < \varep
    38. planned の第12章の stations の最初の要素を `{name: 接空間, color: red}` にする(E02)。
    39. 第3章の picard-lindelof 駅の定義の `#def-lipschitz` を `#lipschitz` にする(E03。定義の ID が `def-` で始まらない)。banach 駅の定理の `#banach-fixed-point` を `#def-banach-fixed-point` にする(E03。定理の ID が `def-` で始まる)。
    40. 第3章の cauchy-sequence 駅に、ID を省略した2つ目の定義を書く(E04。ID def-cauchy-sequence の重複)。
+   41. `site.yml` を消す(E01)。`assets/logo.txt` を消す(E01)。
+   42. `site.yml` から storage_prefix を消す(E08)。
+   43. `site.yml` の lang を `xx` にする(E02。言語ごとの処理がない)。`messages` に辞書にない項目を書く(E02)。
+   44. `site.yml` の storage_prefix を `Math_Enaga` にする(E03)。fonts を `https://example.com/fonts.css` にする(E03)。
 5. 4 の誤りのうち、別々のファイルにある2つを同時に入れると、1回のビルドで両方が出る。
 6. 本文に `<script>alert(1)</script>` と書いた章をビルドすると、ページにはその文字列が文字として出て、script 要素はできない。
 7. テスト用原稿の文献の一覧には kreyszig-fa と lecun-deep-learning があり、どちらにも確認の記録がある。テスト用原稿の章から lecun-deep-learning の引用をすべて消してビルドすると、エラーはなく、N04 で lecun-deep-learning が出る。
