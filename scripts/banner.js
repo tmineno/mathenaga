@@ -6,7 +6,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { ROOT } from '../src/build.js';
-import { BANNER_FILE, bannerSvg, parseBitmap, trim } from '../src/site/logo.js';
+import { BANNER_FILE, bannerSvg, parseBitmap, trim } from '../src/ui/html/logo.js';
 
 const logo = trim(parseBitmap(await fs.readFile(path.join(ROOT, 'src/site/assets/logo.txt'), 'utf8')));
 const file = path.join(ROOT, BANNER_FILE);

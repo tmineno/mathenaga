@@ -8,7 +8,7 @@ import path from 'node:path';
 import { after, describe, test } from 'node:test';
 import * as yaml from 'js-yaml';
 import { layoutMap } from '../../src/core/map.js';
-import { versionOf } from '../../src/site/pages.js';
+import { versionOf } from '../../src/ui/html/pages.js';
 import {
   CONTENT,
   CURRENT_CONTENT,

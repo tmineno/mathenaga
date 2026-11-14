@@ -19,7 +19,7 @@ import {
   placedBlocks,
   svgPath,
   trim,
-} from '../../src/site/logo.js';
+} from '../../src/ui/html/logo.js';
 
 const LOGO = path.join(ROOT, 'src/site/assets/logo.txt');
 

@@ -8,7 +8,7 @@ import { after, describe, test } from 'node:test';
 import { ROOT, analyze } from '../../src/build.js';
 import { chapterInField, nextChapter, otherLineGuide, prerequisiteChapters } from '../../src/core/navigation.js';
 import { branchStations, layoutMap, mapStations } from '../../src/core/map.js';
-import { versionOf } from '../../src/site/pages.js';
+import { versionOf } from '../../src/ui/html/pages.js';
 import {
   CH3,
   MERGE_LINE,

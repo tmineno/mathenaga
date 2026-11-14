@@ -2,23 +2,27 @@
 
 import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
+import { build as esbuild } from 'esbuild';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DEF_PREFIX } from '../core/ids.js';
-import { layoutMap, renderMapSvg } from '../core/map.js';
+import { DEF_PREFIX } from '../../core/ids.js';
+import { layoutMap, renderMapSvg } from '../../core/map.js';
 import {
   chapterInField,
   chapterStations,
   nextChapter,
   prerequisiteChapters,
   otherLineGuide,
-} from '../core/navigation.js';
-import { byFieldOrder, stationItems, walkInline } from '../core/order.js';
-import { escapeHtml as h } from '../core/text.js';
+} from '../../core/navigation.js';
+import { byFieldOrder, stationItems, walkInline } from '../../core/order.js';
+import { escapeHtml as h } from '../../core/text.js';
+import { lookScript } from '../shared/settings.js';
 import { birdSvg, blocks, FAVICON_SIZE, faviconPng, faviconSvg, logoSvg, parseBitmap, trim } from './logo.js';
 
-const ASSETS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'assets');
+const UI = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+/** ロゴのドットマップ(サイトの設定に移すまでの置き場所) */
+const LOGO = path.join(UI, '..', 'site', 'assets', 'logo.txt');
 const KATEX_DIR = path.dirname(createRequire(import.meta.url).resolve('katex'));
 const SITE_NAME = 'MathEnaga';
 const OUT_OF_SCOPE = 'この分野の目標には不要(読み飛ばし可)';
@@ -52,13 +56,13 @@ const FONTS =
  * Failure modes: KaTeX や assets のファイルが読めなければ例外。ロゴのドットマップの形式が違えば例外。
  * Side effects: assets と KaTeX のファイルを読む。
  * @param {any} ctx
- * @returns {Promise<Map<string, import('../io/output.js').OutputFile>>}
+ * @returns {Promise<Map<string, import('../../io/output.js').OutputFile>>}
  */
 export async function generateSite(ctx) {
-  const logo = trim(parseBitmap(await fs.readFile(path.join(ASSETS, 'logo.txt'), 'utf8'), 'src/site/assets/logo.txt'));
+  const logo = trim(parseBitmap(await fs.readFile(LOGO, 'utf8'), 'src/site/assets/logo.txt'));
   const bird = blocks(logo)[0];
   const r = new Renderer(ctx, { logo, bird });
-  /** @type {Map<string, import('../io/output.js').OutputFile>} */
+  /** @type {Map<string, import('../../io/output.js').OutputFile>} */
   const files = new Map();
   // ページが読むファイルは、URL に中身の版の印を付けるので、ページより先に作る(build.md「出力」)
   for (const c of ctx.site.chapters) {
@@ -70,8 +74,8 @@ export async function generateSite(ctx) {
     }
   }
   files.set('defs.json', r.definitionIndex());
-  files.set('assets/style.css', await fs.readFile(path.join(ASSETS, 'style.css'), 'utf8'));
-  files.set('assets/app.js', await fs.readFile(path.join(ASSETS, 'app.js'), 'utf8'));
+  files.set('assets/style.css', await themeCss());
+  files.set('assets/app.js', await clientScript());
   files.set('assets/lines.css', lineCss(ctx.site.lines));
   files.set('assets/favicon.svg', faviconSvg(bird));
   files.set('assets/favicon.png', faviconPng(bird));
@@ -96,6 +100,40 @@ export async function generateSite(ctx) {
 }
 
 /**
+ * CSS(docs/spec/build.md「出力」)。src/ui/theme/ の .css を、ファイル名の順に空行1つをはさんでつなぐ。
+ * Preconditions: なし。
+ * Postconditions: つないだ CSS を返す。
+ * Failure modes: ファイルが読めなければ例外。
+ * Side effects: src/ui/theme/ を読む。
+ */
+export async function themeCss() {
+  const dir = path.join(UI, 'theme');
+  const names = (await fs.readdir(dir)).filter((f) => f.endsWith('.css')).sort();
+  const parts = await Promise.all(names.map((f) => fs.readFile(path.join(dir, f), 'utf8')));
+  return parts.join('\n');
+}
+
+/**
+ * 閲覧時のスクリプト(docs/spec/build.md「出力」)。src/ui/client/index.js から読むモジュールを、esbuild で1つの即時関数にまとめる。
+ * Preconditions: esbuild がインストール済み。
+ * Postconditions: まとめたスクリプトを返す。同じソースからは同じ文字列になる。
+ * Failure modes: モジュールが解決できない・構文の誤りがあれば例外。
+ * Side effects: src/ui/client/ と src/ui/shared/ を読む。
+ */
+export async function clientScript() {
+  const out = await esbuild({
+    entryPoints: [path.join(UI, 'client', 'index.js')],
+    bundle: true,
+    write: false,
+    format: 'iife',
+    charset: 'utf8',
+    legalComments: 'none',
+    logLevel: 'silent',
+  });
+  return out.outputFiles[0].text;
+}
+
+/**
  * ファイルの版の印。中身の SHA-256 の16進の先頭 10 文字(build.md「出力」)。
  * @param {string | Uint8Array} content
  */
@@ -107,7 +145,7 @@ export function versionOf(content) {
  * 路線の色を CSS の変数にする。ダークテーマでは color_dark を使う。
  * ダークは、OS の設定に合わせるとき(テーマをライトに固定していない)と、表示の設定でダークを選んだときの2つ
  * (site.md「表示の設定」)。
- * @param {import('../core/schema.js').Line[]} lines
+ * @param {import('../../core/schema.js').Line[]} lines
  */
 export function lineCss(lines) {
   const light = lines.map((l) => `.l-${l.id}{--lc:${l.color}}`).join('\n');
@@ -116,14 +154,8 @@ export function lineCss(lines) {
   return `${light}\n@media (prefers-color-scheme: dark){\n${dark(":root:not([data-theme='light'])")}\n}\n${dark(":root[data-theme='dark']")}\n`;
 }
 
-/**
- * ページを描く前に、保存した表示の設定のうちテーマ・文字の大きさ・本文の幅を html の属性に移す
- * (site.md「表示の設定」。開いたときに初期値の表示が一瞬見えないように、head の中で動かす)。
- * 選択肢にない値は無視する(初期値のまま)。設定の読み書きと残りの項目は app.js が受け持つ。
- */
-const LOOK_SCRIPT =
-  "try{var s=JSON.parse(localStorage.getItem('mathenaga-settings')||'null'),r=document.documentElement,o={theme:['light','dark'],text:['small','large'],width:['narrow','wide']};" +
-  "if(s&&typeof s==='object')for(var k in o)if(o[k].indexOf(s[k])>=0)r.setAttribute('data-'+k,s[k])}catch(e){}";
+/** head の中で表示の設定を html の属性に移すスクリプト(src/ui/shared/settings.js) */
+const LOOK_SCRIPT = lookScript();
 
 /**
  * トークン i が段落として数えるもの(site.md「位置情報つきのコピー」)なら、data-p を付けるトークンを返す。
@@ -154,7 +186,7 @@ class Renderer {
     this.logoSvg = logoSvg(art.logo, { className: 'logo', label: SITE_NAME });
     /** 上端のバーのアイコン */
     this.birdSvg = birdSvg(art.bird, 'mark-icon');
-    /** @type {import('../core/graph.js').Site} */
+    /** @type {import('../../core/graph.js').Site} */
     this.site = ctx.site;
     this.base = ctx.basePath;
     /** @type {string} */
@@ -261,7 +293,7 @@ class Renderer {
 
   /** @param {any} t @param {any} chapter @param {boolean} plain */
   refHtml(t, chapter, plain) {
-    /** @type {import('../core/resolve.js').Resolution | undefined} */
+    /** @type {import('../../core/resolve.js').Resolution | undefined} */
     const r = this.ctx.resolved.get(t);
     if (!r) return h(t.content);
     const text = h(r.text);
@@ -346,14 +378,14 @@ class Renderer {
     return this.md.renderer.render(chapter.tokens.slice(start, end + 1), this.md.options, this.env(chapter, plain));
   }
 
-  /** ブロックの中身。 @param {any} chapter @param {import('../core/chapter.js').Block} b @param {boolean} [plain] */
+  /** ブロックの中身。 @param {any} chapter @param {import('../../core/chapter.js').Block} b @param {boolean} [plain] */
   inner(chapter, b, plain = false) {
     return this.range(chapter, b.start + 1, b.end - 1, plain);
   }
 
   /**
-   * @param {any} chapter @param {import('../core/chapter.js').Block} b
-   * @param {import('../core/chapter.js').Block[]} [proofs]  theorem の枠に入れる、直後の proof-sketch と proof
+   * @param {any} chapter @param {import('../../core/chapter.js').Block} b
+   * @param {import('../../core/chapter.js').Block[]} [proofs]  theorem の枠に入れる、直後の proof-sketch と proof
    */
   blockHtml(chapter, b, proofs = []) {
     const body = this.inner(chapter, b);
@@ -390,7 +422,7 @@ class Renderer {
   /**
    * 共通版と分野版の組。共通版は開いたまま、分野版は折りたたむ(初期状態は未選択)。
    * 出発点は節の見出し「出発点」の下に置くので、共通版に札を付けず、分野版の札を「〈分野名〉では」にする(site.md)。
-   * @param {any} chapter @param {import('../core/chapter.js').Block[]} blocks @param {string} kind @param {string} label
+   * @param {any} chapter @param {import('../../core/chapter.js').Block[]} blocks @param {string} kind @param {string} label
    * @param {string} [loc] 位置情報つきのコピーで使う区画の名前(data-loc)。区画でなければ空
    * @param {string} [tail] 組の最後に足す HTML(注の一覧など)
    */
@@ -419,12 +451,12 @@ class Renderer {
     return out.join('');
   }
 
-  /** @param {import('../core/graph.js').StationInfo} st */
+  /** @param {import('../../core/graph.js').StationInfo} st */
   badge(st) {
     return `<span class="badge l-${st.lineId}">${h(st.code)}</span>`;
   }
 
-  /** 駅の表示番号の範囲。1駅なら1つだけ。 @param {import('../core/graph.js').StationInfo[]} list @param {string} sep */
+  /** 駅の表示番号の範囲。1駅なら1つだけ。 @param {import('../../core/graph.js').StationInfo[]} list @param {string} sep */
   codeRange(list, sep = '–') {
     if (list.length === 0) return '';
     if (list.length === 1) return this.badge(list[0]);
@@ -528,7 +560,7 @@ ${p.main}
 
   // ---------- 分野の入口ページ ----------
 
-  /** @param {import('../core/schema.js').Field} f */
+  /** @param {import('../../core/schema.js').Field} f */
   fieldPage(f) {
     const scope = this.site.scope.get(f.id) ?? new Set();
     const goals = f.goals
@@ -572,7 +604,7 @@ ${p.main}
 
   // ---------- 章ページ ----------
 
-  /** @param {import('../core/chapter.js').ChapterModel} c */
+  /** @param {import('../../core/chapter.js').ChapterModel} c */
   chapterPage(c) {
     const site = this.site;
     const stations = chapterStations(site, c);
@@ -711,7 +743,7 @@ ${aheadSec}
     return this.page({ title: `第${c.number}章 ${c.title} | ${SITE_NAME}`, bodyClass: 'page-chapter', bar, main });
   }
 
-  /** @param {any} c @param {import('../core/graph.js').StationInfo} st */
+  /** @param {any} c @param {import('../../core/graph.js').StationInfo} st */
   stationSection(c, st) {
     const site = this.site;
     const out = site.fields.filter((f) => !site.scope.get(f.id)?.has(st.id)).map((f) => f.id);
@@ -765,7 +797,7 @@ ${notes}${items.join('')}${appHtml}${this.notesList(
   /**
    * 駅のしおりのボタン(site.md「しおり」)と起票のリンクを横に並べた置き場。駅の最後の子に置く。
    * しおりのボタンはスクリプトが動くときだけ見せる(app.js)。
-   * @param {any} c @param {import('../core/graph.js').StationInfo} st
+   * @param {any} c @param {import('../../core/graph.js').StationInfo} st
    */
   stationTools(c, st) {
     const bookmark = `<button type="button" class="bm" data-bm="${h(st.id)}" aria-pressed="false" aria-label="${BOOKMARK_TIP}" data-tip="${BOOKMARK_TIP}" hidden>${BOOKMARK_ICON}</button>`;
@@ -775,7 +807,7 @@ ${notes}${items.join('')}${appHtml}${this.notesList(
   /**
    * 駅の改善案を起票するリンク(site.md「改善案の起票」)。リポジトリの URL がなければ空。
    * ページの欄は、スクリプトがオリジンを足して完全な URL にする(app.js)。
-   * @param {any} c @param {import('../core/graph.js').StationInfo} st
+   * @param {any} c @param {import('../../core/graph.js').StationInfo} st
    */
   issueLink(c, st) {
     if (!this.repoUrl) return '';
@@ -799,7 +831,7 @@ ${notes}${items.join('')}${appHtml}${this.notesList(
     return `${this.repoUrl}/issues/new?${params}`;
   }
 
-  /** 駅の起票の URL。 @param {any} c @param {import('../core/graph.js').StationInfo} st */
+  /** 駅の起票の URL。 @param {any} c @param {import('../../core/graph.js').StationInfo} st */
   stationIssueHref(c, st) {
     return this.issueHref(
       `第${c.number}章 ${st.code} ${st.name}`,
@@ -848,7 +880,7 @@ ${notes}${items.join('')}${appHtml}${this.notesList(
     return lines ? ` data-l="${lines}"` : '';
   }
 
-  /** 現在地の「次の章」。 @param {any} c @param {import('../core/schema.js').Field | null} f */
+  /** 現在地の「次の章」。 @param {any} c @param {import('../../core/schema.js').Field | null} f */
   nextText(c, f) {
     const next = nextChapter(this.site, c, f ? f.id : null);
     let text;
@@ -863,7 +895,7 @@ ${notes}${items.join('')}${appHtml}${this.notesList(
     return text;
   }
 
-  /** 「この先」の項目。 @param {any} c @param {import('../core/schema.js').Field | null} f */
+  /** 「この先」の項目。 @param {any} c @param {import('../../core/schema.js').Field | null} f */
   aheadItems(c, f) {
     const site = this.site;
     if (!f) {
@@ -914,7 +946,7 @@ ${notes}${items.join('')}${appHtml}${this.notesList(
     /** @type {Record<string, any>} */
     const out = {};
     for (const id of [...this.site.definitions.keys()].sort()) {
-      const d = /** @type {import('../core/graph.js').DefinitionInfo} */ (this.site.definitions.get(id));
+      const d = /** @type {import('../../core/graph.js').DefinitionInfo} */ (this.site.definitions.get(id));
       const c = d.station.chapter;
       out[id] = {
         name: d.name,
@@ -937,7 +969,7 @@ ${notes}${items.join('')}${appHtml}${this.notesList(
 /**
  * 参考文献の項目の書誌(site.md「注と参考文献の表示」)。要素を「、」で区切って「。」で終え、
  * その後に ISBN と DOI のリンクを空白で区切って置く。書名・題名に仮名か漢字があれば和文として扱う。
- * @param {import('../core/references.js').Reference} r
+ * @param {import('../../core/references.js').Reference} r
  */
 export function bibliography(r) {
   const ja = /[\u3040-\u30ff\u3400-\u9fff]/.test(r.title);

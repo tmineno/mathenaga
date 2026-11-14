@@ -23,7 +23,7 @@ import { parseYaml, readContent } from './io/content.js';
 import { writeOutput } from './io/output.js';
 import { createMarkdown } from './render/markdown.js';
 import { renderTex } from './render/math.js';
-import { generateSite } from './site/pages.js';
+import { generateSite } from './ui/html/pages.js';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BASE_PATH = /^\/(?:[A-Za-z0-9._~-]+\/)*$/;
