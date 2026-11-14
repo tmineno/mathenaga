@@ -2,6 +2,5 @@ dist/
 tmp/
 node_modules/
 content/
-tests/fixtures/content/
 docs/
 package-lock.json
