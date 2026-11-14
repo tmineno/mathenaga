@@ -48,7 +48,7 @@ export function createHttp({ fetch: fetchFn, sleep, gapMs = 1000, timeoutMs = 30
       const timeout = new Promise((_, reject) => {
         timer = setTimeout(() => {
           ctl.abort();
-          reject(new Error(`${timeoutMs / 1000} 秒以内に応答がない`));
+          reject(new Error(`no response within ${timeoutMs / 1000} s`));
         }, timeoutMs);
       });
       const request = (async () => {
@@ -82,8 +82,8 @@ export async function lookupDoi(doi, http) {
   const url = `https://api.crossref.org/works/${encodeURI(doi)}`;
   const res = await tryGet(http, url);
   if ('error' in res) return { status: 'unavailable', detail: res.error };
-  if (res.status === 404) return { status: 'notfound', detail: 'CrossRef に登録がない(404)' };
-  if (res.status !== 200) return { status: 'unavailable', detail: `CrossRef が status ${res.status} を返した` };
+  if (res.status === 404) return { status: 'notfound', detail: 'not registered in CrossRef (404)' };
+  if (res.status !== 200) return { status: 'unavailable', detail: `CrossRef returned status ${res.status}` };
   try {
     const m = JSON.parse(res.text).message;
     const authors = (m.author ?? []).map((/** @type {any} */ a) =>
@@ -107,7 +107,7 @@ export async function lookupDoi(doi, http) {
       ],
     };
   } catch {
-    return { status: 'unavailable', detail: 'CrossRef の応答を JSON として読めない' };
+    return { status: 'unavailable', detail: 'CrossRef response is not valid JSON' };
   }
 }
 
@@ -126,9 +126,9 @@ export async function lookupDoi(doi, http) {
 export async function lookupIsbn(isbn, http) {
   const isbn13 = toIsbn13(isbn);
   const ndlRes = await tryGet(http, `https://ndlsearch.ndl.go.jp/api/opensearch?isbn=${isbn13}`);
-  if ('error' in ndlRes) return { status: 'unavailable', detail: `NDL サーチ:${ndlRes.error}` };
+  if ('error' in ndlRes) return { status: 'unavailable', detail: `NDL Search: ${ndlRes.error}` };
   if (ndlRes.status !== 200) {
-    return { status: 'unavailable', detail: `NDL サーチが status ${ndlRes.status} を返した` };
+    return { status: 'unavailable', detail: `NDL Search returned status ${ndlRes.status}` };
   }
   const records = parseNdl(ndlRes.text, isbn13);
   if (records.length > 0) return { status: 'found', source: 'ndl', records };
@@ -136,28 +136,31 @@ export async function lookupIsbn(isbn, http) {
   const olRes = await tryGet(http, `https://openlibrary.org/isbn/${isbn13}.json`);
   if ('error' in olRes) return { status: 'unavailable', detail: `OpenLibrary:${olRes.error}` };
   if (olRes.status === 404) {
-    return { status: 'notfound', detail: 'NDL サーチにも OpenLibrary にも、その ISBN の記録がない' };
+    return { status: 'notfound', detail: 'no record of that ISBN in NDL Search or OpenLibrary' };
   }
   if (olRes.status !== 200) {
-    return { status: 'unavailable', detail: `OpenLibrary が status ${olRes.status} を返した` };
+    return { status: 'unavailable', detail: `OpenLibrary returned status ${olRes.status}` };
   }
   /** @type {any} */
   let rec;
   try {
     rec = JSON.parse(olRes.text);
   } catch {
-    return { status: 'unavailable', detail: 'OpenLibrary の応答を JSON として読めない' };
+    return { status: 'unavailable', detail: 'OpenLibrary response is not valid JSON' };
   }
   const listed = [...(rec.isbn_10 ?? []), ...(rec.isbn_13 ?? [])];
   if (!listed.some((/** @type {unknown} */ v) => sameIsbn(v, isbn13))) {
-    return { status: 'notfound', detail: 'NDL サーチに記録がなく、OpenLibrary の記録もその ISBN を持たない' };
+    return {
+      status: 'notfound',
+      detail: 'no record in NDL Search, and the OpenLibrary record does not have that ISBN',
+    };
   }
   let name = '';
   const authorKey = rec.authors?.[0]?.key;
   if (typeof authorKey === 'string') {
     const a = await tryGet(http, `https://openlibrary.org${authorKey}.json`);
-    if ('error' in a) return { status: 'unavailable', detail: `OpenLibrary(著者):${a.error}` };
-    if (a.status >= 500) return { status: 'unavailable', detail: `OpenLibrary が status ${a.status} を返した` };
+    if ('error' in a) return { status: 'unavailable', detail: `OpenLibrary (authors): ${a.error}` };
+    if (a.status >= 500) return { status: 'unavailable', detail: `OpenLibrary returned status ${a.status}` };
     if (a.status === 200) {
       try {
         const aj = JSON.parse(a.text);

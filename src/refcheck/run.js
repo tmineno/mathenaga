@@ -34,7 +34,7 @@ import { matchRecord } from './match.js';
  * @property {number} [timeoutMs]
  */
 
-const USAGE = '使い方: npm run refs:verify -- [--all | --check] [--content <dir>]';
+const USAGE = 'usage: npm run refs:verify -- [--all | --check] [--content <dir>]';
 
 /**
  * 文献の一覧を検査し、確認の記録がない・古い文献を問い合わせて、確認の記録を更新する。
@@ -86,7 +86,7 @@ export async function runRefsVerify(options) {
       existing = v;
     } catch {
       unreadable = true;
-      log('references.verified.json を読めない(文献の ID をキーにした JSON のオブジェクトでない)');
+      log('cannot read references.verified.json (not a JSON object keyed by reference ID)');
     }
   }
   if (unreadable && mode === 'check') return 1;
@@ -104,7 +104,7 @@ export async function runRefsVerify(options) {
     const valid = old !== undefined && old !== null && old.fingerprint === fp;
     if (mode === 'default' && valid) {
       next[ref.id] = old;
-      log(`${ref.id}: 一致(記録あり。問い合わせなし)`);
+      log(`${ref.id}: match (record exists; no lookup)`);
       continue;
     }
     const outcome = await verifyReference(ref, http);
@@ -114,25 +114,27 @@ export async function runRefsVerify(options) {
         if (!valid) {
           mismatched = true;
           log(
-            `${ref.id}: 一致しない(今の記録と合わない。${old === undefined ? '記録がない' : '項目を書き換えた後に確かめていない'})`,
+            `${ref.id}: mismatch (does not agree with the current record; ${old === undefined ? 'no record' : 'the entry was edited and not verified since'})`,
           );
         } else if (JSON.stringify(old.checks) !== JSON.stringify(outcome.checks)) {
           mismatched = true;
-          log(`${ref.id}: 一致しない(今の記録と合わない。記録の checks が今の問い合わせの結果と違う)`);
+          log(
+            `${ref.id}: mismatch (does not agree with the current record; the checks in the record differ from the result of the current lookup)`,
+          );
         } else {
-          log(`${ref.id}: 一致`);
+          log(`${ref.id}: match`);
         }
       } else {
         next[ref.id] = record;
-        log(`${ref.id}: 一致 (${outcome.checks.map((c) => `${c.identifier} / ${c.source}`).join(', ')})`);
+        log(`${ref.id}: match (${outcome.checks.map((c) => `${c.identifier} / ${c.source}`).join(', ')})`);
       }
     } else if (outcome.kind === 'mismatch') {
       mismatched = true;
-      log(`${ref.id}: 一致しない`);
+      log(`${ref.id}: mismatch`);
       for (const l of outcome.lines) log(`  ${l}`);
     } else {
       unavailable = true;
-      log(`${ref.id}: 確かめられなかった(${outcome.reason})`);
+      log(`${ref.id}: could not verify (${outcome.reason})`);
       if (mode !== 'check' && valid) next[ref.id] = old;
     }
   }
@@ -142,10 +144,10 @@ export async function runRefsVerify(options) {
   if (mode === 'check') {
     for (const id of removed) {
       mismatched = true;
-      log(`${id}: 一致しない(一覧にない文献の確認の記録がある)`);
+      log(`${id}: mismatch (a verification record exists for a reference not in the list)`);
     }
   } else {
-    for (const id of removed) log(`${id}: 一覧にないので記録を消す`);
+    for (const id of removed) log(`${id}: not in the list, so its record is removed`);
     const sorted = Object.fromEntries(
       Object.keys(next)
         .sort(compareCodePoints)
@@ -189,8 +191,7 @@ export async function verifyReference(ref, http) {
       reason = reason || `${identifier}:${found.detail}`;
       continue;
     }
-    if (found.status === 'notfound')
-      return { kind: 'mismatch', lines: [`${identifier}:見つからない(${found.detail})`] };
+    if (found.status === 'notfound') return { kind: 'mismatch', lines: [`${identifier}: not found (${found.detail})`] };
     let best = null;
     let matched = null;
     for (const rec of found.records) {
@@ -216,7 +217,7 @@ export async function verifyReference(ref, http) {
       });
     } else if (best) {
       const lines = best.diffs.map(
-        (d) => `${identifier} (${found.source}):${d.field}が一致しない。項目「${d.entry}」、記録「${d.record}」`,
+        (d) => `${identifier} (${found.source}): ${d.field} does not match; entry "${d.entry}", record "${d.record}"`,
       );
       return { kind: 'mismatch', lines };
     }
@@ -234,11 +235,11 @@ function parseArgs(argv) {
     else if (a === '--check') out.check = true;
     else if (a === '--content') {
       const v = argv[++i];
-      if (v === undefined) return '--content にはディレクトリを渡す';
+      if (v === undefined) return '--content needs a directory';
       out.content = v;
-    } else return `知らない引数 ${a}`;
+    } else return `unknown argument ${a}`;
   }
-  if (out.all && out.check) return '--all と --check は同時に使えない';
+  if (out.all && out.check) return '--all and --check cannot be used together';
   return out;
 }
 

@@ -5,6 +5,11 @@ import { fill } from './text.js';
 import { DEF_PREFIX } from './ids.js';
 import { issue } from './issues.js';
 
+/** 種類名に不定冠詞を付ける(メッセージ用)。 */
+function withArticle(/** @type {string} */ name) {
+  return `${/^[aeiou]/.test(name) ? 'an' : 'a'} ${name}`;
+}
+
 /**
  * @typedef {object} Resolution
  * @property {'definition' | 'theorem' | 'station' | 'chapter' | 'equation' | 'figure' | 'application' | 'reference'} kind
@@ -45,21 +50,24 @@ export function resolveRefs(site, equations, statements, figures, applications, 
       /** @param {string} code @param {string} msg */
       const fail = (code, msg) => errors.push(issue(code, chapter.file, ref.line, msg));
       if (key === '') {
-        fail('E05', `参照 [[${ref.token.content}]] にキーがない`);
+        fail('E05', `reference [[${ref.token.content}]] has no key`);
         continue;
       }
       if (at) {
         if (label !== null) {
-          fail('E05', `[[@${key}]] では表示する文字を変えられない`);
+          fail('E05', `[[@${key}]] cannot change the displayed text`);
           continue;
         }
         if (site.kinds.get(key) === 'reference') {
           if (ref.inDefinition) {
-            fail('E14', `definition の本文には文献の引用 [[@${key}]] を書けない(定義はほかの章のポップアップにも出る)`);
+            fail(
+              'E14',
+              `a definition body cannot cite a reference [[@${key}]] (definitions also appear in popups of other chapters)`,
+            );
             continue;
           }
           const n = citations.get(chapter.id)?.get(key);
-          if (n === undefined) fail('E05', `[[@${key}]] の文献に番号がない`);
+          if (n === undefined) fail('E05', `[[@${key}]]: the reference has no number`);
           else resolved.set(ref.token, { kind: 'reference', id: key, text: `[${n}]`, chapterId: chapter.id });
           continue;
         }
@@ -87,7 +95,7 @@ export function resolveRefs(site, equations, statements, figures, applications, 
  */
 function resolveNumber(site, equations, statements, figures, applications, id) {
   const kind = site.kinds.get(id);
-  if (!kind) return `[[@${id}]] の参照先 ${id} がない`;
+  if (!kind) return `[[@${id}]]: ${id} does not exist`;
   if (kind === 'station') {
     const st = /** @type {any} */ (site.stationById.get(id));
     return { kind: 'station', id, text: st.code, chapterId: st.chapter.id };
@@ -98,12 +106,12 @@ function resolveNumber(site, equations, statements, figures, applications, id) {
   }
   if (kind === 'equation') {
     const eq = equations.get(id);
-    if (!eq) return `[[@${id}]] の式に番号がない`;
+    if (!eq) return `[[@${id}]]: the equation has no number`;
     return { kind: 'equation', id, text: `(${eq.label})`, chapterId: eq.chapter.id };
   }
   if (kind === 'figure') {
     const f = figures.get(id);
-    if (!f) return `[[@${id}]] の図に番号がない`;
+    if (!f) return `[[@${id}]]: the figure has no number`;
     return {
       kind: 'figure',
       id,
@@ -113,7 +121,7 @@ function resolveNumber(site, equations, statements, figures, applications, id) {
   }
   if (kind === 'application') {
     const a = applications.get(id);
-    if (!a) return `[[@${id}]] の応用に番号がない`;
+    if (!a) return `[[@${id}]]: the application has no number`;
     return {
       kind: 'application',
       id,
@@ -130,7 +138,7 @@ function resolveNumber(site, equations, statements, figures, applications, id) {
       chapterId: s.chapter.id,
     };
   }
-  return `[[@${id}]] の ${id} は${KIND_NAMES[kind]}の ID なので番号を差し込めない(駅・章・式・定理・定義・図・応用・文献だけ)`;
+  return `[[@${id}]]: ${id} is the ID of ${withArticle(KIND_NAMES[kind])}, so its number cannot be inserted (only stations, chapters, equations, theorems, definitions, figures, applications and references)`;
 }
 
 /**
@@ -150,9 +158,9 @@ function resolveKey(site, names, scope, key, label) {
   if (kind) {
     const hint =
       kind === 'chapter' || kind === 'equation' || kind === 'figure' || kind === 'application' || kind === 'reference'
-        ? `。${KIND_NAMES[kind]}は [[@${key}]] で指す`
+        ? `; use [[@${key}]] to point at ${withArticle(KIND_NAMES[kind])}`
         : '';
-    return `E05 [[${key}]] の ${key} は${KIND_NAMES[kind]}の ID で、[[…]] では指せない${hint}`;
+    return `E05 [[${key}]]: ${key} is the ID of ${withArticle(KIND_NAMES[kind])}, which [[…]] cannot point at${hint}`;
   }
   const all = names.get(key) ?? [];
   /** @type {Map<string, { id: string, kind: 'definition' | 'station', stationId: string }>} */
@@ -165,11 +173,14 @@ function resolveKey(site, names, scope, key, label) {
   }
   if (candidates.size === 0) {
     const outside = [...new Set(all.map((c) => candidateKey(site, c)))];
-    const hint = outside.length > 0 ? `。参照範囲の外に候補がある(${outside.join('、')})。ID で書く` : '';
-    return `E07 [[${key}]] の候補が参照範囲にない${hint}`;
+    const hint =
+      outside.length > 0
+        ? `; there is a candidate outside the lookup scope (${outside.join(', ')}); write it by ID`
+        : '';
+    return `E07 [[${key}]]: no candidate in the lookup scope${hint}`;
   }
   if (candidates.size > 1) {
-    return `E07 [[${key}]] の候補が2つ以上ある(${[...candidates.keys()].join('、')})。ID で書く`;
+    return `E07 [[${key}]]: two or more candidates (${[...candidates.keys()].join(', ')}); write it by ID`;
   }
   const only = [...candidates.values()][0];
   if (only.kind === 'definition') {

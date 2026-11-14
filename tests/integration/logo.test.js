@@ -25,15 +25,15 @@ const LOGO = path.join(ROOT, 'content/assets/logo.txt');
 
 describe('logo: ドットマップ', () => {
   test('行の長さが不ぞろいなら、ファイル名と行番号を出して止まる', () => {
-    assert.throws(() => parseBitmap('#.#\n##\n', 'x.txt'), /^Error: x\.txt:2: 行の長さが 2\(1 行目は 3\)$/);
+    assert.throws(() => parseBitmap('#.#\n##\n', 'x.txt'), /^Error: x\.txt:2: line length is 2 \(line 1 is 3\)$/);
   });
 
   test('# と . 以外の文字があれば、その行で止まる', () => {
-    assert.throws(() => parseBitmap('#.\n#o\n', 'x.txt'), /^Error: x\.txt:2: 「o」は使えない/);
+    assert.throws(() => parseBitmap('#.\n#o\n', 'x.txt'), /^Error: x\.txt:2: "o" is not allowed/);
   });
 
   test('空なら止まる', () => {
-    assert.throws(() => parseBitmap('\n', 'x.txt'), /ドットマップが空/);
+    assert.throws(() => parseBitmap('\n', 'x.txt'), /dot map is empty/);
   });
 
   test('末尾の改行は無視し、trim は線のドットを囲む長方形に切り詰める', () => {
@@ -137,8 +137,8 @@ describe('logo: リポジトリのロゴ', () => {
   });
 
   test('バナーは、塊が2つない、または文字が鳥より高いロゴでは止まる', () => {
-    assert.throws(() => bannerSvg(parseBitmap('##\n')), /2つの塊がない/);
-    assert.throws(() => bannerSvg(parseBitmap('#\n.\n#\n#\n')), /鳥\(高さ 1\)より高い/);
+    assert.throws(() => bannerSvg(parseBitmap('##\n')), /two blobs/);
+    assert.throws(() => bannerSvg(parseBitmap('#\n.\n#\n#\n')), /taller than the bird \(height 1\)/);
   });
 
   test('サイトの鳥は、白(体の内側と縁)と #18202e(線)で塗り、縁の分だけ広い', async () => {
@@ -172,6 +172,9 @@ describe('logo: リポジトリのロゴ', () => {
   });
 
   test('縁を含めた鳥が favicon に収まらなければ止まる', () => {
-    assert.throws(() => faviconSvg(parseBitmap(`${'#'.repeat(65)}\n`)), /縁を含めて 67×3\)が 66×66 に収まらない/);
+    assert.throws(
+      () => faviconSvg(parseBitmap(`${'#'.repeat(65)}\n`)),
+      /67×3 including the margin\) does not fit in 66×66/,
+    );
   });
 });

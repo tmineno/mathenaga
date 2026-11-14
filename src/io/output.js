@@ -20,12 +20,12 @@ export async function writeOutput(outDir, files) {
   const target = path.resolve(outDir);
   const cwd = path.resolve(process.cwd());
   if (target === path.parse(target).root || cwd === target || cwd.startsWith(target + path.sep)) {
-    throw new Error(`出力先 ${target} は消せない場所である`);
+    throw new Error(`output directory ${target} is not a place that may be deleted`);
   }
   await fs.rm(target, { recursive: true, force: true });
   const keys = [...files.keys()].sort();
   for (const key of keys) {
-    if (key.split('/').includes('..') || path.isAbsolute(key)) throw new Error(`出力のパス ${key} が不正`);
+    if (key.split('/').includes('..') || path.isAbsolute(key)) throw new Error(`invalid output path ${key}`);
     const dest = path.join(target, ...key.split('/'));
     await fs.mkdir(path.dirname(dest), { recursive: true });
     const file = /** @type {OutputFile} */ (files.get(key));

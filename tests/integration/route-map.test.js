@@ -367,8 +367,8 @@ describe('route-map: 受け入れテスト', () => {
     assert.deepEqual(r.errors, []);
     const n03 = r.notices.filter((n) => n.code === 'N03');
     assert.equal(n03.length, 2);
-    assert.ok(n03.some((n) => n.message.startsWith('全体の図')));
-    assert.ok(n03.some((n) => n.message.startsWith('理論物理の図')));
+    assert.ok(n03.some((n) => n.message.startsWith('whole map')));
+    assert.ok(n03.some((n) => n.message.startsWith('理論物理 map')));
     const site = r.ctx.site;
     const overall = overallOf(site);
     assert.ok(cardsOf(overall, 'analysis').every((c) => c.tier > 0));
@@ -569,7 +569,7 @@ describe('route-map: 始発の路線', () => {
     const r = await analyzeIn(root);
     const e12 = r.errors.filter((e) => e.code === 'E12');
     assert.ok(e12.length > 0, r.errors.map((e) => `${e.code} ${e.message}`).join('\n'));
-    assert.match(e12[0].message, /始発の路線 幾何線/);
+    assert.match(e12[0].message, /starting line 幾何線/);
     assert.match(e12[0].message, /completeness/);
   });
 
@@ -675,7 +675,7 @@ describe('route-map: 支線からの分岐と合流', () => {
     assert.deepEqual(r.errors, []);
     const n03 = r.notices.filter((n) => n.code === 'N03');
     assert.equal(n03.length, 1, n03.map((n) => n.message).join('\n'));
-    assert.ok(n03[0].message.startsWith('全体の図'));
+    assert.ok(n03[0].message.startsWith('whole map'));
     assert.match(n03[0].message, /リーマン幾何線/);
     const overall = overallOf(r.ctx.site);
     const [e] = cardsOf(overall, 'extension');

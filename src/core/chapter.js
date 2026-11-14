@@ -125,7 +125,7 @@ export function analyzeChapter(input) {
   let pending = null;
   const closePending = () => {
     if (pending) {
-      fail('E08', tokens[pending.question.start], 'question の直後に answer がない');
+      fail('E08', tokens[pending.question.start], 'question is not followed by answer');
       pending = null;
     }
   };
@@ -135,10 +135,10 @@ export function analyzeChapter(input) {
     if (tok.type === 'heading_open' && (tok.tag === 'h1' || tok.tag === 'h2')) {
       closePending();
       if (tok.tag === 'h1') {
-        fail('E09', tok, '1段目の見出し(#)は書けない。章のタイトルは front matter に書く');
+        fail('E09', tok, 'a level-1 heading (#) is not allowed; write the chapter title in the front matter');
         continue;
       }
-      if (phase === 'end') fail('E09', tok, '章末(review・question)の後に駅の見出しがある');
+      if (phase === 'end') fail('E09', tok, 'a station heading comes after the chapter end (review, question)');
       current = makeStation(tokens, node.start, fail, lineOf);
       chapter.stations.push(current);
       phase = 'station';
@@ -155,7 +155,7 @@ export function analyzeChapter(input) {
         else if (name === 'question') {
           pending = { question: block, answer: null };
           chapter.end.questions.push(pending);
-        } else if (!pending) fail('E09', tok, 'question のない answer がある');
+        } else if (!pending) fail('E09', tok, 'answer without a question');
         else {
           pending.answer = block;
           pending = null;
@@ -164,23 +164,25 @@ export function analyzeChapter(input) {
       }
       closePending();
       if (HEAD_BLOCKS.has(name)) {
-        if (phase !== 'head') fail('E09', tok, `${name} は章頭(最初の駅の見出しより前)にだけ書ける`);
+        if (phase !== 'head')
+          fail('E09', tok, `${name} can only be written in the chapter head (before the first station heading)`);
         else (name === 'goal' ? chapter.head.goals : chapter.head.motivations).push(block);
         continue;
       }
       // 駅のブロック
-      if (phase === 'head') fail('E09', tok, `${name} は駅の中にだけ書ける(駅の外にある)`);
-      else if (phase === 'end') fail('E09', tok, `章末(review・question)の後に ${name} がある`);
+      if (phase === 'head') fail('E09', tok, `${name} can only be written inside a station (it is outside one)`);
+      else if (phase === 'end') fail('E09', tok, `${name} comes after the chapter end (review, question)`);
       else if (current) current.items.push({ kind: 'block', block });
       continue;
     }
     closePending();
     if (isStrayClose(tokens, node)) {
-      fail('E09', tok, '開いていないブロックの ::: がある');
+      fail('E09', tok, 'a ::: with no open block');
       continue;
     }
     if (phase === 'head') chapter.head.prose.push({ start: node.start, end: node.end });
-    else if (phase === 'end') fail('E09', tok, '章末には review・question・answer のブロックだけを書ける');
+    else if (phase === 'end')
+      fail('E09', tok, 'only review, question and answer blocks are allowed at the chapter end');
     else if (current) current.items.push({ kind: 'prose', start: node.start, end: node.end });
   }
   closePending();
@@ -188,7 +190,7 @@ export function analyzeChapter(input) {
   checkHead(chapter, fail);
   for (const st of chapter.stations) checkStation(st, tokens, fail);
   checkEnd(chapter, tokens, fail, notices, file);
-  if (chapter.stations.length === 0) errors.push(issue('E08', file, null, '駅が1つもない'));
+  if (chapter.stations.length === 0) errors.push(issue('E08', file, null, 'no station'));
   collectInline(chapter, lineOf, fail);
   return { chapter, errors, notices };
 }
@@ -245,30 +247,30 @@ function makeStation(tokens, start, fail, lineOf) {
   };
   const src = open.meta?.attrsSrc ?? null;
   if (src === null) {
-    fail('E09', open, `駅の見出し「${st.name}」に {#ID} がない`);
+    fail('E09', open, `station heading "${st.name}" has no {#ID}`);
     return st;
   }
   const parsed = parseAttrs(src);
   for (const p of parsed.problems) fail('E02', open, p);
-  if (parsed.id === null) fail('E09', open, `駅の見出し「${st.name}」に #ID がない`);
+  if (parsed.id === null) fail('E09', open, `station heading "${st.name}" has no #ID`);
   else {
     const problem = idProblem(parsed.id);
     if (problem) fail('E03', open, problem);
     st.id = parsed.id;
   }
   for (const key of Object.keys(parsed.values)) {
-    if (key !== 'requires') fail('E02', open, `駅の見出しに属性 ${key} は書けない`);
+    if (key !== 'requires') fail('E02', open, `attribute ${key} is not allowed in a station heading`);
   }
   if (parsed.values.requires !== undefined) {
     for (const r of splitList(parsed.values.requires)) {
-      if (r === '') fail('E03', open, 'requires に空の ID がある');
+      if (r === '') fail('E03', open, 'requires has an empty ID');
       else st.requires.push(r);
     }
   }
-  if (st.name === '') fail('E08', open, '駅名がない');
+  if (st.name === '') fail('E08', open, 'station name is empty');
   for (const c of inline.children || []) {
     if (['math_inline', 'math_error', 'wikiref', 'note', 'note_error'].includes(c.type)) {
-      fail('E09', open, `駅の見出し「${st.name}」に数式・参照・注は書けない`);
+      fail('E09', open, `station heading "${st.name}" cannot contain formulas, references or notes`);
       break;
     }
   }
@@ -287,39 +289,39 @@ function makeBlock(tokens, node, fail, lineOf) {
   const info = open.info.trim();
   const m = /^([a-z][a-z-]*)\s*(.*)$/.exec(info);
   if (!m) {
-    fail('E02', open, `ブロック「${info}」を解釈できない`);
+    fail('E02', open, `cannot parse block "${info}"`);
     return null;
   }
   const name = m[1];
   if (!HEAD_BLOCKS.has(name) && !STATION_BLOCKS.has(name) && !END_BLOCKS.has(name)) {
-    fail('E02', open, `知らないブロック ${name}`);
+    fail('E02', open, `unknown block ${name}`);
     return null;
   }
   const rest = m[2].trim();
   let parsed = { id: null, values: {}, problems: [] };
   if (rest !== '') {
     const braces = /^\{(.*)\}$/.exec(rest);
-    if (!braces) fail('E02', open, `ブロック ${name} の属性は {…} で書く`);
+    if (!braces) fail('E02', open, `attributes of block ${name} must be written in {…}`);
     else parsed = parseAttrs(braces[1]);
   }
   for (const p of parsed.problems) fail('E02', open, p);
   const allowed = ALLOWED_ATTRS[name] || [];
-  if (parsed.id !== null && !allowed.includes('#')) fail('E02', open, `ブロック ${name} に #ID は書けない`);
+  if (parsed.id !== null && !allowed.includes('#')) fail('E02', open, `block ${name} cannot have an #ID`);
   for (const key of Object.keys(parsed.values)) {
-    if (!allowed.includes(key)) fail('E02', open, `ブロック ${name} に属性 ${key} は書けない`);
+    if (!allowed.includes(key)) fail('E02', open, `block ${name} cannot have attribute ${key}`);
   }
   for (let i = node.start + 1; i < node.end; i++) {
     const t = tokens[i];
     if (t.type === BLOCK_OPEN) {
-      fail('E09', t, 'ブロックの中に別のブロックは書けない(::: の閉じ忘れかもしれない)');
+      fail('E09', t, 'a block cannot contain another block (a ::: may be unclosed)');
       break;
     }
     if (t.type === 'heading_open' && (t.tag === 'h1' || t.tag === 'h2')) {
-      fail('E09', t, 'ブロックの中に駅の見出しがある(::: の閉じ忘れかもしれない)');
+      fail('E09', t, 'a station heading inside a block (a ::: may be unclosed)');
       break;
     }
   }
-  if (tokens[node.end]?.type !== BLOCK_CLOSE) fail('E09', open, `ブロック ${name} が閉じていない`);
+  if (tokens[node.end]?.type !== BLOCK_CLOSE) fail('E09', open, `block ${name} is not closed`);
   if (parsed.id !== null) {
     const problem = idProblem(parsed.id, name === 'definition');
     if (problem) fail('E03', open, problem);
@@ -344,11 +346,11 @@ function checkHead(chapter, fail) {
   ]) {
     const blocks = /** @type {Block[]} */ (list);
     const common = blocks.filter((b) => !b.field);
-    if (common.length === 0) fail('E08', null, `共通版の ${name}(field のないもの)がない`);
-    if (common.length > 1) fail('E09', tokens[common[1].start], `共通版の ${name} が2つ以上ある`);
+    if (common.length === 0) fail('E08', null, `no common ${name} (one without field)`);
+    if (common.length > 1) fail('E09', tokens[common[1].start], `two or more common ${name}`);
     const seen = new Set();
     for (const b of blocks.filter((x) => x.field)) {
-      if (seen.has(b.field)) fail('E09', tokens[b.start], `${name} の分野版(${b.field})が2つ以上ある`);
+      if (seen.has(b.field)) fail('E09', tokens[b.start], `two or more field versions of ${name} (${b.field})`);
       seen.add(b.field);
     }
   }
@@ -363,31 +365,31 @@ function checkStation(st, tokens, fail) {
   const heading = tokens[st.headingStart];
   const blocks = st.items.filter((i) => i.kind === 'block').map((i) => /** @type {any} */ (i).block);
   const summaries = blocks.filter((b) => b.name === 'summary');
-  if (summaries.length === 0) fail('E08', heading, `駅「${st.name}」に summary がない`);
-  if (summaries.length > 1) fail('E09', tokens[summaries[1].start], `駅「${st.name}」に summary が2つ以上ある`);
+  if (summaries.length === 0) fail('E08', heading, `station "${st.name}" has no summary`);
+  if (summaries.length > 1) fail('E09', tokens[summaries[1].start], `station "${st.name}" has two or more summaries`);
   st.definitions = blocks.filter((b) => b.name === 'definition');
   st.theorems = blocks.filter((b) => b.name === 'theorem');
   st.applications = blocks.filter((b) => b.name === 'application');
   if (st.theorems.length > 0 && !blocks.some((b) => b.name === 'proof-sketch')) {
-    fail('E08', heading, `駅「${st.name}」には定理があるのに proof-sketch がない`);
+    fail('E08', heading, `station "${st.name}" has a theorem but no proof-sketch`);
   }
   for (const d of st.definitions) {
     const open = tokens[d.start];
-    if (!d.attrs.name) fail('E08', open, 'definition に name がない');
-    if (!d.attrs.en) fail('E08', open, 'definition に en がない');
+    if (!d.attrs.name) fail('E08', open, 'definition has no name');
+    if (!d.attrs.en) fail('E08', open, 'definition has no en');
     // ID を省略した定義は def-<駅ID>。2つ目は名前空間の重複(E04)になる(ADR-008)
     if (d.id === null && st.id !== null) d.id = `${DEF_PREFIX}${st.id}`;
   }
   for (const t of st.theorems) {
     const open = tokens[t.start];
-    if (t.id === null) fail('E08', open, 'theorem に #ID がない(定理の ID は省略できない)');
-    if (!t.attrs.name) fail('E08', open, 'theorem に name がない');
+    if (t.id === null) fail('E08', open, 'theorem has no #ID (a theorem ID cannot be omitted)');
+    if (!t.attrs.name) fail('E08', open, 'theorem has no name');
   }
   // 同じ分野の application は何個でも書ける(content-format.md「ブロック」)
   for (const a of st.applications) {
     const open = tokens[a.start];
-    if (!a.field) fail('E08', open, 'application に field がない');
-    if (!a.attrs.title) fail('E08', open, 'application に title がない');
+    if (!a.field) fail('E08', open, 'application has no field');
+    if (!a.attrs.title) fail('E08', open, 'application has no title');
   }
 }
 
@@ -400,9 +402,9 @@ function checkStation(st, tokens, fail) {
  */
 function checkEnd(chapter, tokens, fail, notices, file) {
   const reviews = chapter.end.reviews;
-  if (reviews.length === 0) fail('E08', null, 'review がない');
-  if (reviews.length > 1) fail('E09', tokens[reviews[1].start], 'review が2つ以上ある');
-  if (chapter.end.questions.length === 0) notices.push(issue('N02', file, null, '確認問題(question)がない'));
+  if (reviews.length === 0) fail('E08', null, 'no review');
+  if (reviews.length > 1) fail('E09', tokens[reviews[1].start], 'two or more reviews');
+  if (chapter.end.questions.length === 0) notices.push(issue('N02', file, null, 'no review question (question block)'));
 }
 
 /**
@@ -435,12 +437,12 @@ function collectInline(chapter, lineOf, fail) {
       const after = tok.meta?.after ?? '';
       if (after !== '') {
         const braces = /^\{(.*)\}$/.exec(after);
-        if (!braces) fail('E10', tok, `閉じる $$ の後ろに属性以外の文字「${after}」がある`);
+        if (!braces) fail('E10', tok, `text "${after}" other than attributes follows the closing $$`);
         else {
           const parsed = parseAttrs(braces[1]);
           for (const p of parsed.problems) fail('E02', tok, p);
           for (const key of Object.keys(parsed.values))
-            fail('E02', tok, `式に属性 ${key} は書けない(書けるのは #ID だけ)`);
+            fail('E02', tok, `attribute ${key} is not allowed on a formula (only #ID)`);
           if (parsed.id !== null) {
             const problem = idProblem(parsed.id);
             if (problem) fail('E03', tok, problem);
@@ -452,7 +454,7 @@ function collectInline(chapter, lineOf, fail) {
       chapter.maths.push({ token: tok, line, display: true });
       checkTex(tok, fail);
     } else if (tok.type === 'math_error') {
-      fail('E10', tok, '閉じていない $$ がある');
+      fail('E10', tok, 'unclosed $$');
     }
     if (tok.type !== 'inline' || !tok.children) continue;
     collectChildren(chapter, tok, tok.children, inDefinition.has(i), false, lineOf, fail);
@@ -480,8 +482,8 @@ function collectChildren(chapter, tok, children, inDefinition, inNote, lineOf, f
         'E10',
         tok,
         c.meta.kind === 'inline-display'
-          ? '別行立ての $$ は行頭から書く(文中に $$ がある)'
-          : `閉じていない $ がある(「${c.content}」)。$ そのものは \\$ と書く`,
+          ? 'a display $$ must start at the beginning of a line (there is a $$ inside a sentence)'
+          : `unclosed $ ("${c.content}"); write a literal $ as \\$`,
       );
     } else if (c.type === 'wikiref') {
       chapter.refs.push({ token: c, line: lineOf(tok), inDefinition });
@@ -491,16 +493,18 @@ function collectChildren(chapter, tok, children, inDefinition, inNote, lineOf, f
       fail(
         'E14',
         tok,
-        c.meta.kind === 'empty'
-          ? '空の注(^[])がある'
-          : `閉じていない注がある(「${c.content}」)。^[ そのものは \\^[ と書く`,
+        c.meta.kind === 'empty' ? 'empty note (^[])' : `unclosed note ("${c.content}"); write a literal ^[ as \\^[`,
       );
     } else if (c.type === 'note') {
-      if (inNote) fail('E14', tok, '注の中に注は書けない');
+      if (inNote) fail('E14', tok, 'a note cannot contain a note');
       else if (inDefinition)
-        fail('E14', tok, 'definition の本文には注を書けない(定義はほかの章のポップアップにも出る)');
+        fail(
+          'E14',
+          tok,
+          'a definition body cannot contain a note (definitions also appear in popups of other chapters)',
+        );
       else chapter.notes.push({ token: c, line: lineOf(tok) });
-      if (c.meta?.display) fail('E14', tok, '注の中に別行立ての数式($$)は書けない');
+      if (c.meta?.display) fail('E14', tok, 'a note cannot contain a display formula ($$)');
       collectChildren(chapter, tok, c.children ?? [], inDefinition, true, lineOf, fail);
     }
   }
@@ -532,7 +536,7 @@ function figureOf(children, fail) {
   let id = null;
   const parsed = parseAttrs(braces[1]);
   for (const p of parsed.problems) fail('E02', p);
-  for (const key of Object.keys(parsed.values)) fail('E02', `図に属性 ${key} は書けない(書けるのは #ID だけ)`);
+  for (const key of Object.keys(parsed.values)) fail('E02', `attribute ${key} is not allowed on a figure (only #ID)`);
   if (parsed.id !== null) {
     const problem = idProblem(parsed.id);
     if (problem) fail('E03', problem);
@@ -558,8 +562,8 @@ function captionOf(image, chapter, line, fail) {
       fail(
         'E10',
         p.meta?.kind === 'inline-display'
-          ? '図のタイトルに $$ は書けない(行内の数式は $…$ で書く)'
-          : `図のタイトルに閉じていない $ がある(「${p.content}」)。$ そのものは \\$ と書く`,
+          ? 'a figure title cannot contain $$ (write inline formulas as $…$)'
+          : `unclosed $ in the figure title ("${p.content}"); write a literal $ as \\$`,
       );
   }
   return parts;
@@ -572,7 +576,12 @@ function captionOf(image, chapter, line, fail) {
  */
 function checkTex(tok, fail, lineTok) {
   const m = FORBIDDEN_TEX.exec(tok.content);
-  if (m) fail('E10', lineTok ?? tok, `数式に \\${m[1]} は使えない。番号はツールが振り、参照は [[@ID]] で書く`);
+  if (m)
+    fail(
+      'E10',
+      lineTok ?? tok,
+      `formula cannot use \\${m[1]}; numbers are assigned by the tool, refer to a formula with [[@ID]]`,
+    );
 }
 
 /**

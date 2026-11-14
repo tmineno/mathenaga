@@ -61,57 +61,57 @@ export function checkReferences(data, file) {
   const references = [];
   if (data === null || data === undefined) return { references, errors };
   if (!Array.isArray(data)) {
-    errors.push(issue('E01', file, null, '文献の一覧は文献の配列で書く'));
+    errors.push(issue('E01', file, null, 'the reference list must be an array of references'));
     return { references, errors };
   }
   data.forEach((r, index) => {
-    const where = typeof r?.id === 'string' ? `文献 ${r.id}` : `${index + 1}番目の文献`;
+    const where = typeof r?.id === 'string' ? `reference ${r.id}` : `reference #${index + 1}`;
     /** @param {string} code @param {string} msg */
     const fail = (code, msg) => errors.push(issue(code, file, null, `${where}:${msg}`));
     if (typeof r !== 'object' || r === null || Array.isArray(r)) {
-      errors.push(issue('E01', file, null, `${where}が項目の組になっていない`));
+      errors.push(issue('E01', file, null, `${where} is not a mapping`));
       return;
     }
-    for (const key of Object.keys(r)) if (!KEYS.includes(key)) fail('E02', `知らない項目 ${key} がある`);
+    for (const key of Object.keys(r)) if (!KEYS.includes(key)) fail('E02', `unknown key ${key}`);
     for (const key of ['id', 'type', 'authors', 'title', 'year']) {
-      if (r[key] === undefined || r[key] === null || r[key] === '') fail('E08', `${key} がない`);
+      if (r[key] === undefined || r[key] === null || r[key] === '') fail('E08', `${key} is missing`);
     }
     if (typeof r.id === 'string' && r.id !== '') {
       const p = idProblem(r.id);
       if (p) fail('E03', p);
     }
     if (r.type !== undefined && r.type !== 'book' && r.type !== 'article') {
-      fail('E02', `type「${r.type}」は book か article`);
+      fail('E02', `type "${r.type}" must be book or article`);
     }
     if (r.authors !== undefined) {
       if (!Array.isArray(r.authors) || r.authors.some((a) => typeof a !== 'string' || a.trim() === '')) {
-        fail('E03', 'authors は著者の名前の配列で書く');
-      } else if (r.authors.length === 0) fail('E03', 'authors が空である');
+        fail('E03', 'authors must be an array of author names');
+      } else if (r.authors.length === 0) fail('E03', 'authors is empty');
     }
     for (const key of ['title', 'edition', 'publisher', 'journal', 'volume', 'issue', 'pages', 'isbn', 'doi']) {
       if (r[key] !== undefined && r[key] !== null && typeof r[key] !== 'string') {
-        fail('E03', `${key} は文字列で書く(数だけなら引用符で囲む)`);
+        fail('E03', `${key} must be a string (quote it if it is only digits)`);
       }
     }
     if (r.year !== undefined && !(Number.isInteger(r.year) && r.year >= 1000 && r.year <= 9999)) {
-      fail('E03', `year「${r.year}」は4桁の整数で書く`);
+      fail('E03', `year "${r.year}" must be a 4-digit integer`);
     }
-    if (r.type === 'book' && !nonEmpty(r.publisher)) fail('E08', 'book に publisher がない');
-    if (r.type === 'article' && !nonEmpty(r.journal)) fail('E08', 'article に journal がない');
+    if (r.type === 'book' && !nonEmpty(r.publisher)) fail('E08', 'book has no publisher');
+    if (r.type === 'article' && !nonEmpty(r.journal)) fail('E08', 'article has no journal');
     if (r.type !== 'article') {
       for (const key of ARTICLE_ONLY) {
-        if (key !== 'journal' && r[key] !== undefined) fail('E03', `${key} は article にだけ書ける`);
+        if (key !== 'journal' && r[key] !== undefined) fail('E03', `${key} can only be given for an article`);
       }
-      if (r.type === 'book' && r.journal !== undefined) fail('E03', 'journal は article にだけ書ける');
+      if (r.type === 'book' && r.journal !== undefined) fail('E03', 'journal can only be given for an article');
     }
-    if (!nonEmpty(r.isbn) && !nonEmpty(r.doi)) fail('E08', 'doi と isbn のどちらもない(少なくとも一方を書く)');
+    if (!nonEmpty(r.isbn) && !nonEmpty(r.doi)) fail('E08', 'neither doi nor isbn is given (give at least one)');
     if (nonEmpty(r.isbn)) {
-      if (r.type !== 'book') fail('E03', 'isbn は book にだけ書ける');
+      if (r.type !== 'book') fail('E03', 'isbn can only be given for a book');
       const p = isbnProblem(r.isbn);
       if (p) fail('E03', p);
     }
     if (nonEmpty(r.doi) && !DOI_PATTERN.test(r.doi)) {
-      fail('E03', `doi「${r.doi}」は 10. で始まる DOI で書く(https://doi.org/ は付けない)`);
+      fail('E03', `doi "${r.doi}" must be a DOI starting with 10. (without https://doi.org/)`);
     }
     if (typeof r.id !== 'string' || r.id === '') return;
     references.push({
@@ -149,29 +149,43 @@ export function checkReferences(data, file) {
 export function checkVerified(data, references, file) {
   /** @type {import('./issues.js').Issue[]} */
   const errors = [];
-  const hint = 'npm run refs:verify を実行する';
+  const hint = 'run npm run refs:verify';
   if (references.length === 0 && data === undefined) return errors;
   if (data === undefined) {
-    for (const r of references) errors.push(issue('E15', file, null, `文献 ${r.id} の確認の記録がない。${hint}`));
+    for (const r of references)
+      errors.push(issue('E15', file, null, `no verification record for reference ${r.id}; ${hint}`));
     return errors;
   }
   if (typeof data !== 'object' || data === null || Array.isArray(data)) {
-    errors.push(issue('E15', file, null, `確認の記録が読めない(文献の ID をキーにしたオブジェクトでない)。${hint}`));
+    errors.push(
+      issue('E15', file, null, `verification record is unreadable (not an object keyed by reference ID); ${hint}`),
+    );
     return errors;
   }
   const records = /** @type {Record<string, any>} */ (data);
   const ids = new Set(references.map((r) => r.id));
   for (const r of references) {
     const rec = records[r.id];
-    if (rec === undefined) errors.push(issue('E15', file, null, `文献 ${r.id} の確認の記録がない。${hint}`));
+    if (rec === undefined)
+      errors.push(issue('E15', file, null, `no verification record for reference ${r.id}; ${hint}`));
     else if (typeof rec !== 'object' || rec === null || typeof rec.fingerprint !== 'string') {
-      errors.push(issue('E15', file, null, `文献 ${r.id} の確認の記録が読めない。${hint}`));
+      errors.push(issue('E15', file, null, `verification record of reference ${r.id} is unreadable; ${hint}`));
     } else if (rec.fingerprint !== fingerprint(r.raw)) {
-      errors.push(issue('E15', file, null, `文献 ${r.id} は、確認の記録を取った後に書き換えられている。${hint}`));
+      errors.push(
+        issue('E15', file, null, `reference ${r.id} was edited after its verification record was made; ${hint}`),
+      );
     }
   }
   for (const id of Object.keys(records)) {
-    if (!ids.has(id)) errors.push(issue('E15', file, null, `文献の一覧にない文献 ${id} の確認の記録がある。${hint}`));
+    if (!ids.has(id))
+      errors.push(
+        issue(
+          'E15',
+          file,
+          null,
+          `verification record exists for reference ${id}, which is not in the reference list; ${hint}`,
+        ),
+      );
   }
   return errors;
 }
@@ -224,14 +238,14 @@ export function isbnProblem(isbn) {
   if (/^\d{9}[\dX]$/.test(s)) {
     let sum = 0;
     for (let i = 0; i < 10; i++) sum += (s[i] === 'X' ? 10 : Number(s[i])) * (10 - i);
-    return sum % 11 === 0 ? null : `isbn「${isbn}」のチェックディジットが合わない`;
+    return sum % 11 === 0 ? null : `isbn "${isbn}" has a wrong check digit`;
   }
   if (/^\d{13}$/.test(s)) {
     let sum = 0;
     for (let i = 0; i < 13; i++) sum += Number(s[i]) * (i % 2 === 0 ? 1 : 3);
-    return sum % 10 === 0 ? null : `isbn「${isbn}」のチェックディジットが合わない`;
+    return sum % 10 === 0 ? null : `isbn "${isbn}" has a wrong check digit`;
   }
-  return `isbn「${isbn}」は ISBN-10 か ISBN-13 で書く(数字10桁か13桁。ハイフンは任意)`;
+  return `isbn "${isbn}" must be ISBN-10 or ISBN-13 (10 or 13 digits; hyphens optional)`;
 }
 
 /**

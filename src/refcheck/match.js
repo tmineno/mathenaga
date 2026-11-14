@@ -13,7 +13,7 @@
 
 /**
  * @typedef {object} Diff  項目と記録の食い違い
- * @property {'種類' | '書名' | '第1著者' | '年' | '巻'} field
+ * @property {'type' | 'title' | 'first author' | 'year' | 'volume'} field
  * @property {string} entry
  * @property {string} record
  */
@@ -125,21 +125,21 @@ export function matchRecord(entry, rec) {
   const diffs = [];
   if (rec.crossrefType !== null) {
     const ok = entry.type === 'book' ? BOOK_TYPES.includes(rec.crossrefType) : rec.crossrefType === 'journal-article';
-    if (!ok) diffs.push({ field: '種類', entry: entry.type, record: rec.crossrefType });
+    if (!ok) diffs.push({ field: 'type', entry: entry.type, record: rec.crossrefType });
   }
   const t = normalize(rec.title);
   const e = normalize(entry.title);
-  if (e === '' || !t.startsWith(e)) diffs.push({ field: '書名', entry: entry.title, record: rec.title });
+  if (e === '' || !t.startsWith(e)) diffs.push({ field: 'title', entry: entry.title, record: rec.title });
   const family = normalize(rec.family);
   const first = normalize(entry.authors[0] ?? '');
   if (family === '' || !first.includes(family)) {
-    diffs.push({ field: '第1著者', entry: entry.authors[0] ?? '', record: rec.family });
+    diffs.push({ field: 'first author', entry: entry.authors[0] ?? '', record: rec.family });
   }
-  if (rec.year !== entry.year) diffs.push({ field: '年', entry: String(entry.year), record: String(rec.year) });
+  if (rec.year !== entry.year) diffs.push({ field: 'year', entry: String(entry.year), record: String(rec.year) });
   if (rec.volume !== null) {
     const r = volumeKey(rec.volume);
     const bad = entry.volume ? volumeKey(entry.volume) !== r : NUMBERED_VOLUME.test(r);
-    if (bad) diffs.push({ field: '巻', entry: entry.volume ?? '(なし)', record: rec.volume || '(なし)' });
+    if (bad) diffs.push({ field: 'volume', entry: entry.volume ?? '(none)', record: rec.volume || '(none)' });
   }
   return diffs;
 }

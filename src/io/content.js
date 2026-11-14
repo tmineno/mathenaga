@@ -88,7 +88,7 @@ export function parseYaml(text, file, lineOffset = 0) {
     const err = /** @type {any} */ (e);
     const line = err?.mark?.line !== undefined ? err.mark.line + 1 + lineOffset : null;
     const reason = err?.reason ?? String(err?.message ?? err).split('\n')[0];
-    return { value: undefined, error: issue('E01', file, line, `YAML を解釈できない(${reason})`) };
+    return { value: undefined, error: issue('E01', file, line, `cannot parse YAML (${reason})`) };
   }
 }
 

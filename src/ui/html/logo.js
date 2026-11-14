@@ -29,12 +29,12 @@ export const FAVICON_SIZE = 66;
  */
 export function parseBitmap(text, file = 'logo.txt') {
   const lines = text.replace(/\r\n/g, '\n').replace(/\n$/, '').split('\n');
-  if (lines.length === 0 || lines[0] === '') throw new Error(`${file}: ドットマップが空`);
+  if (lines.length === 0 || lines[0] === '') throw new Error(`${file}: dot map is empty`);
   const width = lines[0].length;
   const dots = lines.map((line, i) => {
-    if (line.length !== width) throw new Error(`${file}:${i + 1}: 行の長さが ${line.length}(1 行目は ${width})`);
+    if (line.length !== width) throw new Error(`${file}:${i + 1}: line length is ${line.length} (line 1 is ${width})`);
     const bad = line.search(/[^#.]/);
-    if (bad >= 0) throw new Error(`${file}:${i + 1}: 「${line[bad]}」は使えない(# と . だけで書く)`);
+    if (bad >= 0) throw new Error(`${file}:${i + 1}: "${line[bad]}" is not allowed (use only # and .)`);
     return [...line].map((c) => c === '#');
   });
   return { width, height: dots.length, dots };
@@ -51,7 +51,7 @@ export function parseBitmap(text, file = 'logo.txt') {
  */
 export function trim(bm) {
   const ys = bm.dots.map((row, y) => (row.includes(true) ? y : -1)).filter((y) => y >= 0);
-  if (ys.length === 0) throw new Error('ドットマップに線のドットがない');
+  if (ys.length === 0) throw new Error('the dot map has no line dots');
   let x0 = bm.width;
   let x1 = -1;
   for (const row of bm.dots) {
@@ -230,7 +230,7 @@ export function birdSvg(bird, className) {
  */
 export function logoSvg(logo, { className, label }) {
   const [bird, ...rest] = placedBlocks(logo);
-  if (!bird) throw new Error('ロゴに線のドットがない');
+  if (!bird) throw new Error('the logo has no line dots');
   const text = rest.map((b) => svgPath(b.bm, b.x, b.y)).join('');
   return `<svg class="${className}" viewBox="-1 -1 ${logo.width + 2} ${logo.height + 2}" role="img" aria-label="${label}" shape-rendering="crispEdges">${birdPaths(bird.bm, bird.x, bird.y)}<path fill="currentColor" d="${text}"/></svg>`;
 }
@@ -248,8 +248,9 @@ export function logoSvg(logo, { className, label }) {
  */
 export function bannerSvg(logo) {
   const [bird, word] = blocks(logo);
-  if (!word) throw new Error('ロゴに鳥とサイト名の2つの塊がない');
-  if (word.height > bird.height) throw new Error(`サイト名(高さ ${word.height})が鳥(高さ ${bird.height})より高い`);
+  if (!word) throw new Error('the logo does not have two blobs, the bird and the site name');
+  if (word.height > bird.height)
+    throw new Error(`the site name (height ${word.height}) is taller than the bird (height ${bird.height})`);
   const w = bird.width + BANNER_GAP + word.width;
   const text = svgPath(word, bird.width + BANNER_GAP, Math.floor((bird.height - word.height) / 2));
   return (
@@ -266,7 +267,9 @@ export function bannerSvg(logo) {
 function faviconOffset(bird) {
   const [w, h] = [bird.width + 2, bird.height + 2];
   if (w > FAVICON_SIZE || h > FAVICON_SIZE) {
-    throw new Error(`favicon の絵(縁を含めて ${w}×${h})が ${FAVICON_SIZE}×${FAVICON_SIZE} に収まらない`);
+    throw new Error(
+      `the favicon drawing (${w}×${h} including the margin) does not fit in ${FAVICON_SIZE}×${FAVICON_SIZE}`,
+    );
   }
   return [Math.floor((FAVICON_SIZE - w) / 2) + 1, Math.floor((FAVICON_SIZE - h) / 2) + 1];
 }

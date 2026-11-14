@@ -59,10 +59,10 @@ describe('content-format: 受け入れテスト', () => {
     const n01 = result.notices.filter((n) => n.code === 'N01');
     const physics = n01.find((n) => n.file === 'fields/physics.yml');
     const cs = n01.find((n) => n.file === 'fields/cs.yml');
-    assert.match(physics.message, /9駅/);
+    assert.match(physics.message, /9 station\(s\)/);
     assert.match(physics.message, /cauchy-sequence/);
     assert.match(physics.message, /contraction/);
-    assert.match(cs.message, /1駅\(cauchy-sequence\)/);
+    assert.match(cs.message, /1 station\(s\).*\(cauchy-sequence\)/);
     for (const n of [physics, cs]) assert.ok(!/reading-/.test(n.message), '第0章の駅が N01 に出ている');
     const n02 = result.notices.filter((n) => n.code === 'N02').map((n) => n.file);
     assert.equal(n02.length, 5);
@@ -325,7 +325,7 @@ describe('content-format: 受け入れテスト', () => {
           replaceOnce(t, '{#completeness requires=cauchy-sequence}', '{#completeness requires=cauchy-sequence,banach}'),
         ),
       );
-      const cycle = errors.find((e) => e.code === 'E06' && e.message.includes('循環'));
+      const cycle = errors.find((e) => e.code === 'E06' && e.message.includes('cycle'));
       assert.ok(cycle);
       assert.match(cycle.message, /completeness/);
       assert.match(cycle.message, /banach/);
@@ -373,7 +373,7 @@ describe('content-format: 受け入れテスト', () => {
     await edit(root, CH3, (t) => replaceOnce(t, 'この章では、1 を防ぐ', '[[位相空間]]。この章では、1 を防ぐ'));
     const r = await analyzeIn(root);
     const e = expectError(r.errors, 'E07', CH3);
-    assert.match(e.message, /参照範囲の外に候補がある\(topological-space\)/);
+    assert.match(e.message, /candidate outside the lookup scope \(topological-space\)/);
   });
   test('駅と、その駅の def-<駅ID> の定義は、参照範囲の外の候補でも1つに数える', async () => {
     const root = await tempRoot();
@@ -382,7 +382,7 @@ describe('content-format: 受け入れテスト', () => {
     const r = await analyzeIn(root);
     const e = expectError(r.errors, 'E07', CH3);
     // 駅 normed-space(駅名)と定義 def-normed-space(別名)の両方が名前に一致する
-    assert.match(e.message, /参照範囲の外に候補がある\(def-normed-space\)/);
+    assert.match(e.message, /candidate outside the lookup scope \(def-normed-space\)/);
   });
 });
 

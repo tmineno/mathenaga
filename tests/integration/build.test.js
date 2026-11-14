@@ -309,7 +309,10 @@ describe('build: 受け入れテスト', () => {
     );
     assert.equal(errors.length, 1);
     assert.equal(errors[0].code, 'E05');
-    assert.match(errors[0].message, /路線の ID なので番号を差し込めない\(駅・章・式・定理・定義・図・応用・文献だけ\)/);
+    assert.match(
+      errors[0].message,
+      /is the ID of a line, so its number cannot be inserted \(only stations, chapters, equations, theorems, definitions, figures, applications and references\)/,
+    );
   });
 
   test('23. 図番号とキャプション、[[@ID]] による図の参照', async () => {
@@ -512,7 +515,7 @@ describe('build: 受け入れテスト', () => {
       errors.map((e) => e.code),
       ['E05'],
     );
-    assert.match(errors[0].message, /\[\[@app-function-space\]\] で指す/);
+    assert.match(errors[0].message, /use \[\[@app-function-space\]\] to point at an application/);
   });
 
   test('28. 合流する支線のほかの路線への案内は、分岐駅を読む順にすべて持つ', async () => {

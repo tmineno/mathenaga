@@ -84,7 +84,7 @@ export async function analyze({ contentDir, basePath, repoUrl = '' }) {
 
   let lines = [];
   const linesFile = 'lines.yml';
-  if (!raw.lines) errors.push(issue('E01', linesFile, null, 'lines.yml がない'));
+  if (!raw.lines) errors.push(issue('E01', linesFile, null, 'lines.yml is missing'));
   else {
     const parsed = parseYaml(raw.lines.text, linesFile);
     if (parsed.error) errors.push(parsed.error);
@@ -134,7 +134,7 @@ export async function analyze({ contentDir, basePath, repoUrl = '' }) {
           'E15',
           verifiedFile,
           null,
-          `確認の記録が JSON として読めない(${String(/** @type {any} */ (e)?.message ?? e)})`,
+          `verification record is not valid JSON (${String(/** @type {any} */ (e)?.message ?? e)})`,
         ),
       );
     }
@@ -152,19 +152,19 @@ export async function analyze({ contentDir, basePath, repoUrl = '' }) {
           'E03',
           `chapters/${c.dir}/`,
           null,
-          `章フォルダ名「${c.dir}」は「章番号-章の ID」の形で書く(例:03-completeness-fixed-point)`,
+          `chapter folder name "${c.dir}" must be <chapter number>-<chapter ID> (example: 03-completeness-fixed-point)`,
         ),
       );
       continue;
     }
     const problem = idProblem(dir.id);
-    if (problem) errors.push(issue('E03', `chapters/${c.dir}/`, null, `章の ID:${problem}`));
+    if (problem) errors.push(issue('E03', `chapters/${c.dir}/`, null, `chapter ID: ${problem}`));
     if (c.text === null) {
-      errors.push(issue('E01', c.file, null, '章フォルダに index.md がない'));
+      errors.push(issue('E01', c.file, null, 'chapter folder has no index.md'));
       continue;
     }
     const src = splitFrontMatter(c.text);
-    if (src.unclosed) errors.push(issue('E01', c.file, 1, 'front matter が --- で閉じていない'));
+    if (src.unclosed) errors.push(issue('E01', c.file, 1, 'front matter is not closed with ---'));
     let fmValue;
     if (src.yaml !== null) {
       const parsed = parseYaml(src.yaml, c.file, 1);
@@ -205,7 +205,8 @@ export async function analyze({ contentDir, basePath, repoUrl = '' }) {
   errors.push(...refs.errors);
   const cited = new Set([...citations.values()].flatMap((m) => [...m.keys()]));
   for (const id of site.references.keys()) {
-    if (!cited.has(id)) notices.push(issue('N04', referencesFile, null, `文献 ${id} はどの章からも引かれていない`));
+    if (!cited.has(id))
+      notices.push(issue('N04', referencesFile, null, `reference ${id} is not cited from any chapter`));
   }
 
   /** @type {Map<any, string>} */
@@ -215,7 +216,7 @@ export async function analyze({ contentDir, basePath, repoUrl = '' }) {
       const r = renderTex(m.token.content, m.display);
       if (r.error !== null)
         errors.push(
-          issue('E10', c.file, m.line, `KaTeX が解釈できない数式「${m.token.content.slice(0, 40)}」:${r.error}`),
+          issue('E10', c.file, m.line, `KaTeX cannot parse the formula "${m.token.content.slice(0, 40)}": ${r.error}`),
         );
       else mathHtml.set(m.token, r.html);
     }
@@ -229,7 +230,7 @@ export async function analyze({ contentDir, basePath, repoUrl = '' }) {
             'E11',
             c.file,
             img.line,
-            `図「${img.src}」がない(図は章フォルダの figures/ に置き、相対パスで参照する)`,
+            `figure "${img.src}" not found (put figures in the chapter folder's figures/ and refer to them by relative path)`,
           ),
         );
       }
@@ -334,11 +335,11 @@ export async function main() {
   for (const n of result.notices) console.log(formatIssue(n));
   if (result.errors.length > 0) {
     for (const e of result.errors) console.error(formatIssue(e));
-    console.error(`ビルドを止めた:エラー ${result.errors.length}件。dist/ は変えていない`);
+    console.error(`build stopped: ${result.errors.length} error(s); dist/ is unchanged`);
     process.exitCode = 1;
     return;
   }
-  console.log(`dist/ に書き出した(通知 ${result.notices.length}件)`);
+  console.log(`wrote dist/ (${result.notices.length} notice(s))`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

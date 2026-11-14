@@ -60,7 +60,7 @@ export function main() {
     child.on('exit', (code) => {
       running = false;
       if (code === 0) for (const c of clients) c.write('data: reload\n\n');
-      else console.error('ビルドに失敗した。原稿を直して保存し直すと、もう一度作り直す。');
+      else console.error('build failed; fix the manuscript and save again to rebuild');
       if (again) {
         again = false;
         rebuild();
@@ -77,7 +77,7 @@ export function main() {
     });
   }
   server.listen(port, HOST, () => {
-    console.log(`プレビュー:http://${HOST}:${port}${basePath}`);
+    console.log(`preview: http://${HOST}:${port}${basePath}`);
     rebuild();
   });
 }

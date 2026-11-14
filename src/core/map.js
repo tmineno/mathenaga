@@ -268,12 +268,16 @@ function planRows(site, branches, starts, trunkIds, lastTrunk) {
           dir = 'down';
           fallbacks.push({
             line,
-            reason: `分岐駅 ${info.branch.code} がこの図の幹線の最後の駅ではない`,
-            drawn: 'down と同じに',
+            reason: `branch station ${info.branch.code} is not the last station of the trunk line in this map`,
+            drawn: 'like down',
           });
         } else if (midUsed) {
           dir = 'down';
-          fallbacks.push({ line, reason: '幹線より右の場所をほかの支線が使った', drawn: 'down と同じに' });
+          fallbacks.push({
+            line,
+            reason: 'another branch line uses the place to the right of the trunk line',
+            drawn: 'like down',
+          });
         } else midUsed = true;
       }
     } else if (hasUp !== hasDown) {
@@ -283,7 +287,11 @@ function planRows(site, branches, starts, trunkIds, lastTrunk) {
       midUsed = true;
     } else {
       dir = side.get(info.branch.lineId) === 'up' ? 'up' : 'down';
-      fallbacks.push({ line, reason: '幹線より右の場所をほかの支線が使った', drawn: '主な分岐駅の側に' });
+      fallbacks.push({
+        line,
+        reason: 'another branch line uses the place to the right of the trunk line',
+        drawn: 'on the side of the main branch station',
+      });
     }
     rows.push({ line, dir, row: dir === 'up' ? ups++ : dir === 'down' ? downs++ : 0, info, start: null });
     side.set(line.id, dir === 'up' || dir === 'down' ? dir : 'mid');

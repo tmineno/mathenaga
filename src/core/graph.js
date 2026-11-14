@@ -4,16 +4,16 @@
 import { issue } from './issues.js';
 
 export const KIND_NAMES = {
-  line: '路線',
-  field: '分野',
-  chapter: '章',
-  station: '駅',
-  definition: '定義',
-  theorem: '定理',
-  equation: '式',
-  figure: '図',
-  application: '応用',
-  reference: '文献',
+  line: 'line',
+  field: 'field',
+  chapter: 'chapter',
+  station: 'station',
+  definition: 'definition',
+  theorem: 'theorem',
+  equation: 'equation',
+  figure: 'figure',
+  application: 'application',
+  reference: 'reference',
 };
 
 /**
@@ -95,7 +95,7 @@ export function buildSite(input) {
           'E04',
           file,
           line,
-          `ID「${id}」が重複している(${KIND_NAMES[kind]}。最初は ${firstSeen.get(id)} の${KIND_NAMES[kinds.get(id)]})`,
+          `ID "${id}" is duplicated (${KIND_NAMES[kind]}; the first one is the ${KIND_NAMES[kinds.get(id)]} in ${firstSeen.get(id)})`,
         ),
       );
       return false;
@@ -116,10 +116,12 @@ export function buildSite(input) {
   for (const c of chapters) {
     if (register(c.id, 'chapter', c.file, null)) chapterById.set(c.id, c);
     if (numbers.has(c.number)) {
-      errors.push(issue('E04', c.file, null, `章番号 ${c.number} が重複している(${numbers.get(c.number)} と同じ)`));
+      errors.push(
+        issue('E04', c.file, null, `chapter number ${c.number} is duplicated (same as ${numbers.get(c.number)})`),
+      );
     } else numbers.set(c.number, c.file);
     if (c.lineId && !lineById.has(c.lineId)) {
-      errors.push(issue('E05', c.file, 1, `line の参照先 ${c.lineId} が路線ファイルにない`));
+      errors.push(issue('E05', c.file, 1, `line reference ${c.lineId} is not in the lines file`));
     }
   }
   /** @type {import('./schema.js').PlannedChapter[]} */
@@ -134,11 +136,11 @@ export function buildSite(input) {
             'E04',
             input.linesFile,
             null,
-            `planned の章番号 ${pc.number}(${pc.title})が重複している(${numbers.get(pc.number)} と同じ)`,
+            `planned chapter number ${pc.number} (${pc.title}) is duplicated (same as ${numbers.get(pc.number)})`,
           ),
         );
       } else {
-        numbers.set(pc.number, `${input.linesFile} の planned`);
+        numbers.set(pc.number, `planned in ${input.linesFile}`);
         const copy = {
           ...pc,
           stations: pc.stations.map((st) => ({ name: st.name, requires: /** @type {string[]} */ ([]) })),
@@ -212,12 +214,17 @@ export function buildSite(input) {
       const kind = kinds.get(r);
       const file = info.chapter.file;
       if (!kind) {
-        errors.push(issue('E05', file, info.model.line, `駅 ${info.id} の requires の参照先 ${r} がない`));
+        errors.push(issue('E05', file, info.model.line, `requires of station ${info.id}: ${r} does not exist`));
         continue;
       }
       if (kind !== 'station') {
         errors.push(
-          issue('E05', file, info.model.line, `駅 ${info.id} の requires の ${r} は駅ではない(${KIND_NAMES[kind]})`),
+          issue(
+            'E05',
+            file,
+            info.model.line,
+            `requires of station ${info.id}: ${r} is not a station (${KIND_NAMES[kind]})`,
+          ),
         );
         continue;
       }
@@ -228,7 +235,7 @@ export function buildSite(input) {
             'E06',
             file,
             info.model.line,
-            `駅 ${info.id} の requires の ${r} は、読む順で後ろの駅${target === info ? '(自分自身)' : ''}を指している`,
+            `requires of station ${info.id}: ${r} is a station later in reading order${target === info ? ' (itself)' : ''}`,
           ),
         );
       }
@@ -238,16 +245,16 @@ export function buildSite(input) {
   // 未執筆の駅の requires(章に書いた requires は、最初の駅のもの)
   for (const pc of planned) {
     for (const [i, st] of pc.stations.entries()) {
-      const where = `planned の第${pc.number}章(${pc.title})${i === 0 ? '' : `の駅「${st.name}」`}`;
+      const where = `planned chapter ${pc.number} (${pc.title})${i === 0 ? '' : `, station "${st.name}"`}`;
       for (const r of declared.get(st) ?? []) {
         const kind = kinds.get(r);
         if (!kind) {
-          errors.push(issue('E05', input.linesFile, null, `${where}の requires の参照先 ${r} がない`));
+          errors.push(issue('E05', input.linesFile, null, `${where}: requires ${r} does not exist`));
           continue;
         }
         if (kind !== 'station') {
           errors.push(
-            issue('E05', input.linesFile, null, `${where}の requires の ${r} は駅ではない(${KIND_NAMES[kind]})`),
+            issue('E05', input.linesFile, null, `${where}: requires ${r} is not a station (${KIND_NAMES[kind]})`),
           );
           continue;
         }
@@ -258,7 +265,7 @@ export function buildSite(input) {
               'E06',
               input.linesFile,
               null,
-              `${where}の requires の ${r} は、章番号の大きい第${target.chapter.number}章の駅を指している`,
+              `${where}: requires ${r} is a station of chapter ${target.chapter.number}, which has a larger chapter number`,
             ),
           );
           continue;
@@ -270,7 +277,7 @@ export function buildSite(input) {
   for (const cycle of findCycles(stations, stationById)) {
     const head = /** @type {StationInfo} */ (stationById.get(cycle[0]));
     errors.push(
-      issue('E06', head.chapter.file, head.model.line, `requires が循環している:${[...cycle, cycle[0]].join(' → ')}`),
+      issue('E06', head.chapter.file, head.model.line, `requires has a cycle: ${[...cycle, cycle[0]].join(' → ')}`),
     );
   }
 
@@ -287,16 +294,16 @@ export function buildSite(input) {
     const blocks = [...c.head.goals, ...c.head.motivations, ...c.stations.flatMap((s) => s.applications)];
     for (const b of blocks) {
       if (b.field && !fieldById.has(b.field)) {
-        errors.push(issue('E05', c.file, b.line, `field の参照先 ${b.field} が分野ファイルにない`));
+        errors.push(issue('E05', c.file, b.line, `field reference ${b.field} is not in the field files`));
       }
     }
   }
   for (const f of fields) {
     for (const g of f.goals) {
       const kind = kinds.get(g.station);
-      if (!kind) errors.push(issue('E05', f.file, null, `goals の station ${g.station} がない`));
+      if (!kind) errors.push(issue('E05', f.file, null, `goals: station ${g.station} does not exist`));
       else if (kind !== 'station') {
-        errors.push(issue('E05', f.file, null, `goals の station ${g.station} は駅ではない(${KIND_NAMES[kind]})`));
+        errors.push(issue('E05', f.file, null, `goals: station ${g.station} is not a station (${KIND_NAMES[kind]})`));
       }
     }
   }
@@ -342,7 +349,7 @@ export function buildSite(input) {
           'N01',
           f.file,
           null,
-          `${f.title}:分野での応用がない駅 ${missing.length}駅(${missing.map((s) => s.id).join('、')})`,
+          `${f.title}: ${missing.length} station(s) without a field application (${missing.map((s) => s.id).join(', ')})`,
         ),
       );
     }
