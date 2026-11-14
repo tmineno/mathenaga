@@ -51,11 +51,11 @@ export async function analyze({ contentDir, basePath, repoUrl = '' }) {
   const errors = [];
   const notices = [];
   if (!BASE_PATH.test(basePath)) {
-    errors.push(issue('E13', '-', null, `MATHENAGA_BASE_PATH「${basePath}」は / で始まり / で終わる形で書く`));
+    errors.push(issue('E13', '-', null, `SITE_BASE_PATH "${basePath}" must start and end with /`));
   }
   if (repoUrl !== '' && !REPO_URL.test(repoUrl)) {
     errors.push(
-      issue('E13', '-', null, `MATHENAGA_REPO_URL「${repoUrl}」は https://github.com/<owner>/<repo> の形で書く`),
+      issue('E13', '-', null, `SITE_REPO_URL "${repoUrl}" must have the form https://github.com/<owner>/<repo>`),
     );
   }
   if (errors.length > 0) return { errors, notices, ctx: null };
@@ -280,10 +280,51 @@ export async function build({ contentDir, outDir, basePath, repoUrl = '' }) {
   return { errors, notices, written: true };
 }
 
+/** 環境変数の新しい名前 → 古い名前(build.md「入力」、ADR-009) */
+const ENV_NAMES = [
+  ['SITE_BASE_PATH', 'MATHENAGA_BASE_PATH'],
+  ['SITE_REPO_URL', 'MATHENAGA_REPO_URL'],
+];
+
+/**
+ * ビルドの環境変数を読む(build.md「入力」)。古い名前(MATHENAGA_*)も受け付ける。
+ * Preconditions: なし。
+ * Postconditions: ベースパス(既定は /)とリポジトリの URL(既定は空)を返す。古い名前を使ったら N05、
+ *   新しい名前と古い名前に違う値があれば E13 を返す。値の形式は analyze() が確かめる。
+ * Failure modes: 例外は投げない。
+ * Side effects: なし。
+ * @param {Record<string, string | undefined>} env
+ * @returns {{ basePath: string, repoUrl: string, errors: import('./core/issues.js').Issue[], notices: import('./core/issues.js').Issue[] }}
+ */
+export function readEnv(env) {
+  const errors = [];
+  const notices = [];
+  /** @type {Record<string, string>} */
+  const values = {};
+  for (const [name, old] of ENV_NAMES) {
+    const value = env[name] || '';
+    const oldValue = env[old] || '';
+    values[name] = value || oldValue;
+    if (!oldValue) continue;
+    if (value && value !== oldValue) {
+      errors.push(issue('E13', '-', null, `${name} and ${old} have different values; remove ${old}`));
+    } else {
+      notices.push(issue('N05', '-', null, `${old} is an old name; use ${name}`));
+    }
+  }
+  return { basePath: values.SITE_BASE_PATH || '/', repoUrl: values.SITE_REPO_URL, errors, notices };
+}
+
 /** `npm run build` の入口。 */
 export async function main() {
-  const basePath = process.env.MATHENAGA_BASE_PATH || '/';
-  const repoUrl = process.env.MATHENAGA_REPO_URL || '';
+  const env = readEnv(process.env);
+  for (const n of env.notices) console.log(formatIssue(n));
+  if (env.errors.length > 0) {
+    for (const e of env.errors) console.error(formatIssue(e));
+    process.exitCode = 1;
+    return;
+  }
+  const { basePath, repoUrl } = env;
   const result = await build({
     contentDir: path.join(ROOT, 'content'),
     outDir: path.join(ROOT, 'dist'),

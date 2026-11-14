@@ -25,7 +25,7 @@ function setupCopy(article) {
   var BLOCK =
     /^(block|flex|grid|flow-root|list-item|table|table-row|table-row-group|table-header-group|table-footer-group|table-caption)$/;
   var coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-  /** 原稿のファイルの GitHub の URL。MATHENAGA_REPO_URL を渡したビルドだけにある(site.md P-12) */
+  /** 原稿のファイルの GitHub の URL。SITE_REPO_URL を渡したビルドだけにある(site.md P-12) */
   var source = article.getAttribute('data-source');
   /** 「起票」の該当箇所に入れる、選んだ文の文字数の上限(Issue 作成画面の URL を長くしすぎない) */
   var EXCERPT_MAX = 500;

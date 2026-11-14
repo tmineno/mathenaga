@@ -40,7 +40,7 @@ test('19. 保存すると数秒以内に表示が変わり、壊した原稿で�
   const port = await freePort();
   const child = spawn(process.execPath, [path.join(dir, 'src/dev/server.js')], {
     cwd: dir,
-    env: { ...process.env, PORT: String(port), MATHENAGA_BASE_PATH: '/' },
+    env: { ...process.env, PORT: String(port), SITE_BASE_PATH: '/' },
   });
   cleanups.push(async () => {
     child.kill();

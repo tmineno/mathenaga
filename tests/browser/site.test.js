@@ -610,7 +610,7 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
       await context.close();
     });
 
-    test('21. MATHENAGA_REPO_URL を渡さなければ起票のリンクはなく、選択メニューは2つだけ', async () => {
+    test('21. SITE_REPO_URL を渡さなければ起票のリンクはなく、選択メニューは2つだけ', async () => {
       const root = await tempRoot();
       try {
         const r = await buildIn(root, '/', '');

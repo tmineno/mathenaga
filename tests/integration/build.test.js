@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { after, describe, test } from 'node:test';
-import { ROOT, analyze } from '../../src/build.js';
+import { ROOT, analyze, readEnv } from '../../src/build.js';
 import { chapterInField, nextChapter, otherLineGuide, prerequisiteChapters } from '../../src/core/navigation.js';
 import { branchStations, layoutMap, mapStations } from '../../src/core/map.js';
 import { versionOf } from '../../src/ui/html/pages.js';
@@ -617,23 +617,58 @@ describe('build: 受け入れテスト', () => {
     assert.deepEqual([...afterSnap.keys()], [...before.keys()]);
   });
 
-  test('18. MATHENAGA_BASE_PATH=mathenaga は E13', async () => {
+  test('18. SITE_BASE_PATH=mathenaga は E13', async () => {
     const r = await analyze({ contentDir: '/nonexistent', basePath: 'mathenaga' });
     assert.equal(r.errors.length, 1);
     assert.equal(r.errors[0].code, 'E13');
   });
 
-  test('20. MATHENAGA_REPO_URL=github.com/example/mathenaga は E13', async () => {
+  test('20. SITE_REPO_URL=github.com/example/mathenaga は E13', async () => {
     const r = await analyze({ contentDir: '/nonexistent', basePath: '/', repoUrl: 'github.com/example/mathenaga' });
     assert.equal(r.errors.length, 1);
     assert.equal(r.errors[0].code, 'E13');
-    assert.match(r.errors[0].message, /MATHENAGA_REPO_URL/);
+    assert.match(r.errors[0].message, /SITE_REPO_URL/);
   });
 
   test('17・18. npm run build はエラーのとき終了コード 1 でエラーを標準エラー出力に出す', async () => {
     const r = spawnSync(process.execPath, ['src/build.js'], {
       cwd: ROOT,
-      env: { ...process.env, MATHENAGA_BASE_PATH: 'mathenaga' },
+      env: { ...process.env, SITE_BASE_PATH: 'mathenaga' },
+      encoding: 'utf8',
+    });
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /^E13 /m);
+  });
+
+  test('32. 古い名前の環境変数だけなら、その値を使って N05 を出す。新旧に違う値があれば E13', () => {
+    const old = readEnv({ MATHENAGA_BASE_PATH: '/mathenaga/' });
+    assert.deepEqual([old.basePath, old.errors.length], ['/mathenaga/', 0]);
+    assert.deepEqual(
+      old.notices.map((n) => n.code),
+      ['N05'],
+    );
+    assert.deepEqual(readEnv({ SITE_BASE_PATH: '/mathenaga/' }), {
+      basePath: '/mathenaga/',
+      repoUrl: '',
+      errors: [],
+      notices: [],
+    });
+    const both = readEnv({ SITE_BASE_PATH: '/a/', MATHENAGA_BASE_PATH: '/b/' });
+    assert.deepEqual(
+      both.errors.map((e) => e.code),
+      ['E13'],
+    );
+    const same = readEnv({
+      SITE_REPO_URL: 'https://github.com/example/x',
+      MATHENAGA_REPO_URL: 'https://github.com/example/x',
+    });
+    assert.deepEqual([same.repoUrl, same.errors.length, same.notices.length], ['https://github.com/example/x', 0, 1]);
+  });
+
+  test('32. npm run build に古い名前と新しい名前の違う値を渡すと E13 で止まる', () => {
+    const r = spawnSync(process.execPath, ['src/build.js'], {
+      cwd: ROOT,
+      env: { ...process.env, SITE_BASE_PATH: '/a/', MATHENAGA_BASE_PATH: '/b/' },
       encoding: 'utf8',
     });
     assert.equal(r.status, 1);

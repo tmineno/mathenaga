@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readEnv } from '../build.js';
 import { createStaticHandler } from './static.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -20,7 +21,7 @@ const EVENTS = '/__mathenaga/events';
  * Side effects: dist/ を書き換える。子プロセスを起動する。
  */
 export function main() {
-  const basePath = process.env.MATHENAGA_BASE_PATH || '/';
+  const { basePath } = readEnv(process.env);
   const port = Number(process.env.PORT || 8000);
   /** @type {Set<import('node:http').ServerResponse>} */
   const clients = new Set();
