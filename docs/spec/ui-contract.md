@@ -54,8 +54,8 @@
 | 名前 | 付ける要素 | 値 | 書く | 読む |
 |---|---|---|---|---|
 | `button.term[data-def]` | 本文の用語 | 定義の ID | html | client:`defs.json` の項目を出す |
-| `.note-ref a[data-note]` | 注の印 | 注番号。`href` は `#_note-<注番号>-text` | html | client:`#_note-<注番号>-text .note-body` の写しを出す |
-| `a.cite[data-cite]` | 文献の印 | 文献の ID | html | client:`#<文献ID> .ref-body` の写しを出す |
+| `.note-ref a[data-note]`、注の一覧の項目 `#_note-<注番号>-text` の中の `.note-body` | 注の印と、注の一覧の項目 | 注番号。`href` は `#_note-<注番号>-text` | html | client:注の一覧の項目の `.note-body` の写しを出す |
+| `a.cite[data-cite]`、参考文献の項目 `#<文献ID>` の中の `.ref-body` | 文献の印と、参考文献の項目 | 文献の ID | html | client:参考文献の項目の `.ref-body` の写しを出す |
 | `aria-expanded` | 上の3つ | 開いているときだけ `true` | html(初期値 `false`)、client | client |
 
 ### 現在地バー(P-02)
@@ -142,7 +142,7 @@ theme は、client が作る次の要素と、client が付ける状態のクラ
 
 ## Acceptance tests
 
-1. client のソースの中で、セレクタや属性名を受け取る呼び出し(`querySelector`・`querySelectorAll`・`closest`・`matches`・`getElementById`・`getAttribute`・`setAttribute`・`removeAttribute`・`classList`)と、`className`・`id` への代入に渡した文字列から、クラス名・id・`data-` 属性名を集める。その集合は、この文書の表の「名前」の列に出てくる名前の集合と一致する(「付ける要素」の列は説明なので比べない)。ソースにあって表にない名前と、表にあってソースにない名前は、どちらも0個である。表から1行を消すと、このテストは落ちる。
+1. client のソースの中で、セレクタや属性名を受け取る呼び出し(`querySelector`・`querySelectorAll`・`closest`・`matches`・`getElementById`・`getAttribute`・`setAttribute`・`removeAttribute`・`classList`)と、`className`・`id` への代入に渡した文字列から、クラス名・id・`data-` 属性名を集める。その集合は、この文書の表の「名前」の列に出てくる名前の集合と一致する(「付ける要素」の列は説明なので比べない)。ソースにあって表にない名前と、表にあってソースにない名前は、どちらも0個である。表から1行を消すと、このテストは落ちる。文字列をつないで組み立てる名前(`#_note-<注番号>-text` の `.note-body`、`#<文献ID>` の `.ref-body`、`data-<項目>`)は、組み立てる部分の文字列(`'#_note-'`・`'-text .note-body'`・`' .ref-body'`・`'data-' + k`)が client のソースにあることを確かめて、ソースの名前に数える。名前の列の `<…>` は差し込む値で、名前はその手前までとする。
 2. テスト用原稿でビルドした全ページを合わせると、表の「書く」が html か core になっている名前がすべて出てくる。`SITE_REPO_URL` を渡したビルドだけに付く名前は、渡したビルドで確かめる。
 3. テスト用原稿の章ページから `#_stations` を消して開くと、しおりのボタンは表示されないままで、分野の切り替えと用語ポップアップは動き、ページの例外は0件である。
 4. 表示の設定のうち html の属性で切り替える項目について、初期値以外の値(theme の `light`・`dark`、text の `small`・`large`、width の `narrow`・`wide`)ごとに、theme に `[data-<項目>='<値>']` が出てくる。head の中のスクリプトが受け付ける値は、client の選択肢の定義と同じである。選択肢の定義に値を1つ足すと、theme にその値の規則がないので、このテストは落ちる。
@@ -150,4 +150,4 @@ theme は、client が作る次の要素と、client が付ける状態のクラ
 
 ## Open questions
 
-- 受け入れテスト 1 で名前を集めるとき、文字列をつないで組み立てる名前をどう扱うか。今の `app.js` には `'data-' + k`(`data-theme`・`data-text`・`data-width`)、`'#_note-' + note + '-text .note-body'`、`'#' + CSS.escape(cite) + ' .ref-body'` がある。文字列リテラルだけを集めると、これらの名前は client のソースにないことになる。組み立てる部分を shared の定数にして集める範囲に入れるか、表に「組み立てる名前」の印を付けるかを、実装するときに決める。
+- なし。

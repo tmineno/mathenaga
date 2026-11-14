@@ -14,7 +14,7 @@ MathEnaga と同じ形のサイト(路線・駅・分野で章を並べ、章ペ
 
 この形では、別のサイトを作るとコードを書き換えることになる。理由は次の4つである。
 
-- **サイト固有の値がコードに直接書いてある。** サイト名(`SITE_NAME`)、`lang="ja"`、ロゴのドット絵(`src/site/assets/logo.txt`)、Google Fonts の URL、色と書体のトークン、ブラウザに保存するキー4つ(`mathenaga-field` など)、原稿の URL のブランチ名(`/blob/main/`)。`grep -rnE "'MathEnaga'|mathenaga-|fonts\.googleapis\.com" src/site/ src/core/` は8行に当たる。
+- **サイト固有の値がコードに直接書いてある。** サイト名(`SITE_NAME`)、`lang="ja"`、ロゴのドット絵(`src/site/assets/logo.txt`)、Google Fonts の URL、色と書体のトークン、ブラウザに保存するキー4つ(`mathenaga-field` など)、原稿の URL のブランチ名(`/blob/main/`)。`grep -rnE "'MathEnaga'|mathenaga-|fonts\.googleapis\.com/css2" src/site/ src/core/` は7行に当たる。
 - **文言がコードに散っている。** 引用符の後に日本語が続く行(コメントの行を除く)は、`pages.js` に 81、`app.js` に 55、`src/core/map.js` に 21 ある。閲覧者に見える文言のほか、ビルドの通知の文も含んだ数である。
 - **路線図のレイアウトが文言に依存している。** `src/core/map.js` は、目標の札の幅を「途中の目標」という文字列で見積もり(56 行目)、駅名の折り返しを「の・」「とや」の後ろで決めている(98〜99 行目)。
 - **`pages.js` と `app.js` のあいだの取り決めが、どこにも書かれていない。** `app.js` には、`data-` 属性の名前が 24 種類(`app.js` が自分で付けるものを含む)、`getElementById` で引く id が 3 つ(`_fields`・`_stations`・`_pop`)、セレクタの文字列の中のクラス名が 26 種類出てくる。どの名前を出すかは `pages.js` のコードにしか書かれていない。表示の設定の選択肢は、`pages.js` の `LOOK_SCRIPT`、`app.js` の `CHOICES`、`style.css` のセレクタの3か所に別々に書かれている。
@@ -100,7 +100,7 @@ src/
 ## Consequences
 
 - 別サイトは、`src/` と `package.json` などを写し、`content/` を差し替えて作る。パッケージにするまでは、MathEnaga 側の改修を別サイトへ取り込む作業は手作業になる。
-- 切り離しが済んだかは、`grep -rnE "'MathEnaga'|mathenaga-|fonts\.googleapis\.com" src/` が0行で、`git ls-files src` に `logo.txt` がないことで確かめる。今の `src/` では前者が9行に当たる(Context の8行と、`src/refcheck/lookup.js` の User-Agent)。古い環境変数の名前(`MATHENAGA_BASE_PATH` など)は大文字なので、この検査には当たらない。
+- 切り離しが済んだかは、`grep -rnE "'MathEnaga'|mathenaga-|fonts\.googleapis\.com/css2" src/` が0行で、`git ls-files src` に `logo.txt` がないことで確かめる。今の `src/` では前者が8行に当たる(Context の7行と、`src/refcheck/lookup.js` の User-Agent)。書体の読み込み先は Google Fonts に限るので([content-format.md](../spec/content-format.md)「サイトの設定」)、`fonts.googleapis.com` のオリジンそのものはコードに残る。検査は、MathEnaga の書体を選んだ CSS の URL(`/css2?…`)だけを対象にする。古い環境変数の名前(`MATHENAGA_BASE_PATH` など)は大文字なので、この検査には当たらない。
 - 依存が1つ増える(esbuild)。esbuild は、プラットフォームごとのバイナリを optional な依存として入れる。CI(GitHub Actions の Linux)と手元で同じ版を使う。
 - 仕様([content-format.md](../spec/content-format.md)・[build.md](../spec/build.md)・[site.md](../spec/site.md)・[route-map.md](../spec/route-map.md)・[reference-check.md](../spec/reference-check.md)・[ui-contract.md](../spec/ui-contract.md))は、この ADR と一緒に直した。実装では、公開のワークフローと、環境変数の名前を使うテスト(`tests/integration/build.test.js` など)も直す。
 - ロゴの元データの場所が変わるので、`scripts/banner.js` と `tests/integration/logo.test.js` を直す。`tests/unit/style.test.js` は、読む CSS のパスを直す。
