@@ -2,7 +2,7 @@
 // 駅のしおりのボタンで駅を入れ・外し、上端のバーのボタンで一覧を開く。駅の ID の並びとして保存する。
 // 一覧の表示番号・駅名・章は、ページに埋め込んだ駅の索引(_stations)から引く。
 
-import { KEYS } from './site.js';
+import { KEYS, msg } from './site.js';
 import { all, base } from './dom.js';
 import { getItem, setItem } from './storage.js';
 
@@ -68,23 +68,23 @@ export function initBookmarks() {
   panel.id = '_bookmarks';
   panel.className = 'bm-panel';
   panel.setAttribute('role', 'dialog');
-  panel.setAttribute('aria-label', 'しおり');
+  panel.setAttribute('aria-label', msg('bookmark.title'));
   panel.tabIndex = -1;
   panel.hidden = true;
   var title = document.createElement('h2');
-  title.textContent = 'しおり';
+  title.textContent = msg('bookmark.title');
   var list = document.createElement('ol');
   list.className = 'bm-list';
   var empty = document.createElement('p');
   empty.className = 'bm-empty';
-  empty.textContent = 'しおりはまだありません。駅のしおりのアイコンを押すと、ここに加わります。';
+  empty.textContent = msg('bookmark.empty');
   panel.appendChild(title);
   panel.appendChild(list);
   panel.appendChild(empty);
   document.body.appendChild(panel);
 
   function label(st) {
-    return '第' + st.ch + '章 ' + st.code + ' ' + st.name;
+    return msg('chapter.number', { n: st.ch }) + ' ' + st.code + ' ' + st.name;
   }
   function renderList() {
     list.textContent = '';
@@ -100,8 +100,8 @@ export function initBookmarks() {
       del.type = 'button';
       del.className = 'bm-del';
       del.textContent = '×';
-      del.setAttribute('aria-label', 'しおりから外す:' + label(st));
-      del.title = 'しおりから外す';
+      del.setAttribute('aria-label', msg('bookmark.remove.station', { station: label(st) }));
+      del.title = msg('bookmark.remove');
       del.addEventListener('click', function () {
         set(st.id, false);
         var next = /** @type {HTMLElement | null} */ (list.querySelector('.bm-del'));
@@ -117,7 +117,7 @@ export function initBookmarks() {
   function refresh() {
     toggles.forEach(function (b) {
       var on = has(b.getAttribute('data-bm'));
-      var tip = on ? 'しおりから外す' : 'この駅をしおりに入れる';
+      var tip = on ? msg('bookmark.remove') : msg('bookmark.add');
       b.setAttribute('aria-pressed', String(on));
       b.setAttribute('aria-label', tip);
       b.setAttribute('data-tip', tip);

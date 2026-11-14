@@ -190,7 +190,7 @@ export async function analyze({ contentDir, basePath, repoUrl = '' }) {
     chapterFiles.set(dir.id, { dirPath: c.dirPath, figures: c.figures });
   }
 
-  const g = buildSite({ lines, fields, chapters, linesFile, references, referencesFile, text: locale.text });
+  const g = buildSite({ lines, fields, chapters, linesFile, references, referencesFile, text: locale.text, messages });
   errors.push(...g.errors);
   notices.push(...g.notices);
   const site = g.site;

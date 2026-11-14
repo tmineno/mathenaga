@@ -1,7 +1,7 @@
 // 路線図の配置と SVG(docs/spec/route-map.md)。章ごとに1枚の札を格子に置き、路線の線・分岐の線・
 // 前提の矢印で札どうしをつなぐ。分岐の線と前提の矢印は、札のあいだの溝(列の溝と段の溝)だけを通る。
 
-import { escapeXml } from './text.js';
+import { escapeXml, fill } from './text.js';
 
 /** 寸法(px)。路線図の見た目の調整はここで行う。 */
 export const GEOM = {
@@ -349,9 +349,10 @@ export function mapStations(site) {
  * @param {import('./schema.js').Line[]} lines
  * @param {import('./graph.js').StationInfo[]} shown
  * @param {Map<string, BranchInfo>} branches
+ * @param {string} joiner  矢印の札で、駅名をつなぐ文字(文言 list.join)
  * @returns {Arrow[]}
  */
-export function prerequisiteArrows(lines, shown, branches) {
+export function prerequisiteArrows(lines, shown, branches, joiner) {
   const byId = new Map(shown.map((s) => [s.id, s]));
   const pos = new Map(shown.map((s, i) => [s.id, i]));
   /** 手順 3 の関係。to と、requires の辺か @type {Map<string, Array<{ to: string, req: boolean }>>} */
@@ -412,7 +413,7 @@ export function prerequisiteArrows(lines, shown, branches) {
   const out = [...groups.values()];
   for (const g of out) {
     g.stations.sort((a, b) => /** @type {number} */ (pos.get(a.id)) - /** @type {number} */ (pos.get(b.id)));
-    g.label = g.stations.map((s) => s.name).join('・');
+    g.label = g.stations.map((s) => s.name).join(joiner);
   }
   return out.sort((a, b) => a.from - b.from || a.to - b.to);
 }
@@ -501,12 +502,41 @@ export function prerequisiteArrows(lines, shown, branches) {
  *   E12:最初の駅が、路線ファイルで後ろにある路線の駅を前提にしている始発の路線
  * @property {Fallback[]} fallbacks  N03
  * @property {import('./schema.js').Line[]} linesShown
+ * @property {Record<string, string>} messages  路線図の文言(site.messages のうち MESSAGE_KEYS のもの。文字列だけ)
  */
 
-/** 章の札の文字。 @param {{ number: number, planned?: boolean }} chapter @param {boolean} current */
-function headText(chapter, current) {
-  if (chapter.planned) return `第${chapter.number}章 未執筆`;
-  return current ? `第${chapter.number}章 このページ` : `第${chapter.number}章`;
+/** 路線図が使う文言のキー(言語ごとの文言の辞書から、レイアウトに写す) */
+const MESSAGE_KEYS = [
+  'chapter.number',
+  'goal.final',
+  'goal.partial',
+  'map.card.planned',
+  'map.card.current',
+  'map.from',
+  'map.goal.title',
+  'map.desc.planned',
+  'map.desc.station',
+  'map.desc.mark',
+  'map.desc.chapter',
+  'map.desc.line',
+  'map.desc.arrow',
+  'list.separator',
+];
+
+/**
+ * 路線図が使う文言だけを、辞書から取り出す。
+ * @param {Record<string, string>} messages
+ * @returns {Record<string, string>}
+ */
+function pickMessages(messages) {
+  return Object.fromEntries(MESSAGE_KEYS.map((k) => [k, messages[k]]));
+}
+
+/** 章の札の文字。 @param {{ number: number, planned?: boolean }} chapter @param {boolean} current @param {Record<string, string>} messages */
+function headText(chapter, current, messages) {
+  const n = fill(messages['chapter.number'], { n: chapter.number });
+  if (chapter.planned) return fill(messages['map.card.planned'], { chapter: n });
+  return current ? fill(messages['map.card.current'], { chapter: n }) : n;
 }
 
 /** @param {number} v */
@@ -520,8 +550,9 @@ function round(v) {
  * @param {import('./graph.js').StationInfo[]} stations
  * @param {Map<string, import('./schema.js').Goal>} goals
  * @param {TextRules} rules
+ * @param {string} pillText  「途中の目標」の札の文字
  */
-function measureCard(chapter, stations, goals, rules) {
+function measureCard(chapter, stations, goals, rules, pillText) {
   const g = GEOM;
   const inner = g.cardW - 2 * g.pad;
   const head = { text: '', x: g.pad, y: g.pad, w: inner, h: g.headH };
@@ -549,7 +580,7 @@ function measureCard(chapter, stations, goals, rules) {
     }));
     let h = Math.max(g.plateH, lines.length * g.stLineH);
     const pill = partial
-      ? { x: nameX, y: top + h + 2, w: Math.round(textWidth('途中の目標', g.pillFont, rules) + 12), h: g.pillH }
+      ? { x: nameX, y: top + h + 2, w: Math.round(textWidth(pillText, g.pillFont, rules) + 12), h: g.pillH }
       : null;
     if (pill) h += 2 + g.pillH;
     const plate = info.planned ? null : { x: g.pad, y: top + (g.stLineH - g.plateH) / 2, w: g.plateW, h: g.plateH };
@@ -677,9 +708,9 @@ export function layoutMap(site, drawn, opts = {}) {
   const cards = new Map();
   /** @param {any} chapter @param {import('./graph.js').StationInfo[]} stations @param {string} lineId @param {number} col @param {number} tier */
   const addCard = (chapter, stations, lineId, col, tier) => {
-    const m = measureCard(chapter, stations, goals, site.text);
+    const m = measureCard(chapter, stations, goals, site.text, site.messages['goal.partial']);
     const current = !chapter.planned && chapter.id === (opts.highlight ?? null);
-    const head = headText(chapter, current);
+    const head = headText(chapter, current, site.messages);
     /** @type {Card} */
     const card = {
       number: chapter.number,
@@ -748,6 +779,7 @@ export function layoutMap(site, drawn, opts = {}) {
     site.lines,
     placedStations.map((r) => r.info),
     placedBranches,
+    site.messages['list.join'],
   );
 
   const tiers = cardList.map((c) => c.tier);
@@ -833,7 +865,7 @@ export function layoutMap(site, drawn, opts = {}) {
         id: `branch:${s.id}>${bp.line.id}`,
         group: `branch:${bp.line.id}`,
         main: s === bp.info.branch,
-        label: `${s.name}から`,
+        label: fill(site.messages['map.from'], { name: s.name }),
         station: s,
       });
     }
@@ -1513,6 +1545,7 @@ export function layoutMap(site, drawn, opts = {}) {
     lateStarts,
     fallbacks,
     linesShown: site.lines.filter((l) => cardList.some((c) => c.lineId === l.id)),
+    messages: pickMessages(site.messages),
   };
 }
 
@@ -1676,7 +1709,7 @@ export function renderMapSvg(layout, opts) {
     const href = !c.planned && c.chapterId && opts.chapterHref ? opts.chapterHref(c.chapterId) : null;
     out.push(
       href
-        ? `<a href="${escapeXml(href)}" class="ch" aria-label="${escapeXml(`第${c.number}章 ${c.title}`)}">${body}</a>`
+        ? `<a href="${escapeXml(href)}" class="ch" aria-label="${escapeXml(`${fill(layout.messages['chapter.number'], { n: c.number })} ${c.title}`)}">${body}</a>`
         : `<g class="ch">${body}</g>`,
     );
     for (const r of c.rows) {
@@ -1693,7 +1726,9 @@ export function renderMapSvg(layout, opts) {
       const row = at(r);
       const plate = /** @type {Box} */ (r.plate);
       const pp = at(plate);
-      const tip = r.goal ? `<title>${escapeXml(`${r.final ? '最終目標' : '途中の目標'}:${r.goal.label}`)}</title>` : '';
+      const tip = r.goal
+        ? `<title>${escapeXml(fill(layout.messages['map.goal.title'], { kind: layout.messages[r.final ? 'goal.final' : 'goal.partial'], label: r.goal.label }))}</title>`
+        : '';
       out.push(
         `<a href="${escapeXml(opts.hrefFor(r.info))}" class="st" aria-label="${escapeXml(`${r.info.code} ${r.info.name}`)}">${r.final ? tip : ''}`,
         `<rect class="hit" x="${row.x}" y="${row.y}" width="${round(r.w)}" height="${round(r.name.length * GEOM.stLineH)}"/>`,
@@ -1705,7 +1740,7 @@ export function renderMapSvg(layout, opts) {
       if (r.pill && r.partial) {
         const p = at(r.pill);
         out.push(
-          `<g class="pill"><title>${escapeXml(`途中の目標:${r.partial.label}`)}</title><rect x="${p.x}" y="${p.y}" width="${r.pill.w}" height="${r.pill.h}" rx="7.5"/><text x="${round(p.x + r.pill.w / 2)}" y="${round(p.y + r.pill.h / 2)}">途中の目標</text></g>`,
+          `<g class="pill"><title>${escapeXml(fill(layout.messages['map.goal.title'], { kind: layout.messages['goal.partial'], label: r.partial.label }))}</title><rect x="${p.x}" y="${p.y}" width="${r.pill.w}" height="${r.pill.h}" rx="7.5"/><text x="${round(p.x + r.pill.w / 2)}" y="${round(p.y + r.pill.h / 2)}">${escapeXml(layout.messages['goal.partial'])}</text></g>`,
         );
       }
     }
@@ -1737,21 +1772,37 @@ export function renderMapSvg(layout, opts) {
  * @param {MapLayout} layout
  */
 export function mapDescription(layout) {
+  const m = layout.messages;
+  const sep = m['list.separator'];
+  /** @param {number} n */
+  const chapterNo = (n) => fill(m['chapter.number'], { n });
   const lines = layout.linesShown.map((line) => {
     const cards = layout.cards.filter((c) => c.lineId === line.id).sort((a, b) => a.col - b.col);
     const parts = cards.map((c) => {
       const items = c.rows.map((r) => {
         if (r.info.planned) return r.info.name;
-        const marks = [...(r.final ? ['最終目標'] : []), ...(r.partial ? ['途中の目標'] : [])];
-        return `${r.info.code} ${r.info.name}${marks.map((m) => `(${m})`).join('')}`;
+        const marks = [...(r.final ? [m['goal.final']] : []), ...(r.partial ? [m['goal.partial']] : [])];
+        return fill(m['map.desc.station'], {
+          code: r.info.code,
+          name: r.info.name,
+          marks: marks.map((mark) => fill(m['map.desc.mark'], { mark })).join(''),
+        });
       });
-      return `第${c.number}章 ${c.title}${c.planned ? '(未執筆)' : ''}:${items.join('、')}。`;
+      return fill(m['map.desc.chapter'], {
+        chapter: chapterNo(c.number),
+        title: c.title,
+        planned: c.planned ? m['map.desc.planned'] : '',
+        items: items.join(sep),
+      });
     });
-    return `${line.name}。${parts.join('')}`;
+    return fill(m['map.desc.line'], { line: line.name, chapters: parts.join('') });
   });
-  const arrows = layout.arrows.map(
-    (a) =>
-      `第${a.to}章は、第${a.from}章の ${a.stations.map((s) => (s.code ? `${s.code} ${s.name}` : s.name)).join('、')}を前提にする。`,
+  const arrows = layout.arrows.map((a) =>
+    fill(m['map.desc.arrow'], {
+      to: chapterNo(a.to),
+      from: chapterNo(a.from),
+      stations: a.stations.map((s) => (s.code ? `${s.code} ${s.name}` : s.name)).join(sep),
+    }),
   );
   return [...lines, ...arrows].join('');
 }

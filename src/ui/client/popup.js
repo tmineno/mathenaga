@@ -3,6 +3,7 @@
 // 押しても移らずにポップアップを出す。中身はページの中の一覧から写す(site.md「注と参考文献の表示」)。
 
 import { all, root, base } from './dom.js';
+import { msg } from './site.js';
 import { settings } from './settings.js';
 
 var POP_TRIGGERS = '.term, .note-ref a, a.cite';
@@ -53,7 +54,7 @@ function render(el, d, id) {
   en.className = 'pop-en';
   en.textContent = d.en;
   head.appendChild(badge);
-  head.appendChild(document.createTextNode('定義 ' + d.number + ' · ' + d.name));
+  head.appendChild(document.createTextNode(msg('statement.definition', { number: d.number }) + ' · ' + d.name));
   head.appendChild(en);
   var body = document.createElement('div');
   body.className = 'pop-body flow';
@@ -62,20 +63,25 @@ function render(el, d, id) {
   foot.className = 'pop-s';
   foot.appendChild(
     document.createTextNode(
-      '定義の場所:第' + d.chapter + '章 ' + d.chapterTitle + ' · ' + d.code + ' ' + d.stationName + ' ',
+      msg('popup.definition.place', {
+        chapter: msg('chapter.number', { n: d.chapter }),
+        title: d.chapterTitle,
+        code: d.code,
+        station: d.stationName,
+      }),
     ),
   );
   if (document.getElementById(id)) {
     var go = document.createElement('a');
     go.className = 'pop-go';
     go.href = '#' + id;
-    go.textContent = 'この定義へ移動';
+    go.textContent = msg('popup.definition.here');
     foot.appendChild(go);
   } else {
     var link = document.createElement('a');
     link.className = 'pop-go';
     link.href = d.url;
-    link.textContent = '定義の章へ';
+    link.textContent = msg('popup.definition.chapter');
     foot.appendChild(link);
   }
   pop.appendChild(head);
@@ -95,10 +101,10 @@ function renderLocal(el) {
     ? document.querySelector('#_note-' + note + '-text .note-body')
     : document.querySelector('#' + CSS.escape(cite || '') + ' .ref-body');
   pop.textContent = '';
-  pop.setAttribute('aria-label', note ? '注' : '文献');
+  pop.setAttribute('aria-label', note ? msg('note.title') : msg('popup.reference.title'));
   var head = document.createElement('p');
   head.className = 'pop-h';
-  head.textContent = note ? '注' + note : el.textContent;
+  head.textContent = note ? msg('note.ref', { n: note }) : el.textContent;
   var body = document.createElement('div');
   body.className = 'pop-body flow';
   if (src) body.innerHTML = src.innerHTML;
@@ -116,7 +122,7 @@ function renderLocal(el) {
     var go = document.createElement('a');
     go.className = 'pop-go';
     go.href = '#' + cite;
-    go.textContent = '参考文献へ移動';
+    go.textContent = msg('popup.reference.go');
     foot.appendChild(go);
     pop.appendChild(foot);
   }
@@ -136,9 +142,9 @@ function show(el, focusPop) {
     if (focusPop) pop.focus();
     return;
   }
-  pop.setAttribute('aria-label', '用語の定義');
+  pop.setAttribute('aria-label', msg('popup.definition.title'));
   var id = el.getAttribute('data-def');
-  pop.textContent = '読み込み中…';
+  pop.textContent = msg('popup.loading');
   pop.hidden = false;
   place(el);
   loadDefs().then(
@@ -146,12 +152,12 @@ function show(el, focusPop) {
       if (current !== el) return;
       var d = defs[id];
       if (d) render(el, d, id);
-      else pop.textContent = '定義が索引にありません';
+      else pop.textContent = msg('popup.definition.missing');
       if (focusPop) pop.focus();
     },
     function () {
       if (current !== el) return;
-      pop.textContent = '定義を読み込めませんでした';
+      pop.textContent = msg('popup.definition.failed');
       place(el);
     },
   );

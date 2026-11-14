@@ -1,6 +1,7 @@
 // 参照 [[キー]]・[[キー|文字]]・[[@ID]] の解決(docs/spec/content-format.md「参照」)。
 
 import { closure, KIND_NAMES } from './graph.js';
+import { fill } from './text.js';
 import { DEF_PREFIX } from './ids.js';
 import { issue } from './issues.js';
 
@@ -93,7 +94,7 @@ function resolveNumber(site, equations, statements, figures, applications, id) {
   }
   if (kind === 'chapter') {
     const c = /** @type {any} */ (site.chapterById.get(id));
-    return { kind: 'chapter', id, text: `第${c.number}章`, chapterId: id };
+    return { kind: 'chapter', id, text: fill(site.messages['chapter.number'], { n: c.number }), chapterId: id };
   }
   if (kind === 'equation') {
     const eq = equations.get(id);
@@ -103,16 +104,31 @@ function resolveNumber(site, equations, statements, figures, applications, id) {
   if (kind === 'figure') {
     const f = figures.get(id);
     if (!f) return `[[@${id}]] の図に番号がない`;
-    return { kind: 'figure', id, text: `図 ${f.label}`, chapterId: f.chapter.id };
+    return {
+      kind: 'figure',
+      id,
+      text: fill(site.messages['figure.number'], { number: f.label }),
+      chapterId: f.chapter.id,
+    };
   }
   if (kind === 'application') {
     const a = applications.get(id);
     if (!a) return `[[@${id}]] の応用に番号がない`;
-    return { kind: 'application', id, text: `応用 ${a.label}`, chapterId: a.chapter.id };
+    return {
+      kind: 'application',
+      id,
+      text: fill(site.messages['application.number'], { number: a.label }),
+      chapterId: a.chapter.id,
+    };
   }
   const s = statements.get(id);
   if (s && s.kind === kind) {
-    return { kind: s.kind, id, text: `${KIND_NAMES[s.kind]} ${s.label}`, chapterId: s.chapter.id };
+    return {
+      kind: s.kind,
+      id,
+      text: fill(site.messages[`statement.${s.kind}`], { number: s.label }),
+      chapterId: s.chapter.id,
+    };
   }
   return `[[@${id}]] の ${id} は${KIND_NAMES[kind]}の ID なので番号を差し込めない(駅・章・式・定理・定義・図・応用・文献だけ)`;
 }

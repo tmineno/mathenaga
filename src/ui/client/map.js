@@ -1,6 +1,6 @@
 // 路線図の章の札の強調(P-03)と、図の拡大・縮小・ドラッグ(docs/spec/route-map.md「リンク」「図の操作」)。
 
-import { KEYS } from './site.js';
+import { KEYS, msg } from './site.js';
 import { all } from './dom.js';
 import { getItem, setItem } from './storage.js';
 
@@ -157,19 +157,19 @@ export function initMapPan() {
     [
       {
         text: '+',
-        label: '拡大',
+        label: msg('map.zoomin'),
         act: function () {
           zoomBy(ZOOM_STEP);
         },
       },
       {
         text: '−',
-        label: '縮小',
+        label: msg('map.zoomout'),
         act: function () {
           zoomBy(1 / ZOOM_STEP);
         },
       },
-      { text: '全体', label: '全体を表示', act: fitAll },
+      { text: msg('map.fit'), label: msg('map.fit.label'), act: fitAll },
     ].forEach(function (b) {
       var btn = document.createElement('button');
       btn.type = 'button';

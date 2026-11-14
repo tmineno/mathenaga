@@ -2,7 +2,7 @@
 // 右下の歯車のボタンと、その上に開くメニュー。スクリプトが動くときだけ作る。
 
 import { LOOK } from '../shared/settings.js';
-import { KEYS } from './site.js';
+import { KEYS, msg } from './site.js';
 import { isChapter } from './dom.js';
 import { apply, applyFolds, currentField } from './field.js';
 import { mapResets } from './map.js';
@@ -12,45 +12,45 @@ import { setItem } from './storage.js';
 var GROUPS = [
   {
     key: 'theme',
-    title: 'テーマ',
+    title: msg('settings.theme'),
     options: [
-      ['light', 'ライト'],
-      ['dark', 'ダーク'],
-      ['auto', 'OS に合わせる'],
+      ['light', msg('settings.theme.light')],
+      ['dark', msg('settings.theme.dark')],
+      ['auto', msg('settings.theme.auto')],
     ],
   },
   {
     key: 'text',
-    title: '文字の大きさ',
+    title: msg('settings.text'),
     options: [
-      ['small', '小'],
-      ['medium', '中'],
-      ['large', '大'],
+      ['small', msg('settings.text.small')],
+      ['medium', msg('settings.text.medium')],
+      ['large', msg('settings.text.large')],
     ],
   },
   {
     key: 'width',
-    title: '本文の幅',
+    title: msg('settings.width'),
     options: [
-      ['narrow', '狭い'],
-      ['standard', '標準'],
-      ['wide', '広い'],
+      ['narrow', msg('settings.width.narrow')],
+      ['standard', msg('settings.width.standard')],
+      ['wide', msg('settings.width.wide')],
     ],
   },
   {
-    title: '最初から開く',
+    title: msg('settings.open'),
     checks: [
-      ['openProof', '証明の詳細'],
-      ['openAnswer', '確認問題の答え'],
-      ['openOther', 'ほかの分野の版'],
+      ['openProof', msg('settings.open.proof')],
+      ['openAnswer', msg('settings.open.answer')],
+      ['openOther', msg('settings.open.other')],
     ],
   },
   {
     key: 'popup',
-    title: '用語ポップアップ',
+    title: msg('settings.popup'),
     options: [
-      ['hover', '重ねたら出す'],
-      ['click', '押したときだけ出す'],
+      ['hover', msg('settings.popup.hover')],
+      ['click', msg('settings.popup.click')],
     ],
   },
 ];
@@ -87,8 +87,8 @@ export function initSettingsMenu(bookmark) {
   var btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'settings-btn';
-  btn.setAttribute('aria-label', '表示の設定');
-  btn.title = '表示の設定';
+  btn.setAttribute('aria-label', msg('settings.title'));
+  btn.title = msg('settings.title');
   btn.setAttribute('aria-expanded', 'false');
   btn.setAttribute('aria-controls', '_settings');
   btn.innerHTML = gearSvg();
@@ -97,7 +97,7 @@ export function initSettingsMenu(bookmark) {
   panel.id = '_settings';
   panel.className = 'settings';
   panel.setAttribute('role', 'dialog');
-  panel.setAttribute('aria-label', '表示の設定');
+  panel.setAttribute('aria-label', msg('settings.title'));
   panel.hidden = true;
 
   /** @type {Record<string, HTMLInputElement[]>} */
@@ -151,10 +151,10 @@ export function initSettingsMenu(bookmark) {
   actions.className = 'settings-actions';
   var reset = document.createElement('button');
   reset.type = 'button';
-  reset.textContent = '元に戻す';
+  reset.textContent = msg('settings.reset');
   var clearMarks = document.createElement('button');
   clearMarks.type = 'button';
-  clearMarks.textContent = 'しおりを消す';
+  clearMarks.textContent = msg('settings.clearmarks');
   var status = document.createElement('span');
   status.className = 'settings-status';
   status.setAttribute('aria-live', 'polite');
@@ -197,11 +197,11 @@ export function initSettingsMenu(bookmark) {
     mapResets.forEach(function (fn) {
       fn();
     });
-    say('元に戻しました');
+    say(msg('settings.reset.done'));
   });
   clearMarks.addEventListener('click', function () {
     bookmark.clear();
-    say('しおりを消しました');
+    say(msg('settings.clearmarks.done'));
   });
 
   function open() {

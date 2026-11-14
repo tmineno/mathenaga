@@ -3,6 +3,7 @@
 // リポジトリの URL を渡したビルドでは、区画の起票の URL(data-issue)と段落の原稿の行(data-l)もビルドが書く。
 
 import { all } from './dom.js';
+import { msg } from './site.js';
 
 /**
  * 章の本文(article.chapter[data-chapter])で、選んだ文章の操作メニューを始める。
@@ -41,7 +42,7 @@ function setupCopy(article) {
   var menu = document.createElement('div');
   menu.className = 'copy-menu';
   menu.setAttribute('role', 'group');
-  menu.setAttribute('aria-label', '選んだ文章の操作');
+  menu.setAttribute('aria-label', msg('copy.menu'));
   menu.hidden = true;
   /**
    * アイコンと短い文言を付けて選択メニューに足す。重ねたときの文と読み上げは tip(site.md「位置情報つきのコピー」)。
@@ -59,8 +60,8 @@ function setupCopy(article) {
     return el;
   }
   var buttons = [
-    { mode: 'plain', label: 'コピー', tip: 'そのままコピー' },
-    { mode: 'loc', label: '位置つき', tip: '位置つきでコピー(1行目に位置情報を付ける)' },
+    { mode: 'plain', label: msg('copy.plain'), tip: msg('copy.plain.tip') },
+    { mode: 'loc', label: msg('copy.loc'), tip: msg('copy.loc.tip') },
   ].map(function (b) {
     var el = document.createElement('button');
     el.type = 'button';
@@ -84,8 +85,8 @@ function setupCopy(article) {
     sep.className = 'copy-sep';
     sep.setAttribute('aria-hidden', 'true');
     menu.appendChild(sep);
-    issueLink = addLink('issue', '起票', 'この記述についてGitHub Issueに起票する');
-    sourceLink = addLink('source', '編集', 'この段落の原稿をGitHubで開いて編集する');
+    issueLink = addLink('issue', msg('copy.issue'), msg('copy.issue.tip'));
+    sourceLink = addLink('source', msg('copy.source'), msg('copy.source.tip'));
   }
   var status = document.createElement('span');
   status.className = 'copy-status';
@@ -387,10 +388,10 @@ function setupCopy(article) {
       if (b.getAttribute('data-copy') === 'loc') text = withLocation(r, text);
       writeText(text).then(
         function () {
-          done('コピーしました', true);
+          done(msg('copy.done'), true);
         },
         function () {
-          done('コピーできませんでした', false);
+          done(msg('copy.failed'), false);
         },
       );
     });

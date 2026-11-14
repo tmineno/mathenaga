@@ -16,31 +16,18 @@ import {
   otherLineGuide,
 } from '../../core/navigation.js';
 import { byFieldOrder, stationItems, walkInline } from '../../core/order.js';
-import { escapeHtml as h } from '../../core/text.js';
+import { escapeHtml as h, fill } from '../../core/text.js';
 import { lookScript } from '../shared/settings.js';
 import { birdSvg, blocks, FAVICON_SIZE, faviconPng, faviconSvg, logoSvg, parseBitmap, trim } from './logo.js';
 
 const UI = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const KATEX_DIR = path.dirname(createRequire(import.meta.url).resolve('katex'));
-const OUT_OF_SCOPE = 'この分野の目標には不要(読み飛ばし可)';
-const ISSUE_TIP = 'この駅についてGitHub Issueに起票する';
 /** 吹き出しのアイコン */
 const ISSUE_ICON =
   '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M4 4.5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H10l-5 4v-4H4a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8 9.5h8M8 12.5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
-const BOOKMARK_TIP = 'この駅をしおりに入れる';
 /** しおりのアイコン(site.md「しおり」)。入れた駅では CSS で塗りつぶす */
 const BOOKMARK_ICON =
   '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M6.5 3.5h11v17l-5.5-4.2-5.5 4.2z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>';
-/** 上端のバーのしおりのボタン。スクリプトが動くときだけ見せる(app.js) */
-const BOOKMARK_OPEN = `<button type="button" class="bm-open" aria-expanded="false" aria-controls="_bookmarks" hidden>${BOOKMARK_ICON}<span>しおり</span></button>`;
-const BLOCK_LABELS = {
-  why: 'なぜ必要か',
-  'proof-sketch': '証明の骨格',
-  examples: '例と反例',
-  'drop-assumption': '仮定を外すと',
-  pitfall: '落とし穴',
-  remark: '補足',
-};
 /**
  * 書体の読み込み(site.md「Performance / Safety」の書体)。site.yml の fonts がなければ何も読み込まない。
  * @param {string} url  Google Fonts の CSS の URL(検査済み)
@@ -194,6 +181,8 @@ class Renderer {
     /** サイト名(site.yml の name) */
     this.siteName = ctx.siteConfig.name;
     this.logoSvg = logoSvg(art.logo, { className: 'logo', label: this.siteName });
+    /** 上端のバーのしおりのボタン。スクリプトが動くときだけ見せる(app.js) */
+    this.bookmarkOpen = `<button type="button" class="bm-open" aria-expanded="false" aria-controls="_bookmarks" hidden>${BOOKMARK_ICON}<span>${h(this.m('bookmark.title'))}</span></button>`;
     /** head の中で表示の設定を html の属性に移すスクリプト(src/ui/shared/settings.js) */
     this.lookScript = lookScript(ctx.siteConfig.storagePrefix);
     /** 上端のバーのアイコン */
@@ -218,6 +207,27 @@ class Renderer {
     this.noteHosts = new Map();
     /** @type {Map<string, string>} 出力の相対パス → 版の印(generateSite が入れる) */
     this.versions = new Map();
+  }
+
+  /**
+   * 文言(差し込み済み、エスケープ前)。
+   * @param {string} key @param {Record<string, string | number>} [vars]
+   */
+  m(key, vars) {
+    return fill(this.ctx.messages[key], vars);
+  }
+
+  /**
+   * HTML に入れる文言。文言の文字はエスケープし、vars は HTML として差し込む(呼び出し側でエスケープしておく)。
+   * @param {string} key @param {Record<string, string | number>} [vars]
+   */
+  mh(key, vars) {
+    return fill(h(this.ctx.messages[key]), vars);
+  }
+
+  /** 章番号の文言(「第3章」)。 @param {number} n */
+  chapterNo(n) {
+    return this.m('chapter.number', { n });
   }
 
   /**
@@ -293,7 +303,13 @@ class Renderer {
       figure: (/** @type {any} */ t) => {
         const f = this.figs.get(t);
         return f
-          ? { label: this.ctx.figures.labels.get(t), id: f.id, images: f.images, captions: f.captions }
+          ? {
+              label: this.ctx.figures.labels.get(t),
+              no: this.m('figure.number', { number: this.ctx.figures.labels.get(t) }),
+              id: f.id,
+              images: f.images,
+              captions: f.captions,
+            }
           : undefined;
       },
       ref: (/** @type {any} */ t) => this.refHtml(t, chapter, plain),
@@ -331,7 +347,7 @@ class Renderer {
   noteMarker(t) {
     const n = this.ctx.notes.labels.get(t);
     if (n === undefined) return '';
-    return `<sup class="note-ref" id="_note-${n}"><a href="#_note-${n}-text" data-note="${n}" aria-haspopup="dialog" aria-expanded="false">注${n}</a></sup>`;
+    return `<sup class="note-ref" id="_note-${n}"><a href="#_note-${n}-text" data-note="${n}" aria-haspopup="dialog" aria-expanded="false">${this.mh('note.ref', { n })}</a></sup>`;
   }
 
   /**
@@ -364,9 +380,9 @@ class Renderer {
       const n = this.ctx.notes.labels.get(t);
       const p = this.noteParagraphs.get(t);
       const body = this.md.renderer.renderInline(t.children ?? [], this.md.options, env);
-      return `<li id="_note-${n}-text" class="note-item"${p === undefined ? '' : ` data-p="${p}"${this.linesAttr(c, this.noteHosts.get(t))}`}><span class="note-no">注${n}</span> <span class="note-body">${body}</span><a class="note-back" href="#_note-${n}" aria-label="本文へ戻る">↩</a></li>`;
+      return `<li id="_note-${n}-text" class="note-item"${p === undefined ? '' : ` data-p="${p}"${this.linesAttr(c, this.noteHosts.get(t))}`}><span class="note-no">${this.mh('note.ref', { n })}</span> <span class="note-body">${body}</span><a class="note-back" href="#_note-${n}" aria-label="${h(this.m('note.back'))}">↩</a></li>`;
     });
-    return `<aside class="notes" aria-label="注"><p class="notes-h">注</p><ol class="note-list">${items.join('')}</ol></aside>`;
+    return `<aside class="notes" aria-label="${h(this.m('note.title'))}"><p class="notes-h">${h(this.m('note.title'))}</p><ol class="note-list">${items.join('')}</ol></aside>`;
   }
 
   /**
@@ -381,7 +397,8 @@ class Renderer {
       const r = this.site.references.get(id);
       return `<li id="${h(id)}" class="ref-item" data-p="${n}"><span class="ref-no">[${n}]</span> <span class="ref-body">${r ? this.ctx.locale.bibliography(r) : h(id)}</span></li>`;
     });
-    return `<section class="refs-sec" id="_references" data-loc="参考文献"${this.sectionIssue(c, '参考文献', '_references')}><h2 class="sec-h" data-p="0">参考文献</h2><ol class="refs">${items.join('')}</ol></section>`;
+    const title = this.m('section.references');
+    return `<section class="refs-sec" id="_references" data-loc="${h(title)}"${this.sectionIssue(c, title, '_references')}><h2 class="sec-h" data-p="0">${h(title)}</h2><ol class="refs">${items.join('')}</ol></section>`;
   }
 
   /** トークンの範囲 [start, end] を描画する。 @param {any} chapter @param {number} start @param {number} end @param {boolean} [plain] */
@@ -402,7 +419,7 @@ class Renderer {
   blockHtml(chapter, b, proofs = []) {
     const body = this.inner(chapter, b);
     if (b.name === 'definition') {
-      return `<div class="box def" id="${h(b.id)}"><p class="tag">定義 ${this.ctx.statements.labels.get(b)} · ${h(b.attrs.name)}<span class="tag-en">${h(b.attrs.en)}</span></p><div class="flow">${body}</div></div>`;
+      return `<div class="box def" id="${h(b.id)}"><p class="tag">${h(this.m('statement.definition', { number: this.ctx.statements.labels.get(b) }))} · ${h(b.attrs.name)}<span class="tag-en">${h(b.attrs.en)}</span></p><div class="flow">${body}</div></div>`;
     }
     if (b.name === 'theorem') {
       // 証明の骨格と証明の詳細は、定理の枠の中に入れる(site.md「駅の表示」)
@@ -410,10 +427,10 @@ class Renderer {
         .map((p) =>
           p.name === 'proof'
             ? this.blockHtml(chapter, p)
-            : `<div class="thm-part proof-sketch"><p class="tag">${BLOCK_LABELS['proof-sketch']}</p><div class="flow">${this.inner(chapter, p)}</div></div>`,
+            : `<div class="thm-part proof-sketch"><p class="tag">${h(this.m('block.proof-sketch'))}</p><div class="flow">${this.inner(chapter, p)}</div></div>`,
         )
         .join('');
-      return `<div class="box thm" id="${h(b.id)}"><p class="tag">定理 ${this.ctx.statements.labels.get(b)} · ${h(b.attrs.name)}</p><div class="flow">${body}</div>${inside}</div>`;
+      return `<div class="box thm" id="${h(b.id)}"><p class="tag">${h(this.m('statement.theorem', { number: this.ctx.statements.labels.get(b) }))} · ${h(b.attrs.name)}</p><div class="flow">${body}</div>${inside}</div>`;
     }
     if (b.name === 'summary') {
       // 一言でいうと:札も枠もなく、駅の最初の地の文として出す(site.md「駅の表示」)
@@ -421,9 +438,9 @@ class Renderer {
     }
     if (b.name === 'proof') {
       // 見出しは、定理の札と同じ大きさの札にする(site.md「駅の表示」)
-      return `<details class="fold proof"><summary><span class="tag">証明の詳細</span></summary><div class="fold-body flow">${body}</div></details>`;
+      return `<details class="fold proof"><summary><span class="tag">${h(this.m('block.proof'))}</span></summary><div class="fold-body flow">${body}</div></details>`;
     }
-    return `<div class="box ${b.name}"><p class="tag">${BLOCK_LABELS[b.name]}</p><div class="flow">${body}</div></div>`;
+    return `<div class="box ${b.name}"><p class="tag">${h(this.m(`block.${b.name}`))}</p><div class="flow">${body}</div></div>`;
   }
 
   /** @param {string} fieldId */
@@ -444,16 +461,20 @@ class Renderer {
     ];
     for (const b of byFieldOrder(blocks, this.site.fieldOrder)) {
       if (!b.field) {
-        const tag = kind === 'motivation' ? '' : `<p class="tag tag-${kind}">${label}</p>`;
+        const tag = kind === 'motivation' ? '' : `<p class="tag tag-${kind}">${h(label)}</p>`;
         out.push(`<div class="v common">${tag}<div class="flow">${this.inner(chapter, b)}</div></div>`);
       } else {
         const field = h(this.fieldTitle(b.field));
         const title =
           kind === 'application'
-            ? `応用 ${h(this.ctx.applications.labels.get(b) ?? '')}(${field}) · ${h(b.attrs.title ?? '')}`
+            ? this.mh('application.title', {
+                number: h(this.ctx.applications.labels.get(b) ?? ''),
+                field,
+                title: h(b.attrs.title ?? ''),
+              })
             : kind === 'motivation'
-              ? `${field}では`
-              : `${label}(${field})`;
+              ? this.mh('version.motivation', { field })
+              : this.mh('version.field', { label: h(label), field });
         out.push(
           `<details class="v"${b.id ? ` id="${h(b.id)}"` : ''} data-field="${h(b.field)}"><summary>${title}</summary><div class="v-body flow">${this.inner(chapter, b)}</div></details>`,
         );
@@ -496,10 +517,14 @@ class Renderer {
     const legend = layout.linesShown.map(
       (l) => `<li><span class="sw l-${l.id}${l.style === 'dotted' ? ' dotted' : ''}"></span>${h(l.name)}</li>`,
     );
-    if (layout.stations.some((s) => s.final)) legend.push('<li><span class="mk final"></span>最終目標</li>');
-    if (layout.stations.some((s) => s.partial)) legend.push('<li><span class="mk pill"></span>途中の目標</li>');
-    if (layout.arrows.length > 0) legend.push('<li><span class="mk arrow"></span>前提の矢印</li>');
-    if (layout.cards.some((c) => c.planned)) legend.push('<li><span class="mk planned"></span>未執筆</li>');
+    if (layout.stations.some((s) => s.final))
+      legend.push(`<li><span class="mk final"></span>${h(this.m('goal.final'))}</li>`);
+    if (layout.stations.some((s) => s.partial))
+      legend.push(`<li><span class="mk pill"></span>${h(this.m('goal.partial'))}</li>`);
+    if (layout.arrows.length > 0)
+      legend.push(`<li><span class="mk arrow"></span>${h(this.m('map.legend.arrow'))}</li>`);
+    if (layout.cards.some((c) => c.planned))
+      legend.push(`<li><span class="mk planned"></span>${h(this.m('map.legend.planned'))}</li>`);
     return { html: `<ul class="legend">${legend.join('')}</ul><div class="map-scroll">${svg}</div>`, layout };
   }
 
@@ -536,7 +561,7 @@ ${fontLinks(this.ctx.siteConfig.fonts)}
 <main class="wrap" id="_main">
 ${p.main}
 </main>
-<div id="_pop" class="pop" role="dialog" aria-label="用語の定義" tabindex="-1" hidden></div>
+<div id="_pop" class="pop" role="dialog" aria-label="${h(this.m('popup.definition.title'))}" tabindex="-1" hidden></div>
 </body>
 </html>
 `;
@@ -552,7 +577,7 @@ ${p.main}
   topPage() {
     const all = new Set(this.site.stations.map((s) => s.id));
     const map = this.mapBlock(all, {
-      title: '全体の路線図',
+      title: this.m('map.title.all'),
       idPrefix: '_map-all',
       planned: true,
       hrefFor: (s) => `${this.chapterUrl(s.chapter.id)}#${s.id}`,
@@ -565,12 +590,12 @@ ${p.main}
       )
       .join('');
     const main = `<section class="intro"><h1 class="logo-h">${this.logoSvg}</h1></section>
-<section class="sec"><h2 class="sec-h">路線図</h2><div class="map-v">${map.html}</div></section>
-<section class="sec"><h2 class="sec-h">分野</h2><ul class="field-list">${fields}</ul></section>`;
+<section class="sec"><h2 class="sec-h">${h(this.m('section.map'))}</h2><div class="map-v">${map.html}</div></section>
+<section class="sec"><h2 class="sec-h">${h(this.m('section.fields'))}</h2><ul class="field-list">${fields}</ul></section>`;
     return this.page({
       title: this.siteName,
       bodyClass: 'page-top',
-      bar: `${this.barStart('')}${BOOKMARK_OPEN}`,
+      bar: `${this.barStart('')}${this.bookmarkOpen}`,
       main,
     });
   }
@@ -585,13 +610,15 @@ ${p.main}
         const st = this.site.stationById.get(g.station);
         if (!st) return '';
         const kind =
-          g.kind === 'final' ? '<span class="gk final">最終目標</span>' : '<span class="gk partial">途中の目標</span>';
+          g.kind === 'final'
+            ? `<span class="gk final">${h(this.m('goal.final'))}</span>`
+            : `<span class="gk partial">${h(this.m('goal.partial'))}</span>`;
         return `<li>${kind}${this.badge(st)}<span>${h(st.name)}</span><span class="note">${h(g.label)}</span></li>`;
       })
       .join('');
     const map = this.mapBlock(scope, {
       goals: f.goals,
-      title: `${f.title}の路線図`,
+      title: this.m('map.title.field', { field: f.title }),
       idPrefix: `_map-${f.id}`,
       hrefFor: (s) => `${this.chapterUrl(s.chapter.id, f.id)}#${s.id}`,
       chapterHref: (id) => this.chapterUrl(id, f.id),
@@ -603,18 +630,20 @@ ${p.main}
         const contiguous =
           inScope.length > 1 &&
           list.indexOf(inScope[inScope.length - 1]) - list.indexOf(inScope[0]) === inScope.length - 1;
-        const codes = contiguous ? this.codeRange(inScope) : inScope.map((s) => this.badge(s)).join('、');
-        return `<tr><td><a href="${this.chapterUrl(c.id, f.id)}">第${c.number}章 ${h(c.title)}</a></td><td>${codes}</td></tr>`;
+        const codes = contiguous
+          ? this.codeRange(inScope)
+          : inScope.map((s) => this.badge(s)).join(h(this.m('list.separator')));
+        return `<tr><td><a href="${this.chapterUrl(c.id, f.id)}">${h(this.chapterNo(c.number))} ${h(c.title)}</a></td><td>${codes}</td></tr>`;
       })
       .join('');
-    const main = `<section class="intro"><p class="eyebrow">分野の入口</p><h1>${h(f.title)}</h1><p class="lede">${h(f.description)}</p></section>
-<section class="sec"><h2 class="sec-h">この分野の目標</h2><ul class="goal-list">${goals}</ul></section>
-<section class="sec"><h2 class="sec-h">路線図</h2><div class="map-v">${map.html}</div></section>
-<section class="sec"><h2 class="sec-h">通る章</h2><div class="tbl-scroll"><table class="chap"><thead><tr><th>章</th><th>この分野で通る駅</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
+    const main = `<section class="intro"><p class="eyebrow">${h(this.m('field.eyebrow'))}</p><h1>${h(f.title)}</h1><p class="lede">${h(f.description)}</p></section>
+<section class="sec"><h2 class="sec-h">${h(this.m('field.goals'))}</h2><ul class="goal-list">${goals}</ul></section>
+<section class="sec"><h2 class="sec-h">${h(this.m('section.map'))}</h2><div class="map-v">${map.html}</div></section>
+<section class="sec"><h2 class="sec-h">${h(this.m('field.chapters'))}</h2><div class="tbl-scroll"><table class="chap"><thead><tr><th>${h(this.m('field.chapters.chapter'))}</th><th>${h(this.m('field.chapters.stations'))}</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
     return this.page({
       title: `${f.title} | ${this.siteName}`,
       bodyClass: 'page-field',
-      bar: `${this.barStart('分野の入口')}${BOOKMARK_OPEN}`,
+      bar: `${this.barStart(this.m('field.eyebrow'))}${this.bookmarkOpen}`,
       main,
     });
   }
@@ -633,7 +662,7 @@ ${p.main}
 
     // 上端のバー
     const switchButtons = [
-      `<button type="button" data-set-field="" aria-pressed="true">指定なし</button>`,
+      `<button type="button" data-set-field="" aria-pressed="true">${h(this.m('field.none'))}</button>`,
       ...fields.map(
         (f) => `<button type="button" data-set-field="${h(f.id)}" aria-pressed="false">${h(f.title)}</button>`,
       ),
@@ -644,45 +673,51 @@ ${p.main}
           `<a href="#${h(s.id)}" class="l-${s.lineId}" data-st="${h(s.id)}" data-out="${outFields(s.id).join(' ')}">${h(s.code)}</a>`,
       )
       .join('');
-    const bar = `${this.barStart(`第${c.number}章 ${c.title}`)}<div class="switch" role="group" aria-label="分野">${switchButtons}</div>${BOOKMARK_OPEN}<nav class="mini" aria-label="この章の駅">${mini}</nav>`;
+    const bar = `${this.barStart(`${this.chapterNo(c.number)} ${c.title}`)}<div class="switch" role="group" aria-label="${h(this.m('field.label'))}">${switchButtons}</div>${this.bookmarkOpen}<nav class="mini" aria-label="${h(this.m('chapter.stations'))}">${mini}</nav>`;
 
     // 見出しと現在地
     const range = this.codeRange(stations);
     const here =
       stations.length === 1
         ? `${lineName} ${range}`
-        : `${lineName} ${this.badge(stations[0])} から ${this.badge(stations[stations.length - 1])} まで`;
+        : this.mh('here.range', {
+            line: lineName,
+            from: this.badge(stations[0]),
+            to: this.badge(stations[stations.length - 1]),
+          });
     const prereq = prerequisiteChapters(site, c);
     const prereqHtml = prereq.length
-      ? prereq.map((p) => `<a href="${this.chapterUrl(p.id)}">第${p.number}章 ${h(p.title)}</a>`).join('、')
-      : 'なし';
+      ? prereq
+          .map((p) => `<a href="${this.chapterUrl(p.id)}">${h(this.chapterNo(p.number))} ${h(p.title)}</a>`)
+          .join(h(this.m('list.separator')))
+      : h(this.m('here.none'));
     const fieldRow = [
       ...fields.map(
         (f) =>
-          `<span data-for="${h(f.id)}" hidden>${h(f.title)}(<a href="${this.base}fields/${f.id}/">入口へ</a>)</span>`,
+          `<span data-for="${h(f.id)}" hidden>${this.mh('here.fieldentry', { field: h(f.title), link: `<a href="${this.base}fields/${f.id}/">${h(this.m('here.enter'))}</a>` })}</span>`,
       ),
-      '<span data-for="">指定なし</span>',
+      `<span data-for="">${h(this.m('field.none'))}</span>`,
     ].join('');
     const nextRow = [
       ...fields.map((f) => `<span data-for="${h(f.id)}" hidden>${this.nextText(c, f)}</span>`),
       `<span data-for="">${this.nextText(c, null)}</span>`,
     ].join('');
     const head = `<header class="ch-head">
-<p class="eyebrow">第${c.number}章 · ${lineName} ${range}</p>
+<p class="eyebrow">${h(this.chapterNo(c.number))} · ${lineName} ${range}</p>
 <h1 class="ch-title">${h(c.title)}</h1>
 ${c.subtitle ? `<p class="ch-sub">${h(c.subtitle)}</p>` : ''}
 <dl class="here">
-<div><dt>現在地</dt><dd class="here-where">${here}</dd></div>
-<div><dt>前提</dt><dd class="here-prereq">${prereqHtml}</dd></div>
-<div><dt>分野</dt><dd class="here-field">${fieldRow}</dd></div>
-<div><dt>次の章</dt><dd class="here-next">${nextRow}</dd></div>
+<div><dt>${h(this.m('here.where'))}</dt><dd class="here-where">${here}</dd></div>
+<div><dt>${h(this.m('here.prereq'))}</dt><dd class="here-prereq">${prereqHtml}</dd></div>
+<div><dt>${h(this.m('field.label'))}</dt><dd class="here-field">${fieldRow}</dd></div>
+<div><dt>${h(this.m('here.next'))}</dt><dd class="here-next">${nextRow}</dd></div>
 </dl>
 </header>`;
 
     const chooser = `<div class="chooser" data-for="">
-<p class="chooser-t">分野を選ぶと、ゴール・路線図・次の章・分野での応用がその分野向けになります。</p>
+<p class="chooser-t">${h(this.m('chooser.text'))}</p>
 <div class="chooser-b">${fields.map((f) => `<button type="button" class="pick" data-set-field="${h(f.id)}">${h(f.title)}</button>`).join('')}</div>
-<p class="note">分野の入口:${fields.map((f) => `<a href="${this.base}fields/${f.id}/">${h(f.title)}</a>`).join(' · ')}</p>
+<p class="note">${this.mh('chooser.entries', { links: fields.map((f) => `<a href="${this.base}fields/${f.id}/">${h(f.title)}</a>`).join(' · ') })}</p>
 </div>`;
 
     // 路線図
@@ -690,46 +725,49 @@ ${c.subtitle ? `<p class="ch-sub">${h(c.subtitle)}</p>` : ''}
       const m = this.mapBlock(site.scope.get(f.id) ?? new Set(), {
         goals: f.goals,
         highlight: c.id,
-        title: `${f.title}の路線図`,
+        title: this.m('map.title.field', { field: f.title }),
         idPrefix: `_map-${f.id}`,
         hrefFor: (s) => (s.chapter === c ? `#${s.id}` : `${this.chapterUrl(s.chapter.id, f.id)}#${s.id}`),
         chapterHref: (id) => (id === c.id ? '#' : this.chapterUrl(id, f.id)),
       });
       const note = m.layout.cards.some((c) => c.current)
         ? ''
-        : `<p class="note">この章は${h(f.title)}の路線図に載っていません。</p>`;
+        : `<p class="note">${this.mh('chapter.notinmap', { field: h(f.title) })}</p>`;
       return `<div class="map-v" data-for="${h(f.id)}" hidden>${m.html}${note}</div>`;
     });
     const all = this.mapBlock(new Set(site.stations.map((s) => s.id)), {
       highlight: c.id,
-      title: '全体の路線図',
+      title: this.m('map.title.all'),
       idPrefix: '_map-all',
       planned: true,
       hrefFor: (s) => (s.chapter === c ? `#${s.id}` : `${this.chapterUrl(s.chapter.id)}#${s.id}`),
       chapterHref: (id) => (id === c.id ? '#' : this.chapterUrl(id)),
     });
     maps.push(`<div class="map-v" data-for="">${all.html}</div>`);
-    const mapSec = `<section class="mapsec" aria-labelledby="_map-h"><h2 id="_map-h" class="sec-h">路線図</h2>${maps.join('')}</section>`;
+    const mapSec = `<section class="mapsec" aria-labelledby="_map-h"><h2 id="_map-h" class="sec-h">${h(this.m('section.map'))}</h2>${maps.join('')}</section>`;
 
     // 出発点
     const prose = c.head.prose.map((r) => this.range(c, r.start, r.end)).join('');
     const startNotes = this.notesList(c, [...c.head.motivations, ...c.head.prose]);
-    const motivation = `<section class="start flow" id="_start" data-loc="出発点"${this.sectionIssue(c, '出発点', '_start')}><h2 class="sec-h" data-p="0">出発点</h2>${this.versionGroup(c, c.head.motivations, 'motivation', '出発点')}${prose}${startNotes}</section>`;
+    const startName = this.m('section.start');
+    const motivation = `<section class="start flow" id="_start" data-loc="${h(startName)}"${this.sectionIssue(c, startName, '_start')}><h2 class="sec-h" data-p="0">${h(startName)}</h2>${this.versionGroup(c, c.head.motivations, 'motivation', startName)}${prose}${startNotes}</section>`;
 
     // 駅
     const stationHtml = stations.map((st) => this.stationSection(c, st)).join('\n');
 
     // 章末
+    const reviewName = this.m('section.review');
+    const quizName = this.m('section.quiz');
     const review = c.end.reviews[0]
-      ? `<section class="review" id="_review" data-loc="ふりかえり"${this.sectionIssue(c, 'ふりかえり', '_review')}><h2 class="sec-h" data-p="0">ふりかえり</h2><div class="box review"><div class="flow">${this.inner(c, c.end.reviews[0])}</div></div>${this.notesList(c, c.end.reviews)}</section>`
+      ? `<section class="review" id="_review" data-loc="${h(reviewName)}"${this.sectionIssue(c, reviewName, '_review')}><h2 class="sec-h" data-p="0">${h(reviewName)}</h2><div class="box review"><div class="flow">${this.inner(c, c.end.reviews[0])}</div></div>${this.notesList(c, c.end.reviews)}</section>`
       : '';
     const questions = c.end.questions.length
-      ? `<section class="quiz" id="_quiz" data-loc="確認問題"${this.sectionIssue(c, '確認問題', '_quiz')}><h2 class="sec-h" data-p="0">確認問題</h2><ol class="qs">${c.end.questions
+      ? `<section class="quiz" id="_quiz" data-loc="${h(quizName)}"${this.sectionIssue(c, quizName, '_quiz')}><h2 class="sec-h" data-p="0">${h(quizName)}</h2><ol class="qs">${c.end.questions
           .map(
             (q) =>
               `<li><div class="q flow">${this.inner(c, q.question)}</div>${
                 q.answer
-                  ? `<details class="fold answer"><summary>答え</summary><div class="fold-body flow">${this.inner(c, q.answer)}</div></details>`
+                  ? `<details class="fold answer"><summary>${h(this.m('quiz.answer'))}</summary><div class="fold-body flow">${this.inner(c, q.answer)}</div></details>`
                   : ''
               }</li>`,
           )
@@ -742,7 +780,7 @@ ${c.subtitle ? `<p class="ch-sub">${h(c.subtitle)}</p>` : ''}
       ...fields.map((f) => `<ul class="next" data-for="${h(f.id)}" hidden>${this.aheadItems(c, f)}</ul>`),
       `<ul class="next" data-for="">${this.aheadItems(c, null)}</ul>`,
     ].join('');
-    const aheadSec = `<section class="ahead" id="_ahead"><h2 class="sec-h">この先</h2>${ahead}</section>`;
+    const aheadSec = `<section class="ahead" id="_ahead"><h2 class="sec-h">${h(this.m('section.ahead'))}</h2>${ahead}</section>`;
 
     const source = this.repoUrl
       ? ` data-source="${h(`${this.repoUrl}/blob/${this.ctx.siteConfig.repoBranch}/content/${c.file}`)}"`
@@ -750,7 +788,7 @@ ${c.subtitle ? `<p class="ch-sub">${h(c.subtitle)}</p>` : ''}
     const main = `<article class="chapter" data-chapter="${c.number}" data-id="${h(c.id)}"${source}>
 ${head}
 ${chooser}
-${this.versionGroup(c, c.head.goals, 'goal', 'この章のゴール', 'この章のゴール', this.notesList(c, c.head.goals))}
+${this.versionGroup(c, c.head.goals, 'goal', this.m('section.goal'), this.m('section.goal'), this.notesList(c, c.head.goals))}
 ${mapSec}
 ${motivation}
 ${stationHtml}
@@ -759,7 +797,12 @@ ${questions}
 ${this.referencesSection(c)}
 ${aheadSec}
 </article>`;
-    return this.page({ title: `第${c.number}章 ${c.title} | ${this.siteName}`, bodyClass: 'page-chapter', bar, main });
+    return this.page({
+      title: `${this.chapterNo(c.number)} ${c.title} | ${this.siteName}`,
+      bodyClass: 'page-chapter',
+      bar,
+      main,
+    });
   }
 
   /** @param {any} c @param {import('../../core/graph.js').StationInfo} st */
@@ -779,7 +822,7 @@ ${aheadSec}
           .filter((g) => g.station === st.id)
           .map(
             (g) =>
-              `<p class="goal-note" data-goal-for="${h(f.id)}"><span class="gk ${g.kind}">${g.kind === 'final' ? '最終目標' : '途中の目標'}</span>${h(f.title)}:${h(g.label)}</p>`,
+              `<p class="goal-note" data-goal-for="${h(f.id)}"><span class="gk ${g.kind}">${h(this.m(g.kind === 'final' ? 'goal.final' : 'goal.partial'))}</span>${h(f.title)}:${h(g.label)}</p>`,
           ),
       )
       .join('');
@@ -803,9 +846,9 @@ ${aheadSec}
       else items.push(this.blockHtml(c, item.block));
     }
     flush();
-    const appHtml = apps.length ? this.versionGroup(c, apps, 'application', '分野での応用') : '';
+    const appHtml = apps.length ? this.versionGroup(c, apps, 'application', this.m('version.application')) : '';
     return `<section class="station flow" id="${h(st.id)}" data-station="${h(st.id)}" data-loc="${h(st.code)}"${this.repoUrl ? ` data-issue="${h(this.stationIssueHref(c, st))}"` : ''} data-out="${out.join(' ')}">
-<h2 data-p="0"${this.linesAttr(c, c.tokens[st.model.headingStart])}>${this.badge(st)}<span class="st-name">${heading}</span>${shared ? `<span class="en">${h(shared.en)}</span>` : ''}<span class="out-label" hidden>${OUT_OF_SCOPE}</span></h2>
+<h2 data-p="0"${this.linesAttr(c, c.tokens[st.model.headingStart])}>${this.badge(st)}<span class="st-name">${heading}</span>${shared ? `<span class="en">${h(shared.en)}</span>` : ''}<span class="out-label" hidden>${h(this.m('station.outofscope'))}</span></h2>
 ${notes}${items.join('')}${appHtml}${this.notesList(
       c,
       st.model.items.map((/** @type {any} */ it) => (it.kind === 'block' ? it.block : it)),
@@ -819,7 +862,8 @@ ${notes}${items.join('')}${appHtml}${this.notesList(
    * @param {any} c @param {import('../../core/graph.js').StationInfo} st
    */
   stationTools(c, st) {
-    const bookmark = `<button type="button" class="bm" data-bm="${h(st.id)}" aria-pressed="false" aria-label="${BOOKMARK_TIP}" data-tip="${BOOKMARK_TIP}" hidden>${BOOKMARK_ICON}</button>`;
+    const tip = h(this.m('bookmark.add'));
+    const bookmark = `<button type="button" class="bm" data-bm="${h(st.id)}" aria-pressed="false" aria-label="${tip}" data-tip="${tip}" hidden>${BOOKMARK_ICON}</button>`;
     return `<div class="st-tools">${bookmark}${this.issueLink(c, st)}</div>`;
   }
 
@@ -831,7 +875,7 @@ ${notes}${items.join('')}${appHtml}${this.notesList(
   issueLink(c, st) {
     if (!this.repoUrl) return '';
     const page = `${this.chapterUrl(c.id)}#${st.id}`;
-    return `<a class="issue" href="${h(this.stationIssueHref(c, st))}" target="_blank" rel="noopener" aria-label="${ISSUE_TIP}" data-tip="${ISSUE_TIP}" data-page="${h(page)}">${ISSUE_ICON}</a>`;
+    return `<a class="issue" href="${h(this.stationIssueHref(c, st))}" target="_blank" rel="noopener" aria-label="${h(this.m('station.issue'))}" data-tip="${h(this.m('station.issue'))}" data-page="${h(page)}">${ISSUE_ICON}</a>`;
   }
 
   /**
@@ -841,7 +885,7 @@ ${notes}${items.join('')}${appHtml}${this.notesList(
   issueHref(title, station, page) {
     const params = [
       ['template', 'station.yml'],
-      ['title', `[改善案] ${title}`],
+      ['title', this.m('issue.title', { title })],
       ['station', station],
       ['page', page],
     ]
@@ -853,8 +897,8 @@ ${notes}${items.join('')}${appHtml}${this.notesList(
   /** 駅の起票の URL。 @param {any} c @param {import('../../core/graph.js').StationInfo} st */
   stationIssueHref(c, st) {
     return this.issueHref(
-      `第${c.number}章 ${st.code} ${st.name}`,
-      `第${c.number}章 ${c.title} / ${st.code} ${st.name}(${st.id})`,
+      `${this.chapterNo(c.number)} ${st.code} ${st.name}`,
+      `${this.chapterNo(c.number)} ${c.title} / ${st.code} ${st.name}(${st.id})`,
       `${this.chapterUrl(c.id)}#${st.id}`,
     );
   }
@@ -867,7 +911,7 @@ ${notes}${items.join('')}${appHtml}${this.notesList(
   sectionIssue(c, name, anchor) {
     if (!this.repoUrl) return '';
     const page = `${this.chapterUrl(c.id)}${anchor ? `#${anchor}` : ''}`;
-    return ` data-issue="${h(this.issueHref(`第${c.number}章 ${name}`, `第${c.number}章 ${c.title} / ${name}`, page))}"`;
+    return ` data-issue="${h(this.issueHref(`${this.chapterNo(c.number)} ${name}`, `${this.chapterNo(c.number)} ${c.title} / ${name}`, page))}"`;
   }
 
   /**
@@ -903,14 +947,18 @@ ${notes}${items.join('')}${appHtml}${this.notesList(
   nextText(c, f) {
     const next = nextChapter(this.site, c, f ? f.id : null);
     let text;
-    if (next) text = `<a href="${this.chapterUrl(next.id, f ? f.id : null)}">第${next.number}章 ${h(next.title)}</a>`;
+    if (next)
+      text = `<a href="${this.chapterUrl(next.id, f ? f.id : null)}">${h(this.chapterNo(next.number))} ${h(next.title)}</a>`;
     else {
       const finals = f
         ? chapterStations(this.site, c).filter((s) => f.goals.some((g) => g.kind === 'final' && g.station === s.id))
         : [];
-      text = finals.length ? `なし(この章の ${finals.map((s) => this.badge(s)).join('、')} が最終目標)` : 'なし';
+      text = finals.length
+        ? this.mh('next.final', { stations: finals.map((s) => this.badge(s)).join(h(this.m('list.separator'))) })
+        : h(this.m('here.none'));
     }
-    if (f && !chapterInField(this.site, c, f.id)) text += ` <span class="note">この章は${h(f.title)}の範囲外</span>`;
+    if (f && !chapterInField(this.site, c, f.id))
+      text += ` <span class="note">${this.mh('next.outofscope', { field: h(f.title) })}</span>`;
     return text;
   }
 
@@ -919,42 +967,52 @@ ${notes}${items.join('')}${appHtml}${this.notesList(
     const site = this.site;
     if (!f) {
       const next = nextChapter(site, c, null);
-      const text = next ? `<a href="${this.chapterUrl(next.id)}">第${next.number}章 ${h(next.title)}</a>` : 'なし';
-      return `<li><b>次の章</b>${text}</li><li>分野を選ぶと、その分野の目標までの道順が表示されます。</li>`;
+      const text = next
+        ? `<a href="${this.chapterUrl(next.id)}">${h(this.chapterNo(next.number))} ${h(next.title)}</a>`
+        : h(this.m('here.none'));
+      return `<li><b>${h(this.m('here.next'))}</b>${text}</li><li>${h(this.m('ahead.choose'))}</li>`;
     }
     const items = [];
     for (const st of chapterStations(site, c)) {
       for (const g of f.goals.filter((x) => x.station === st.id)) {
         items.push(
           g.kind === 'final'
-            ? `<li><b>最終目標</b>${h(f.title)}の目標「${h(g.label)}」には、この章の ${this.badge(st)} で到達します。</li>`
-            : `<li><b>途中の目標</b>${h(g.label)}。この章の ${this.badge(st)} で読み終えて構いません。</li>`,
+            ? `<li><b>${h(this.m('goal.final'))}</b>${this.mh('ahead.final', { field: h(f.title), label: h(g.label), station: this.badge(st) })}</li>`
+            : `<li><b>${h(this.m('goal.partial'))}</b>${this.mh('ahead.partial', { label: h(g.label), station: this.badge(st) })}</li>`,
         );
       }
     }
     const next = nextChapter(site, c, f.id);
     if (next) {
       items.push(
-        `<li><b>${h(site.lineById.get(next.lineId)?.name ?? '')}を進む</b><a href="${this.chapterUrl(next.id, f.id)}">第${next.number}章 ${h(next.title)}</a></li>`,
+        `<li><b>${this.mh('ahead.line', { line: h(site.lineById.get(next.lineId)?.name ?? '') })}</b><a href="${this.chapterUrl(next.id, f.id)}">${h(this.chapterNo(next.number))} ${h(next.title)}</a></li>`,
       );
     } else {
       const further = nextChapter(site, c, null);
       if (further) {
         items.push(
-          `<li><b>さらに進む場合</b><a href="${this.chapterUrl(further.id, f.id)}">第${further.number}章 ${h(further.title)}</a>(${h(f.title)}の範囲外)</li>`,
+          `<li><b>${h(this.m('ahead.further'))}</b><a href="${this.chapterUrl(further.id, f.id)}">${h(this.chapterNo(further.number))} ${h(further.title)}</a>${this.mh('ahead.furtherout', { field: h(f.title) })}</li>`,
         );
       }
     }
     for (const t of otherLineGuide(site, c, f.id)) {
-      const first = `<a href="${this.chapterUrl(t.first.chapter.id, f.id)}">第${t.first.chapter.number}章 ${h(t.first.chapter.title)}</a>`;
+      const first = `<a href="${this.chapterUrl(t.first.chapter.id, f.id)}">${h(this.chapterNo(t.first.chapter.number))} ${h(t.first.chapter.title)}</a>`;
       // 分岐駅が2つ以上あれば(合流する支線)、読む順に「・」でつなぐ(site.md「この先」)
       const stations = t.branches.map(({ station: b, here }) =>
         here
-          ? `この章の ${this.badge(b)} ${h(b.name)}`
-          : `${this.badge(b)} ${h(b.name)}(<a href="${this.chapterUrl(b.chapter.id, f.id)}#${h(b.id)}">第${b.chapter.number}章</a>)`,
+          ? this.mh('ahead.branch.here', { station: this.badge(b), name: h(b.name) })
+          : this.mh('ahead.branch.there', {
+              station: this.badge(b),
+              name: h(b.name),
+              link: `<a href="${this.chapterUrl(b.chapter.id, f.id)}#${h(b.id)}">${h(this.chapterNo(b.chapter.number))}</a>`,
+            }),
       );
-      const from = `${stations.join('・')}${t.branches[t.branches.length - 1].here ? ' から' : 'から'}`;
-      items.push(`<li><b>${h(t.line.name)}へ進む</b>${from}、${first}へ</li>`);
+      const from = this.mh(t.branches[t.branches.length - 1].here ? 'ahead.branch.fromhere' : 'ahead.branch.from', {
+        stations: stations.join(h(this.m('list.join'))),
+      });
+      items.push(
+        `<li><b>${this.mh('ahead.branch.line', { line: h(t.line.name) })}</b>${this.mh('ahead.branch.to', { from, first })}</li>`,
+      );
     }
     return items.join('');
   }
