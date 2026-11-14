@@ -136,7 +136,7 @@ test('1: 論文は CrossRef と一致し、記録ができる', async () => {
 test('2: 存在しない DOI は「見つからない」で、記録ができない', async () => {
   const r = await run(LECUN.replace('nature14539', 'nature99999999'));
   assert.equal(r.code, 1);
-  assert.match(r.lines.join('\n'), /見つからない/);
+  assert.match(r.lines.join('\n'), /not found/);
   assert.equal(r.text, null);
 });
 
@@ -145,7 +145,7 @@ test('3: 本に書評の DOI を付けると、種類が一致しない', async 
   const r = await run(yml);
   assert.equal(r.code, 1);
   const out = r.lines.join('\n');
-  assert.match(out, /種類が一致しない/);
+  assert.match(out, /type does not match/);
   assert.match(out, /journal-article/);
   assert.equal(r.text, null);
 });
@@ -154,7 +154,7 @@ test('4: 無関係な記録に当たる ISBN は書名が一致しない(NDL サ
   const yml = KREYSZIG.replace('978-0-471-50731-4', '978-0-00-000000-2');
   const r = await run(yml);
   assert.equal(r.code, 1);
-  assert.match(r.lines.join('\n'), /書名が一致しない.*Radikalisasi Pancasila/);
+  assert.match(r.lines.join('\n'), /title does not match.*Radikalisasi Pancasila/);
   assert.deepEqual(r.calls, [`${NDL}9780000000002`]);
 });
 
@@ -165,7 +165,7 @@ test('4: NDL サーチに記録がなければ OpenLibrary の無関係な記録
   assert.equal(r.code, 1);
   const out = r.lines.join('\n');
   assert.match(out, /openlibrary/);
-  assert.match(out, /書名が一致しない.*Kitab Jurumiyyah/);
+  assert.match(out, /title does not match.*Kitab Jurumiyyah/);
   assert.equal(r.text, null);
 });
 
@@ -173,7 +173,7 @@ test('5: dcndl:ErrorISBN の一致だけなら NDL サーチの記録を使わ�
   const yml = KREYSZIG.replace('978-0-471-50731-4', '978-4-00-000000-0');
   const r = await run(yml);
   assert.equal(r.code, 1);
-  assert.match(r.lines.join('\n'), /見つからない/);
+  assert.match(r.lines.join('\n'), /not found/);
   // NDL サーチの記録(誤記として登録された ISBN の本)は照合に使わず、OpenLibrary に回る
   assert.deepEqual(r.calls, [`${NDL}9784000000000`, 'https://openlibrary.org/isbn/9784000000000.json']);
   assert.equal(r.text, null);
@@ -197,7 +197,7 @@ test('6: 和書は NDL サーチの記録と一致し、source が ndl になる
 test('7: 年を1つ変えると、年が一致しない', async () => {
   const r = await run(matsu(2019));
   assert.equal(r.code, 1);
-  assert.match(r.lines.join('\n'), /年が一致しない.*2019.*2018/);
+  assert.match(r.lines.join('\n'), /year does not match.*2019.*2018/);
   assert.equal(r.text, null);
 });
 
@@ -225,12 +225,12 @@ test('11: 多巻本は巻 II が記録の巻 2 と一致し、巻を記録に残
 
   const wrong = await run(sugiura('I'));
   assert.equal(wrong.code, 1);
-  assert.match(wrong.lines.join('\n'), /巻が一致しない。項目「I」、記録「2」/);
+  assert.match(wrong.lines.join('\n'), /volume does not match; entry "I", record "2"/);
   assert.equal(wrong.text, null);
 
   const none = await run(sugiura());
   assert.equal(none.code, 1);
-  assert.match(none.lines.join('\n'), /巻が一致しない。項目「\(なし\)」、記録「2」/);
+  assert.match(none.lines.join('\n'), /volume does not match; entry "\(none\)", record "2"/);
   assert.equal(none.text, null);
 });
 
@@ -290,7 +290,7 @@ test('doi と isbn の両方を書いた項目は、両方が一致したとき�
   const r = await run(both);
   assert.equal(r.code, 1);
   assert.equal(r.text, null);
-  assert.match(r.lines.join('\n'), /種類が一致しない/);
+  assert.match(r.lines.join('\n'), /type does not match/);
 });
 
 test('8: 記録を手で書き換えて --check すると、今の記録と合わず、ファイルは変わらない', async () => {
@@ -300,7 +300,7 @@ test('8: 記録を手で書き換えて --check すると、今の記録と合�
   const edited = `${JSON.stringify(tampered, null, 2)}\n`;
   const r = await run(LECUN, ['--check'], { dir: first.dir, verified: edited });
   assert.equal(r.code, 1);
-  assert.match(r.lines.join('\n'), /今の記録と合わない/);
+  assert.match(r.lines.join('\n'), /does not agree with the current record/);
   assert.equal(r.text, edited);
 });
 
@@ -317,8 +317,8 @@ test('--check は、記録がない文献と、一覧にない文献の記録を
   const r = await run(matsu(), ['--check'], { dir: first.dir });
   assert.equal(r.code, 1);
   const out = r.lines.join('\n');
-  assert.match(out, /matsuzaka-sets: 一致しない.*記録がない/);
-  assert.match(out, /lecun-deep-learning: 一致しない.*一覧にない/);
+  assert.match(out, /matsuzaka-sets: mismatch.*no record/);
+  assert.match(out, /lecun-deep-learning: mismatch.*not in the list/);
 });
 
 test('9: 500 は「確かめられなかった」で、終了コード 2、記録は書かない', async () => {
@@ -327,7 +327,7 @@ test('9: 500 は「確かめられなかった」で、終了コード 2、記�
   });
   const r = await run(LECUN, [], { fetch: f });
   assert.equal(r.code, 2);
-  assert.match(r.lines.join('\n'), /確かめられなかった/);
+  assert.match(r.lines.join('\n'), /could not verify/);
   assert.equal(r.text, null);
 });
 
@@ -337,7 +337,7 @@ test('9: 時間内に応答がなければ「確かめられなかった」で�
     new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(new Error('aborted'))));
   const r = await run(LECUN, [], { fetch: { fetch: hang, calls: [] }, timeoutMs: 20 });
   assert.equal(r.code, 2);
-  assert.match(r.lines.join('\n'), /確かめられなかった.*秒以内に応答がない/);
+  assert.match(r.lines.join('\n'), /could not verify.*no response within/);
   assert.equal(r.text, null);
 });
 

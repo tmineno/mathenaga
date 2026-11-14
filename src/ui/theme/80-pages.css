@@ -1,0 +1,78 @@
+/* トップと分野の入口 */
+.intro {
+  display: grid;
+  gap: 12px;
+}
+.intro h1 {
+  font-size: clamp(1.9rem, 4.2vw, 2.6rem);
+}
+/* トップページの見出しのロゴ。1 ドットを 3px の整数倍で表示し、ドットの大きさをそろえる */
+.intro h1.logo-h {
+  margin: 0;
+  line-height: 0;
+}
+.logo {
+  display: block;
+  /* 1 ドット 3px。ロゴ 86×78 ドットに、鳥の縁の分の余白を上下左右 1 ドットずつ足す */
+  width: 264px;
+  height: 240px;
+  color: var(--ink);
+}
+.lede {
+  font-size: 1.06rem;
+  color: var(--muted);
+}
+.sec {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.goal-list,
+.field-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.goal-list li,
+.field-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+.field-list li {
+  display: grid;
+}
+.field-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+.tbl-scroll {
+  overflow-x: auto;
+}
+table.chap {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.chap th {
+  text-align: left;
+  font-weight: 700;
+  color: var(--muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  padding: 8px 12px;
+  border-bottom: 2px solid var(--rule);
+}
+.chap td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}

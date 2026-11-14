@@ -40,7 +40,7 @@ test('19. 保存すると数秒以内に表示が変わり、壊した原稿で�
   const port = await freePort();
   const child = spawn(process.execPath, [path.join(dir, 'src/dev/server.js')], {
     cwd: dir,
-    env: { ...process.env, PORT: String(port), MATHENAGA_BASE_PATH: '/' },
+    env: { ...process.env, PORT: String(port), SITE_BASE_PATH: '/' },
   });
   cleanups.push(async () => {
     child.kill();
@@ -51,7 +51,7 @@ test('19. 保存すると数秒以内に表示が変わり、壊した原稿で�
   child.stdout.on('data', (d) => (stdout += d));
   child.stderr.on('data', (d) => (stderr += d));
   await waitFor(
-    () => stdout.includes('dist/ に書き出した'),
+    () => stdout.includes('wrote dist/'),
     20000,
     () => `起動しない:\n${stdout}\n${stderr}`,
   );

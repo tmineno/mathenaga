@@ -26,14 +26,14 @@ export function parseAttrs(src) {
   while (TOKEN.lastIndex < src.length && (m = TOKEN.exec(src))) {
     if (m[0].trim() === '') break;
     if (m[1] !== undefined) {
-      if (out.id !== null) out.problems.push(`#ID が2つある(#${out.id} と #${m[1]})`);
+      if (out.id !== null) out.problems.push(`two #IDs given (#${out.id} and #${m[1]})`);
       else out.id = m[1];
     } else if (m[2] !== undefined) {
       const value = m[3] !== undefined ? m[3] : m[4];
-      if (Object.hasOwn(out.values, m[2])) out.problems.push(`属性 ${m[2]} が2つある`);
+      if (Object.hasOwn(out.values, m[2])) out.problems.push(`attribute ${m[2]} is given twice`);
       else out.values[m[2]] = value;
     } else {
-      out.problems.push(`属性「${m[5]}」を解釈できない`);
+      out.problems.push(`cannot parse attribute "${m[5]}"`);
     }
   }
   return out;

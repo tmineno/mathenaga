@@ -1,7 +1,7 @@
 // 路線図の配置と SVG(docs/spec/route-map.md)。章ごとに1枚の札を格子に置き、路線の線・分岐の線・
 // 前提の矢印で札どうしをつなぐ。分岐の線と前提の矢印は、札のあいだの溝(列の溝と段の溝)だけを通る。
 
-import { escapeXml } from './text.js';
+import { escapeXml, fill } from './text.js';
 
 /** 寸法(px)。路線図の見た目の調整はここで行う。 */
 export const GEOM = {
@@ -42,63 +42,55 @@ export const GEOM = {
 };
 
 /**
- * 文字列のおおよその幅。全角は 1em、それ以外は 0.58em とみなす。
- * @param {string} s
- * @param {number} [font]
+ * @typedef {object} TextRules  文字の扱い。言語ごとの処理(src/ui/locales/)が決め、site.text で渡す
+ * @property {(ch: string) => number} charWidth  1文字のおおよその幅(em)
+ * @property {Array<(chars: string[], i: number) => boolean>} breakTiers  折り返す位置の選び方。前のものほど優先する
  */
-export function textWidth(s, font = GEOM.stFont) {
+
+/**
+ * 文字列のおおよその幅。1文字の幅は rules.charWidth が決める。
+ * @param {string} s
+ * @param {number} font
+ * @param {TextRules} rules
+ */
+export function textWidth(s, font, rules) {
   let w = 0;
-  for (const ch of s) w += /** @type {number} */ (ch.codePointAt(0)) >= 0x2e80 ? font : font * 0.58;
+  for (const ch of s) w += rules.charWidth(ch) * font;
   return w;
-}
-
-/** 「途中の目標」の札の幅 */
-const PILL_W = Math.round(textWidth('途中の目標', GEOM.pillFont) + 12);
-
-/** @param {string} ch */
-function script(ch) {
-  const cp = /** @type {number} */ (ch.codePointAt(0));
-  if (cp >= 0x30a0 && cp <= 0x30ff) return 'kata';
-  if (cp >= 0x3040 && cp <= 0x309f) return 'hira';
-  if (cp >= 0x4e00 && cp <= 0x9fff) return 'kanji';
-  return 'other';
 }
 
 /**
  * 文字列を幅 width に収まる行に折り返す(route-map.md「配置」6)。行に入るだけ詰めたうえで、
- * 「の」「・」の後ろ、「と」「や」の後ろ、文字の種類の変わり目の順に、折り返す位置を選ぶ。
+ * rules.breakTiers の順に、折り返す位置を選ぶ。
  * Preconditions: width は1文字の幅より大きい。
  * Postconditions: 1行以上の配列を返す。行をつなぐと元の文字列になる(行頭と行末の空白を除く)。
  * Failure modes: なし。
  * Side effects: なし。
  * @param {string} text
  * @param {number} width
- * @param {number} [font]
+ * @param {number} font
+ * @param {TextRules} rules
  * @returns {string[]}
  */
-export function wrapText(text, width, font = GEOM.stFont) {
+export function wrapText(text, width, font, rules) {
   const out = [];
   let rest = [...text];
   while (rest.length > 0) {
-    if (textWidth(rest.join(''), font) <= width) {
+    if (textWidth(rest.join(''), font, rules) <= width) {
       out.push(rest.join(''));
       break;
     }
     let fit = 0;
     let w = 0;
     for (const ch of rest) {
-      const cw = textWidth(ch, font);
+      const cw = textWidth(ch, font, rules);
       if (w + cw > width) break;
       w += cw;
       fit++;
     }
     fit = Math.max(1, fit);
     const r = rest;
-    const tiers = [
-      (/** @type {number} */ i) => 'の・'.includes(r[i - 1]),
-      (/** @type {number} */ i) => 'とや'.includes(r[i - 1]) || r[i - 1] === ' ',
-      (/** @type {number} */ i) => script(r[i - 1]) !== script(r[i]),
-    ];
+    const tiers = rules.breakTiers.map((t) => (/** @type {number} */ i) => t(r, i));
     // 行が短くなりすぎる位置では折り返さない
     const least = Math.max(2, Math.ceil(fit * 0.4));
     let cut = -1;
@@ -123,11 +115,11 @@ export function wrapText(text, width, font = GEOM.stFont) {
  * 行の数を max までにする。収まらなければ最後の行の末尾を「…」で省く。
  * @param {string[]} lines @param {number} max @param {number} width @param {number} font
  */
-function clampLines(lines, max, width, font) {
+function clampLines(lines, max, width, font, rules) {
   if (lines.length <= max) return lines;
   const head = lines.slice(0, max - 1);
   let last = [...lines.slice(max - 1).join('')];
-  while (last.length > 1 && textWidth(`${last.join('')}…`, font) > width) last = last.slice(0, -1);
+  while (last.length > 1 && textWidth(`${last.join('')}…`, font, rules) > width) last = last.slice(0, -1);
   return [...head, `${last.join('')}…`];
 }
 
@@ -276,12 +268,16 @@ function planRows(site, branches, starts, trunkIds, lastTrunk) {
           dir = 'down';
           fallbacks.push({
             line,
-            reason: `分岐駅 ${info.branch.code} がこの図の幹線の最後の駅ではない`,
-            drawn: 'down と同じに',
+            reason: `branch station ${info.branch.code} is not the last station of the trunk line in this map`,
+            drawn: 'like down',
           });
         } else if (midUsed) {
           dir = 'down';
-          fallbacks.push({ line, reason: '幹線より右の場所をほかの支線が使った', drawn: 'down と同じに' });
+          fallbacks.push({
+            line,
+            reason: 'another branch line uses the place to the right of the trunk line',
+            drawn: 'like down',
+          });
         } else midUsed = true;
       }
     } else if (hasUp !== hasDown) {
@@ -291,7 +287,11 @@ function planRows(site, branches, starts, trunkIds, lastTrunk) {
       midUsed = true;
     } else {
       dir = side.get(info.branch.lineId) === 'up' ? 'up' : 'down';
-      fallbacks.push({ line, reason: '幹線より右の場所をほかの支線が使った', drawn: '主な分岐駅の側に' });
+      fallbacks.push({
+        line,
+        reason: 'another branch line uses the place to the right of the trunk line',
+        drawn: 'on the side of the main branch station',
+      });
     }
     rows.push({ line, dir, row: dir === 'up' ? ups++ : dir === 'down' ? downs++ : 0, info, start: null });
     side.set(line.id, dir === 'up' || dir === 'down' ? dir : 'mid');
@@ -357,9 +357,10 @@ export function mapStations(site) {
  * @param {import('./schema.js').Line[]} lines
  * @param {import('./graph.js').StationInfo[]} shown
  * @param {Map<string, BranchInfo>} branches
+ * @param {string} joiner  矢印の札で、駅名をつなぐ文字(文言 list.join)
  * @returns {Arrow[]}
  */
-export function prerequisiteArrows(lines, shown, branches) {
+export function prerequisiteArrows(lines, shown, branches, joiner) {
   const byId = new Map(shown.map((s) => [s.id, s]));
   const pos = new Map(shown.map((s, i) => [s.id, i]));
   /** 手順 3 の関係。to と、requires の辺か @type {Map<string, Array<{ to: string, req: boolean }>>} */
@@ -420,7 +421,7 @@ export function prerequisiteArrows(lines, shown, branches) {
   const out = [...groups.values()];
   for (const g of out) {
     g.stations.sort((a, b) => /** @type {number} */ (pos.get(a.id)) - /** @type {number} */ (pos.get(b.id)));
-    g.label = g.stations.map((s) => s.name).join('・');
+    g.label = g.stations.map((s) => s.name).join(joiner);
   }
   return out.sort((a, b) => a.from - b.from || a.to - b.to);
 }
@@ -460,7 +461,7 @@ export function prerequisiteArrows(lines, shown, branches) {
  * @property {number} y
  * @property {number} w
  * @property {number} h
- * @property {TextLine} head      「第N章」の行
+ * @property {TextLine & { textW: number }} head  「第N章」の行。textW は文字の幅(w は札の内側の幅)
  * @property {TextLine[]} titleLines
  * @property {PlacedStation[]} rows
  * @property {Overview[]} overview  縮小したときの札の文字。[0] が概要、[1] が章のタイトルだけ
@@ -509,12 +510,41 @@ export function prerequisiteArrows(lines, shown, branches) {
  *   E12:最初の駅が、路線ファイルで後ろにある路線の駅を前提にしている始発の路線
  * @property {Fallback[]} fallbacks  N03
  * @property {import('./schema.js').Line[]} linesShown
+ * @property {Record<string, string>} messages  路線図の文言(site.messages のうち MESSAGE_KEYS のもの。文字列だけ)
  */
 
-/** 章の札の文字。 @param {{ number: number, planned?: boolean }} chapter @param {boolean} current */
-function headText(chapter, current) {
-  if (chapter.planned) return `第${chapter.number}章 未執筆`;
-  return current ? `第${chapter.number}章 このページ` : `第${chapter.number}章`;
+/** 路線図が使う文言のキー(言語ごとの文言の辞書から、レイアウトに写す) */
+const MESSAGE_KEYS = [
+  'chapter.number',
+  'goal.final',
+  'goal.partial',
+  'map.card.planned',
+  'map.card.current',
+  'map.from',
+  'map.goal.title',
+  'map.desc.planned',
+  'map.desc.station',
+  'map.desc.mark',
+  'map.desc.chapter',
+  'map.desc.line',
+  'map.desc.arrow',
+  'list.separator',
+];
+
+/**
+ * 路線図が使う文言だけを、辞書から取り出す。
+ * @param {Record<string, string>} messages
+ * @returns {Record<string, string>}
+ */
+function pickMessages(messages) {
+  return Object.fromEntries(MESSAGE_KEYS.map((k) => [k, messages[k]]));
+}
+
+/** 章の札の文字。 @param {{ number: number, planned?: boolean }} chapter @param {boolean} current @param {Record<string, string>} messages */
+function headText(chapter, current, messages) {
+  const n = fill(messages['chapter.number'], { n: chapter.number });
+  if (chapter.planned) return fill(messages['map.card.planned'], { chapter: n });
+  return current ? fill(messages['map.card.current'], { chapter: n }) : n;
 }
 
 /** @param {number} v */
@@ -527,33 +557,39 @@ function round(v) {
  * @param {any} chapter
  * @param {import('./graph.js').StationInfo[]} stations
  * @param {Map<string, import('./schema.js').Goal>} goals
+ * @param {TextRules} rules
+ * @param {string} pillText  「途中の目標」の札の文字
  */
-function measureCard(chapter, stations, goals) {
+function measureCard(chapter, stations, goals, rules, pillText) {
   const g = GEOM;
   const inner = g.cardW - 2 * g.pad;
   const head = { text: '', x: g.pad, y: g.pad, w: inner, h: g.headH };
   let y = g.pad + g.headH + g.headGap;
-  const titleLines = clampLines(wrapText(chapter.title, inner, g.titleFont), 2, inner, g.titleFont).map((text) => {
-    const line = { text, x: g.pad, y, w: textWidth(text, g.titleFont), h: g.titleLineH };
-    y += g.titleLineH;
-    return line;
-  });
+  const titleLines = clampLines(wrapText(chapter.title, inner, g.titleFont, rules), 2, inner, g.titleFont, rules).map(
+    (text) => {
+      const line = { text, x: g.pad, y, w: textWidth(text, g.titleFont, rules), h: g.titleLineH };
+      y += g.titleLineH;
+      return line;
+    },
+  );
   y += g.titleGap;
   const rows = stations.map((info) => {
     const goal = goals.get(info.id) ?? null;
     const partial = goal && goal.kind === 'partial' ? goal : null;
     const nameX = info.planned ? g.pad : g.pad + g.plateW + g.plateGap;
-    const lines = wrapText(info.name, g.cardW - g.pad - nameX, g.stFont);
+    const lines = wrapText(info.name, g.cardW - g.pad - nameX, g.stFont, rules);
     const top = y;
     const name = lines.map((text, i) => ({
       text,
       x: nameX,
       y: top + i * g.stLineH,
-      w: textWidth(text, g.stFont),
+      w: textWidth(text, g.stFont, rules),
       h: g.stLineH,
     }));
     let h = Math.max(g.plateH, lines.length * g.stLineH);
-    const pill = partial ? { x: nameX, y: top + h + 2, w: PILL_W, h: g.pillH } : null;
+    const pill = partial
+      ? { x: nameX, y: top + h + 2, w: Math.round(textWidth(pillText, g.pillFont, rules) + 12), h: g.pillH }
+      : null;
     if (pill) h += 2 + g.pillH;
     const plate = info.planned ? null : { x: g.pad, y: top + (g.stLineH - g.plateH) / 2, w: g.plateW, h: g.plateH };
     y += h + g.rowGap;
@@ -573,7 +609,8 @@ function measureCard(chapter, stations, goals) {
   });
   y += g.pad - g.rowGap;
   // 札の高さは、縮小したときの章のタイトル(3行まで)も入る高さにする(route-map.md「配置」6)
-  const lines = (/** @type {number} */ font) => Math.min(OV_MAX_LINES, wrapText(chapter.title, inner, font).length);
+  const lines = (/** @type {number} */ font) =>
+    Math.min(OV_MAX_LINES, wrapText(chapter.title, inner, font, rules).length);
   const h = Math.max(
     y,
     2 * g.pad + g.ov1HeadH + g.ov1Gap + lines(g.ov1TitleFont) * g.ov1TitleLineH,
@@ -595,25 +632,26 @@ const OV_MAX_LINES = 3;
  * @param {string} headText  「第N章」の行の文字
  * @param {string} title
  * @param {number} h
+ * @param {TextRules} rules
  * @returns {Overview[]}
  */
-function measureOverview(headText, title, h) {
+function measureOverview(headText, title, h, rules) {
   const g = GEOM;
   const inner = g.cardW - 2 * g.pad;
   /** @param {number} top @param {number} font @param {number} lineH */
   const fit = (top, font, lineH) => {
     const max = Math.max(1, Math.floor((h - g.pad - top) / lineH));
-    return clampLines(wrapText(title, inner, font), max, inner, font).map((text, i) => ({
+    return clampLines(wrapText(title, inner, font, rules), max, inner, font, rules).map((text, i) => ({
       text,
       x: g.pad,
       y: top + i * lineH,
-      w: textWidth(text, font),
+      w: textWidth(text, font, rules),
       h: lineH,
     }));
   };
   // 「このページ」「未執筆」を添えると入らないときは「第N章」だけにする
-  const text = textWidth(headText, g.ov1HeadFont) <= inner ? headText : headText.split(' ')[0];
-  const head = { text, x: g.pad, y: g.pad, w: textWidth(text, g.ov1HeadFont), h: g.ov1HeadH };
+  const text = textWidth(headText, g.ov1HeadFont, rules) <= inner ? headText : headText.split(' ')[0];
+  const head = { text, x: g.pad, y: g.pad, w: textWidth(text, g.ov1HeadFont, rules), h: g.ov1HeadH };
   return [
     { head, lines: fit(g.pad + g.ov1HeadH + g.ov1Gap, g.ov1TitleFont, g.ov1TitleLineH) },
     { head: null, lines: fit(g.pad, g.ov2TitleFont, g.ov2TitleLineH) },
@@ -678,9 +716,9 @@ export function layoutMap(site, drawn, opts = {}) {
   const cards = new Map();
   /** @param {any} chapter @param {import('./graph.js').StationInfo[]} stations @param {string} lineId @param {number} col @param {number} tier */
   const addCard = (chapter, stations, lineId, col, tier) => {
-    const m = measureCard(chapter, stations, goals);
+    const m = measureCard(chapter, stations, goals, site.text, site.messages['goal.partial']);
     const current = !chapter.planned && chapter.id === (opts.highlight ?? null);
-    const head = headText(chapter, current);
+    const head = headText(chapter, current, site.messages);
     /** @type {Card} */
     const card = {
       number: chapter.number,
@@ -695,10 +733,10 @@ export function layoutMap(site, drawn, opts = {}) {
       y: 0,
       w: g.cardW,
       h: m.h,
-      head: { ...m.head, text: head },
+      head: { ...m.head, text: head, textW: textWidth(head, GEOM.headFont, site.text) },
       titleLines: m.titleLines,
       rows: /** @type {any} */ (m.rows),
-      overview: measureOverview(head, chapter.title, m.h),
+      overview: measureOverview(head, chapter.title, m.h, site.text),
     };
     for (const r of card.rows) r.card = card;
     cards.set(chapter.number, card);
@@ -749,6 +787,7 @@ export function layoutMap(site, drawn, opts = {}) {
     site.lines,
     placedStations.map((r) => r.info),
     placedBranches,
+    site.messages['list.join'],
   );
 
   const tiers = cardList.map((c) => c.tier);
@@ -834,7 +873,7 @@ export function layoutMap(site, drawn, opts = {}) {
         id: `branch:${s.id}>${bp.line.id}`,
         group: `branch:${bp.line.id}`,
         main: s === bp.info.branch,
-        label: `${s.name}から`,
+        label: fill(site.messages['map.from'], { name: s.name }),
         station: s,
       });
     }
@@ -1417,7 +1456,7 @@ export function layoutMap(site, drawn, opts = {}) {
     for (const route of routes) {
       const conn = route.conn;
       if (!conn.label || quiet.has(conn.id)) continue;
-      const w = round(textWidth(conn.label, g.labelFont) + 2);
+      const w = round(textWidth(conn.label, g.labelFont, site.text) + 2);
       const h = g.labelH;
       /** 候補と、近さの点数(小さいほど先に試す) @type {Array<Box & { score: number }>} */
       const candidates = [];
@@ -1514,6 +1553,7 @@ export function layoutMap(site, drawn, opts = {}) {
     lateStarts,
     fallbacks,
     linesShown: site.lines.filter((l) => cardList.some((c) => c.lineId === l.id)),
+    messages: pickMessages(site.messages),
   };
 }
 
@@ -1570,7 +1610,7 @@ export function layoutBoxes(layout) {
       /** @type {Box} */ b,
       /** @type {number} */ lod = 0,
     ) => boxes.push({ kind, owner, card: c.number, lod, x: c.x + b.x, y: c.y + b.y, w: b.w, h: b.h });
-    inCard('head', own, { ...c.head, w: textWidth(c.head.text, GEOM.headFont) });
+    inCard('head', own, { ...c.head, w: c.head.textW });
     for (const t of c.titleLines) inCard('title', own, t);
     for (const r of c.rows) {
       const owner = r.info.code || r.info.name;
@@ -1677,7 +1717,7 @@ export function renderMapSvg(layout, opts) {
     const href = !c.planned && c.chapterId && opts.chapterHref ? opts.chapterHref(c.chapterId) : null;
     out.push(
       href
-        ? `<a href="${escapeXml(href)}" class="ch" aria-label="${escapeXml(`第${c.number}章 ${c.title}`)}">${body}</a>`
+        ? `<a href="${escapeXml(href)}" class="ch" aria-label="${escapeXml(`${fill(layout.messages['chapter.number'], { n: c.number })} ${c.title}`)}">${body}</a>`
         : `<g class="ch">${body}</g>`,
     );
     for (const r of c.rows) {
@@ -1694,7 +1734,9 @@ export function renderMapSvg(layout, opts) {
       const row = at(r);
       const plate = /** @type {Box} */ (r.plate);
       const pp = at(plate);
-      const tip = r.goal ? `<title>${escapeXml(`${r.final ? '最終目標' : '途中の目標'}:${r.goal.label}`)}</title>` : '';
+      const tip = r.goal
+        ? `<title>${escapeXml(fill(layout.messages['map.goal.title'], { kind: layout.messages[r.final ? 'goal.final' : 'goal.partial'], label: r.goal.label }))}</title>`
+        : '';
       out.push(
         `<a href="${escapeXml(opts.hrefFor(r.info))}" class="st" aria-label="${escapeXml(`${r.info.code} ${r.info.name}`)}">${r.final ? tip : ''}`,
         `<rect class="hit" x="${row.x}" y="${row.y}" width="${round(r.w)}" height="${round(r.name.length * GEOM.stLineH)}"/>`,
@@ -1706,7 +1748,7 @@ export function renderMapSvg(layout, opts) {
       if (r.pill && r.partial) {
         const p = at(r.pill);
         out.push(
-          `<g class="pill"><title>${escapeXml(`途中の目標:${r.partial.label}`)}</title><rect x="${p.x}" y="${p.y}" width="${r.pill.w}" height="${r.pill.h}" rx="7.5"/><text x="${round(p.x + r.pill.w / 2)}" y="${round(p.y + r.pill.h / 2)}">途中の目標</text></g>`,
+          `<g class="pill"><title>${escapeXml(fill(layout.messages['map.goal.title'], { kind: layout.messages['goal.partial'], label: r.partial.label }))}</title><rect x="${p.x}" y="${p.y}" width="${r.pill.w}" height="${r.pill.h}" rx="7.5"/><text x="${round(p.x + r.pill.w / 2)}" y="${round(p.y + r.pill.h / 2)}">${escapeXml(layout.messages['goal.partial'])}</text></g>`,
         );
       }
     }
@@ -1738,21 +1780,37 @@ export function renderMapSvg(layout, opts) {
  * @param {MapLayout} layout
  */
 export function mapDescription(layout) {
+  const m = layout.messages;
+  const sep = m['list.separator'];
+  /** @param {number} n */
+  const chapterNo = (n) => fill(m['chapter.number'], { n });
   const lines = layout.linesShown.map((line) => {
     const cards = layout.cards.filter((c) => c.lineId === line.id).sort((a, b) => a.col - b.col);
     const parts = cards.map((c) => {
       const items = c.rows.map((r) => {
         if (r.info.planned) return r.info.name;
-        const marks = [...(r.final ? ['最終目標'] : []), ...(r.partial ? ['途中の目標'] : [])];
-        return `${r.info.code} ${r.info.name}${marks.map((m) => `(${m})`).join('')}`;
+        const marks = [...(r.final ? [m['goal.final']] : []), ...(r.partial ? [m['goal.partial']] : [])];
+        return fill(m['map.desc.station'], {
+          code: r.info.code,
+          name: r.info.name,
+          marks: marks.map((mark) => fill(m['map.desc.mark'], { mark })).join(''),
+        });
       });
-      return `第${c.number}章 ${c.title}${c.planned ? '(未執筆)' : ''}:${items.join('、')}。`;
+      return fill(m['map.desc.chapter'], {
+        chapter: chapterNo(c.number),
+        title: c.title,
+        planned: c.planned ? m['map.desc.planned'] : '',
+        items: items.join(sep),
+      });
     });
-    return `${line.name}。${parts.join('')}`;
+    return fill(m['map.desc.line'], { line: line.name, chapters: parts.join('') });
   });
-  const arrows = layout.arrows.map(
-    (a) =>
-      `第${a.to}章は、第${a.from}章の ${a.stations.map((s) => (s.code ? `${s.code} ${s.name}` : s.name)).join('、')}を前提にする。`,
+  const arrows = layout.arrows.map((a) =>
+    fill(m['map.desc.arrow'], {
+      to: chapterNo(a.to),
+      from: chapterNo(a.from),
+      stations: a.stations.map((s) => (s.code ? `${s.code} ${s.name}` : s.name)).join(sep),
+    }),
   );
   return [...lines, ...arrows].join('');
 }

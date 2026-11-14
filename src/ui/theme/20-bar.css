@@ -1,0 +1,97 @@
+/* 上端のバー */
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  font-size: 16px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+}
+.bar-in {
+  max-width: var(--page);
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 10px 16px;
+}
+.mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 19px;
+  color: var(--ink);
+  text-decoration: none;
+}
+/* ロゴの鳥(docs/spec/site.md「ロゴと favicon」)。線の色は currentColor で本文の文字色に従う */
+.mark-icon {
+  flex: none;
+  width: auto;
+  height: 32px;
+}
+.crumb {
+  font-size: 13px;
+  color: var(--muted);
+}
+.switch {
+  display: inline-flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.switch button {
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 5px 10px;
+  background: transparent;
+  color: var(--muted);
+  border: 0;
+  border-left: 1px solid var(--rule);
+  cursor: pointer;
+}
+.switch button:first-child {
+  border-left: 0;
+}
+.switch button[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--paper);
+}
+.mini {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.mini a {
+  font-family: var(--font-code);
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1;
+  padding: 5px 6px;
+  border: 2px solid var(--lc, var(--muted));
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--lc, var(--muted));
+  text-decoration: none;
+}
+.mini a.on {
+  background: var(--lc, var(--muted));
+  color: var(--surface);
+}
+.mini a.off {
+  opacity: 0.35;
+}
+@media (max-width: 600px) {
+  .crumb {
+    display: none;
+  }
+  .mini {
+    margin-left: 0;
+  }
+}

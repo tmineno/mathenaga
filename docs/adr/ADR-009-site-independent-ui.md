@@ -14,7 +14,7 @@ MathEnaga と同じ形のサイト(路線・駅・分野で章を並べ、章ペ
 
 この形では、別のサイトを作るとコードを書き換えることになる。理由は次の4つである。
 
-- **サイト固有の値がコードに直接書いてある。** サイト名(`SITE_NAME`)、`lang="ja"`、ロゴのドット絵(`src/site/assets/logo.txt`)、Google Fonts の URL、色と書体のトークン、ブラウザに保存するキー4つ(`mathenaga-field` など)、原稿の URL のブランチ名(`/blob/main/`)。`grep -rnE "'MathEnaga'|mathenaga-|fonts\.googleapis\.com" src/site/ src/core/` は8行に当たる。
+- **サイト固有の値がコードに直接書いてある。** サイト名(`SITE_NAME`)、`lang="ja"`、ロゴのドット絵(`src/site/assets/logo.txt`)、Google Fonts の URL、色と書体のトークン、ブラウザに保存するキー4つ(`mathenaga-field` など)、原稿の URL のブランチ名(`/blob/main/`)。`grep -rnE "'MathEnaga'|mathenaga-|fonts\.googleapis\.com/css2" src/site/ src/core/` は7行に当たる。
 - **文言がコードに散っている。** 引用符の後に日本語が続く行(コメントの行を除く)は、`pages.js` に 81、`app.js` に 55、`src/core/map.js` に 21 ある。閲覧者に見える文言のほか、ビルドの通知の文も含んだ数である。
 - **路線図のレイアウトが文言に依存している。** `src/core/map.js` は、目標の札の幅を「途中の目標」という文字列で見積もり(56 行目)、駅名の折り返しを「の・」「とや」の後ろで決めている(98〜99 行目)。
 - **`pages.js` と `app.js` のあいだの取り決めが、どこにも書かれていない。** `app.js` には、`data-` 属性の名前が 24 種類(`app.js` が自分で付けるものを含む)、`getElementById` で引く id が 3 つ(`_fields`・`_stations`・`_pop`)、セレクタの文字列の中のクラス名が 26 種類出てくる。どの名前を出すかは `pages.js` のコードにしか書かれていない。表示の設定の選択肢は、`pages.js` の `LOOK_SCRIPT`、`app.js` の `CHOICES`、`style.css` のセレクタの3か所に別々に書かれている。
@@ -25,7 +25,7 @@ MathEnaga と同じ形のサイト(路線・駅・分野で章を並べ、章ペ
 
 - 同じ形の別サイトを、`src/` を変えずに `content/` を差し替えるだけで作れるようにする。日本語以外の言語のサイトも対象にする。
 - 次のものは変えない:原稿の形式(サイトの設定のファイルを足すことを除く)、章ページの構成と閲覧時の機能([site.md](../spec/site.md))、路線図の描き方([route-map.md](../spec/route-map.md))、ページの URL、MathEnaga の読者がブラウザに保存した値。
-- 言語ごとに変えるのは、閲覧者が見るものだけにする。ビルドのエラーと通知の文(執筆者が読むもの)は英語だけで書き、言語ごとには変えない(2026-11-14 に人間が決めた)。エラーと通知のコード(E01・N01 など)と、ファイルと行番号の出し方は変えない。
+- 言語ごとに変えるのは、閲覧者が見るものだけにする。ビルドのエラーと通知の文と、`npm run refs:verify` の出力(執筆者が読むもの)は英語だけで書き、言語ごとには変えない(2026-11-14 に人間が決めた)。エラーと通知のコード(E01・N01 など)と、ファイルと行番号の出し方は変えない。
 
 ### サイトごとの値は content/ に置く
 
@@ -100,14 +100,14 @@ src/
 ## Consequences
 
 - 別サイトは、`src/` と `package.json` などを写し、`content/` を差し替えて作る。パッケージにするまでは、MathEnaga 側の改修を別サイトへ取り込む作業は手作業になる。
-- 切り離しが済んだかは、`grep -rnE "'MathEnaga'|mathenaga-|fonts\.googleapis\.com" src/` が0行で、`git ls-files src` に `logo.txt` がないことで確かめる。今の `src/` では前者が9行に当たる(Context の8行と、`src/refcheck/lookup.js` の User-Agent)。古い環境変数の名前(`MATHENAGA_BASE_PATH` など)は大文字なので、この検査には当たらない。
+- 切り離しが済んだかは、`grep -rnE "'MathEnaga'|mathenaga-|fonts\.googleapis\.com/css2" src/` が0行で、`git ls-files src` に `logo.txt` がないことで確かめる。今の `src/` では前者が8行に当たる(Context の7行と、`src/refcheck/lookup.js` の User-Agent)。書体の読み込み先は Google Fonts に限るので([content-format.md](../spec/content-format.md)「サイトの設定」)、`fonts.googleapis.com` のオリジンそのものはコードに残る。検査は、MathEnaga の書体を選んだ CSS の URL(`/css2?…`)だけを対象にする。古い環境変数の名前(`MATHENAGA_BASE_PATH` など)は大文字なので、この検査には当たらない。
 - 依存が1つ増える(esbuild)。esbuild は、プラットフォームごとのバイナリを optional な依存として入れる。CI(GitHub Actions の Linux)と手元で同じ版を使う。
 - 仕様([content-format.md](../spec/content-format.md)・[build.md](../spec/build.md)・[site.md](../spec/site.md)・[route-map.md](../spec/route-map.md)・[reference-check.md](../spec/reference-check.md)・[ui-contract.md](../spec/ui-contract.md))は、この ADR と一緒に直した。実装では、公開のワークフローと、環境変数の名前を使うテスト(`tests/integration/build.test.js` など)も直す。
 - ロゴの元データの場所が変わるので、`scripts/banner.js` と `tests/integration/logo.test.js` を直す。`tests/unit/style.test.js` は、読む CSS のパスを直す。
 - 表示の設定の選択肢の定義が1か所になり、head のスクリプトと client の食い違いが起きなくなる。ダークの値の2か所(OS の設定に合わせるときと、表示の設定でダークを選んだとき)は CSS の書き方の制約で残るので、引き続き `tests/unit/style.test.js` で確かめる。
 - GitHub Pages のプロジェクトサイトは、同じ持ち主のものどうしでオリジン(`<owner>.github.io`)を共有する。接頭辞を変えれば、同じオリジンに2つのサイトを置いても、保存した値がぶつからない。
 - 言語ごとの処理として用意するのは `ja` だけなので、何を辞書に入れ、何を関数にするかの区切りは、`ja` の1例だけで決めることになる。2つ目の言語を足すときに見直す(Exit criteria)。
-- ビルドのエラーと通知の文が、日本語から英語に変わる。MathEnaga の執筆者(人間と AI エージェント)も英語の文を読むことになる。コードは変わらないので、コードで書いた AGENTS.md の手順はそのまま使える。`npm run refs:verify` の出力はビルドの外にあるので、この決定に含めない。
+- ビルドのエラーと通知の文が、日本語から英語に変わる。MathEnaga の執筆者(人間と AI エージェント)も英語の文を読むことになる。コードは変わらないので、コードで書いた AGENTS.md の手順はそのまま使える。
 - ファイルの分割と移動(構造の変更)と、値を外に出す変更は、別のコミットにする。構造の変更では、テスト用原稿でビルドした `dist/` の HTML が、変更の前後で `?v=` の値を除いて同じであることと、`npm test` が通ることを確かめる(`app.js` と `style.css` は、まとめ方が変わると中身と版の印が変わる)。
 
 ## Alternatives
@@ -136,7 +136,7 @@ src/
 | 言語ごとの処理を差し替えられるようにする(採用) | 文言・書誌の形・折り返しの規則・文字幅の見積もりを `locales/<言語>.js` にまとめる | 日本語以外のサイトも、ファイルを1つ足せば作れる | `ja` の1例だけで区切りを決めるので、2つ目の言語で見直しが要りうる |
 | 日本語のサイトだけにする | 文言だけを辞書にし、書誌と折り返しは日本語用のまま残す | 変える箇所が少ない | 日本語以外のサイトを作るときに、core と html をもう一度書き換える |
 
-**執筆者が読む文(ビルドのエラーと通知)**
+**執筆者が読む文(ビルドのエラーと通知、`npm run refs:verify` の出力)**
 
 | 方式 | 長所 | 短所 |
 |---|---|---|

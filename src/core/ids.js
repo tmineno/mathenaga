@@ -17,10 +17,9 @@ export const DEF_PREFIX = 'def-';
  * @returns {string | null}
  */
 export function idProblem(id, definition = false) {
-  if (typeof id !== 'string' || id === '') return 'ID が空である';
-  if (!ID_PATTERN.test(id)) return `ID「${id}」は英小文字・数字・ハイフンで書く`;
-  if (definition && !id.startsWith(DEF_PREFIX)) return `定義の ID「${id}」は def- で始める(def-${id})`;
-  if (!definition && id.startsWith(DEF_PREFIX))
-    return `ID「${id}」は def- で始められない(def- で始まるのは定義の ID だけ)`;
+  if (typeof id !== 'string' || id === '') return 'ID is empty';
+  if (!ID_PATTERN.test(id)) return `ID "${id}" must be lower-case letters, digits and hyphens`;
+  if (definition && !id.startsWith(DEF_PREFIX)) return `definition ID "${id}" must start with def- (def-${id})`;
+  if (!definition && id.startsWith(DEF_PREFIX)) return `ID "${id}" cannot start with def- (only definition IDs do)`;
   return null;
 }

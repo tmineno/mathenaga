@@ -10,8 +10,8 @@ export default [
     rules: { 'no-unused-vars': ['error', { argsIgnorePattern: '^_' }] },
   },
   {
-    files: ['src/site/assets/app.js'],
-    languageOptions: { sourceType: 'script', globals: { ...globals.browser } },
+    files: ['src/ui/client/**/*.js', 'src/ui/shared/**/*.js'],
+    languageOptions: { globals: { ...globals.browser, ENAGA_SITE: 'readonly' } },
   },
   {
     files: ['tests/browser/**/*.js'],

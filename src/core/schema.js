@@ -66,50 +66,50 @@ export function checkLines(data, file) {
   /** @type {Line[]} */
   const lines = [];
   if (!Array.isArray(data)) {
-    errors.push(issue('E01', file, null, '路線ファイルは路線の配列で書く'));
+    errors.push(issue('E01', file, null, 'the lines file must be an array of lines'));
     return { lines, errors };
   }
   const allowed = ['id', 'code', 'name', 'color', 'color_dark', 'style', 'layout', 'start', 'planned'];
   const codes = new Map();
   data.forEach((item, index) => {
-    const where = `${index + 1}番目の路線`;
+    const where = `line #${index + 1}`;
     if (!isObject(item)) {
-      errors.push(issue('E01', file, null, `${where}が項目の組になっていない`));
+      errors.push(issue('E01', file, null, `${where} is not a mapping`));
       return;
     }
     unknownKeys(item, allowed, file, where, errors);
     for (const key of ['id', 'code', 'name', 'color']) {
-      if (!nonEmptyString(item[key])) errors.push(issue('E08', file, null, `${where}に ${key} がない`));
+      if (!nonEmptyString(item[key])) errors.push(issue('E08', file, null, `${where} has no ${key}`));
     }
     if (nonEmptyString(item.id)) {
       const p = idProblem(item.id);
       if (p) errors.push(issue('E03', file, null, p));
     }
     if (nonEmptyString(item.code) && !LINE_CODE.test(item.code)) {
-      errors.push(issue('E03', file, null, `${where}の code「${item.code}」は英大文字で書く`));
+      errors.push(issue('E03', file, null, `${where}: code "${item.code}" must be upper-case letters`));
     }
     if (nonEmptyString(item.code)) {
       if (codes.has(item.code)) {
         errors.push(
-          issue('E04', file, null, `路線記号 ${item.code} が重複している(${codes.get(item.code)} と ${item.id})`),
+          issue('E04', file, null, `line code ${item.code} is duplicated (${codes.get(item.code)} and ${item.id})`),
         );
       } else codes.set(item.code, item.id);
     }
     for (const key of ['color', 'color_dark']) {
       if (item[key] !== undefined && !(typeof item[key] === 'string' && COLOR.test(item[key]))) {
-        errors.push(issue('E03', file, null, `${where}の ${key}「${item[key]}」は #RRGGBB で書く`));
+        errors.push(issue('E03', file, null, `${where}: ${key} "${item[key]}" must be #RRGGBB`));
       }
     }
     if (item.style !== undefined && item.style !== 'solid' && item.style !== 'dotted') {
-      errors.push(issue('E02', file, null, `${where}の style「${item.style}」は solid か dotted`));
+      errors.push(issue('E02', file, null, `${where}: style "${item.style}" must be solid or dotted`));
     }
     if (item.layout !== undefined && !['up', 'down', 'right'].includes(item.layout)) {
-      errors.push(issue('E02', file, null, `${where}の layout「${item.layout}」は up・down・right のどれか`));
+      errors.push(issue('E02', file, null, `${where}: layout "${item.layout}" must be one of up, down, right`));
     }
     if (item.start !== undefined && typeof item.start !== 'boolean') {
-      errors.push(issue('E03', file, null, `${where}の start「${item.start}」は true か false で書く`));
+      errors.push(issue('E03', file, null, `${where}: start "${item.start}" must be true or false`));
     } else if (item.start === true && item.layout !== 'up' && item.layout !== 'down') {
-      errors.push(issue('E03', file, null, `${where}は start が true なので、layout に up か down を書く`));
+      errors.push(issue('E03', file, null, `${where}: start is true, so layout must be up or down`));
     }
     const planned = nonEmptyString(item.id) ? checkPlanned(item.planned, item.id, file, where, errors) : [];
     if (!nonEmptyString(item.id)) return;
@@ -132,7 +132,7 @@ export function checkLines(data, file) {
     });
   });
   if (lines.length > 0 && !lines.some((l) => l.layout === null)) {
-    errors.push(issue('E08', file, null, '幹線(layout を書かない路線)が1つもない'));
+    errors.push(issue('E08', file, null, 'no trunk line (a line without layout)'));
   }
   return { lines, errors };
 }
@@ -149,31 +149,31 @@ export function checkLines(data, file) {
 function checkPlanned(value, lineId, file, where, errors) {
   if (value === undefined) return [];
   if (!Array.isArray(value)) {
-    errors.push(issue('E03', file, null, `${where}の planned は章の配列で書く`));
+    errors.push(issue('E03', file, null, `${where}: planned must be an array of chapters`));
     return [];
   }
   /** @type {PlannedChapter[]} */
   const out = [];
   value.forEach((item, j) => {
-    const w = `${where}の planned の${j + 1}番目`;
+    const w = `${where}, planned #${j + 1}`;
     if (!isObject(item)) {
-      errors.push(issue('E01', file, null, `${w}が項目の組になっていない`));
+      errors.push(issue('E01', file, null, `${w} is not a mapping`));
       return;
     }
     unknownKeys(item, ['chapter', 'title', 'stations', 'requires'], file, w, errors);
     let ok = true;
     for (const key of ['chapter', 'title', 'stations']) {
       if (item[key] === undefined || item[key] === null) {
-        errors.push(issue('E08', file, null, `${w}に ${key} がない`));
+        errors.push(issue('E08', file, null, `${w} has no ${key}`));
         ok = false;
       }
     }
     if (item.chapter !== undefined && item.chapter !== null && !(Number.isInteger(item.chapter) && item.chapter >= 0)) {
-      errors.push(issue('E03', file, null, `${w}の chapter「${item.chapter}」は 0 以上の整数で書く`));
+      errors.push(issue('E03', file, null, `${w}: chapter "${item.chapter}" must be an integer of 0 or more`));
       ok = false;
     }
     if (item.title !== undefined && item.title !== null && !nonEmptyString(item.title)) {
-      errors.push(issue('E03', file, null, `${w}の title は文字列で書く`));
+      errors.push(issue('E03', file, null, `${w}: title must be a string`));
       ok = false;
     }
     const strings = (/** @type {unknown} */ v) => Array.isArray(v) && v.every((x) => nonEmptyString(x));
@@ -181,23 +181,23 @@ function checkPlanned(value, lineId, file, where, errors) {
     const stations = [];
     if (item.stations !== undefined && item.stations !== null) {
       if (!Array.isArray(item.stations) || item.stations.length === 0) {
-        errors.push(issue('E03', file, null, `${w}の stations は駅の配列で、1つ以上書く`));
+        errors.push(issue('E03', file, null, `${w}: stations must be an array of stations (at least one)`));
         ok = false;
       } else {
         item.stations.forEach((/** @type {unknown} */ st, k) => {
-          const ws = `${w}の stations の${k + 1}番目`;
+          const ws = `${w}, stations #${k + 1}`;
           if (nonEmptyString(st)) {
             stations.push({ name: st.trim(), requires: [] });
             return;
           }
           if (!isObject(st) || !nonEmptyString(st.name)) {
-            errors.push(issue('E03', file, null, `${ws}は、駅名か、name を持つ項目で書く`));
+            errors.push(issue('E03', file, null, `${ws} must be a station name or a mapping with name`));
             ok = false;
             return;
           }
           unknownKeys(st, ['name', 'requires'], file, ws, errors);
           if (st.requires !== undefined && !strings(st.requires)) {
-            errors.push(issue('E03', file, null, `${ws}の requires は駅の ID の配列で書く`));
+            errors.push(issue('E03', file, null, `${ws}: requires must be an array of station IDs`));
             ok = false;
             return;
           }
@@ -206,13 +206,13 @@ function checkPlanned(value, lineId, file, where, errors) {
       }
     }
     if (item.requires !== undefined && !strings(item.requires)) {
-      errors.push(issue('E03', file, null, `${w}の requires は駅の ID の配列で書く`));
+      errors.push(issue('E03', file, null, `${w}: requires must be an array of station IDs`));
       ok = false;
     }
     // 章の requires は最初の駅の requires。両方に書くと、どちらを使うか決まらない
     const first = Array.isArray(item.stations) ? item.stations[0] : undefined;
     if (item.requires !== undefined && isObject(first) && first.requires !== undefined) {
-      errors.push(issue('E09', file, null, `${w}の requires と、stations の最初の駅の requires の両方が書かれている`));
+      errors.push(issue('E09', file, null, `${w}: requires is given both on the chapter and on its first station`));
       ok = false;
     }
     if (!ok) return;
@@ -225,6 +225,116 @@ function checkPlanned(value, lineId, file, where, errors) {
     });
   });
   return out;
+}
+
+/**
+ * @typedef {object} SiteConfig  サイトの設定(content-format.md「サイトの設定」、ADR-009)
+ * @property {string} name           サイト名
+ * @property {string} lang           ページの言語(言語ごとの処理の ID)
+ * @property {string} storagePrefix  ブラウザに保存するキーの接頭辞
+ * @property {string} fonts          書体の CSS の URL。空なら書体を読み込まない
+ * @property {string} repoBranch     原稿のファイルの URL に使うブランチ名
+ * @property {Record<string, string>} messages  上書きする文言
+ */
+
+const STORAGE_PREFIX = /^[a-z][a-z0-9-]*$/;
+const FONTS_ORIGIN = 'https://fonts.googleapis.com/';
+const BRANCH = /^[A-Za-z0-9._/-]+$/;
+const PLACEHOLDER = /\{([A-Za-z]+)\}/g;
+
+/**
+ * サイトの設定を検査する。
+ * Preconditions: data は site.yml を解釈した値。dictionaries は言語の ID → その言語の文言の辞書。
+ * Postconditions: 設定を返す。誤りは errors に入れる。誤りがあっても、読めた項目で設定を作る。
+ * Failure modes: 項目の組でなければ site は null。
+ * Side effects: なし。
+ * @param {unknown} data
+ * @param {string} file
+ * @param {Record<string, Record<string, string>>} dictionaries
+ * @returns {{ site: SiteConfig | null, errors: import('./issues.js').Issue[] }}
+ */
+export function checkSite(data, file, dictionaries) {
+  const errors = [];
+  if (!isObject(data)) {
+    errors.push(issue('E01', file, null, 'site.yml must be a mapping of keys to values'));
+    return { site: null, errors };
+  }
+  unknownKeys(data, ['name', 'lang', 'storage_prefix', 'fonts', 'repo_branch', 'messages'], file, 'site.yml', errors);
+  for (const key of ['name', 'lang', 'storage_prefix']) {
+    if (data[key] === undefined || data[key] === null) errors.push(issue('E08', file, null, `${key} is missing`));
+  }
+  if (data.name !== undefined && data.name !== null && !nonEmptyString(data.name)) {
+    errors.push(issue('E03', file, null, 'name must be a non-empty string'));
+  }
+  const lang = typeof data.lang === 'string' ? data.lang : '';
+  const dictionary = Object.hasOwn(dictionaries, lang) ? dictionaries[lang] : null;
+  if (data.lang !== undefined && data.lang !== null && !dictionary) {
+    errors.push(
+      issue(
+        'E02',
+        file,
+        null,
+        `lang "${data.lang}" has no language processing (available: ${Object.keys(dictionaries).join(', ')})`,
+      ),
+    );
+  }
+  const prefix = data.storage_prefix;
+  if (prefix !== undefined && prefix !== null && !(typeof prefix === 'string' && STORAGE_PREFIX.test(prefix))) {
+    errors.push(issue('E03', file, null, `storage_prefix "${prefix}" must start with a-z and use only a-z, 0-9 and -`));
+  }
+  const fonts = data.fonts;
+  if (fonts !== undefined && fonts !== null && !(typeof fonts === 'string' && fonts.startsWith(FONTS_ORIGIN))) {
+    errors.push(issue('E03', file, null, `fonts "${fonts}" must start with ${FONTS_ORIGIN}`));
+  }
+  const branch = data.repo_branch;
+  if (branch !== undefined && branch !== null && !(typeof branch === 'string' && BRANCH.test(branch))) {
+    errors.push(issue('E03', file, null, `repo_branch "${branch}" must be a branch name`));
+  }
+  /** @type {Record<string, string>} */
+  const messages = {};
+  if (data.messages !== undefined && data.messages !== null) {
+    if (!isObject(data.messages))
+      errors.push(issue('E03', file, null, 'messages must be a mapping of keys to strings'));
+    else {
+      for (const [key, value] of Object.entries(data.messages)) {
+        if (dictionary && !Object.hasOwn(dictionary, key)) {
+          errors.push(issue('E02', file, null, `messages: "${key}" is not a message of lang "${lang}"`));
+          continue;
+        }
+        if (typeof value !== 'string') {
+          errors.push(issue('E03', file, null, `messages: "${key}" must be a string`));
+          continue;
+        }
+        if (dictionary) {
+          const allowed = new Set([...dictionary[key].matchAll(PLACEHOLDER)].map((m) => m[1]));
+          const extra = [...value.matchAll(PLACEHOLDER)].map((m) => m[1]).filter((n) => !allowed.has(n));
+          if (extra.length > 0) {
+            errors.push(
+              issue(
+                'E03',
+                file,
+                null,
+                `messages: "${key}" uses {${extra.join('}, {')}}, which the message does not have`,
+              ),
+            );
+            continue;
+          }
+        }
+        messages[key] = value;
+      }
+    }
+  }
+  return {
+    site: {
+      name: typeof data.name === 'string' ? data.name.trim() : '',
+      lang,
+      storagePrefix: typeof prefix === 'string' ? prefix : '',
+      fonts: typeof fonts === 'string' ? fonts : '',
+      repoBranch: typeof branch === 'string' ? branch : 'main',
+      messages,
+    },
+    errors,
+  };
 }
 
 /**
@@ -241,36 +351,36 @@ function checkPlanned(value, lineId, file, where, errors) {
 export function checkField(data, id, file) {
   const errors = [];
   const p = idProblem(id);
-  if (p) errors.push(issue('E03', file, null, `分野ファイル名:${p}`));
+  if (p) errors.push(issue('E03', file, null, `field file name: ${p}`));
   if (!isObject(data)) {
-    errors.push(issue('E01', file, null, '分野ファイルは項目の組で書く'));
+    errors.push(issue('E01', file, null, 'the field file must be a mapping'));
     return { field: null, errors };
   }
-  unknownKeys(data, ['title', 'description', 'goals'], file, '分野ファイル', errors);
+  unknownKeys(data, ['title', 'description', 'goals'], file, 'field file', errors);
   for (const key of ['title', 'description']) {
-    if (!nonEmptyString(data[key])) errors.push(issue('E08', file, null, `${key} がない`));
+    if (!nonEmptyString(data[key])) errors.push(issue('E08', file, null, `${key} is missing`));
   }
   /** @type {Goal[]} */
   const goals = [];
   if (!Array.isArray(data.goals) || data.goals.length === 0) {
-    errors.push(issue('E08', file, null, 'goals がない(目標を1つ以上書く)'));
+    errors.push(issue('E08', file, null, 'goals is missing (give at least one goal)'));
   } else {
     const seen = new Set();
     data.goals.forEach((g, index) => {
-      const where = `goals の${index + 1}番目`;
+      const where = `goals #${index + 1}`;
       if (!isObject(g)) {
-        errors.push(issue('E01', file, null, `${where}が項目の組になっていない`));
+        errors.push(issue('E01', file, null, `${where} is not a mapping`));
         return;
       }
       unknownKeys(g, ['station', 'kind', 'label'], file, where, errors);
       for (const key of ['station', 'kind', 'label']) {
-        if (!nonEmptyString(g[key])) errors.push(issue('E08', file, null, `${where}に ${key} がない`));
+        if (!nonEmptyString(g[key])) errors.push(issue('E08', file, null, `${where} has no ${key}`));
       }
       if (g.kind !== undefined && g.kind !== 'final' && g.kind !== 'partial') {
-        errors.push(issue('E02', file, null, `${where}の kind「${g.kind}」は final か partial`));
+        errors.push(issue('E02', file, null, `${where}: kind "${g.kind}" must be final or partial`));
       }
       if (nonEmptyString(g.station)) {
-        if (seen.has(g.station)) errors.push(issue('E04', file, null, `goals に駅 ${g.station} が2回ある`));
+        if (seen.has(g.station)) errors.push(issue('E04', file, null, `station ${g.station} appears twice in goals`));
         seen.add(g.station);
         goals.push({
           station: g.station,
@@ -280,7 +390,7 @@ export function checkField(data, id, file) {
       }
     });
     if (!data.goals.some((g) => isObject(g) && g.kind === 'final')) {
-      errors.push(issue('E08', file, null, 'kind が final の目標(最終目標)がない'));
+      errors.push(issue('E08', file, null, 'no goal with kind final (final goal)'));
     }
   }
   return {
@@ -308,14 +418,14 @@ export function checkFrontMatter(data, file) {
   const errors = [];
   const obj = isObject(data) ? data : {};
   if (data !== undefined && data !== null && !isObject(data)) {
-    errors.push(issue('E01', file, 1, 'front matter は項目の組で書く'));
+    errors.push(issue('E01', file, 1, 'front matter must be a mapping'));
   }
   unknownKeys(obj, ['title', 'subtitle', 'line'], file, 'front matter', errors, 1);
   for (const key of ['title', 'line']) {
-    if (!nonEmptyString(obj[key])) errors.push(issue('E08', file, 1, `front matter に ${key} がない`));
+    if (!nonEmptyString(obj[key])) errors.push(issue('E08', file, 1, `front matter has no ${key}`));
   }
   if (obj.subtitle !== undefined && typeof obj.subtitle !== 'string') {
-    errors.push(issue('E03', file, 1, 'subtitle は文字列で書く'));
+    errors.push(issue('E03', file, 1, 'subtitle must be a string'));
   }
   return {
     title: typeof obj.title === 'string' ? obj.title.trim() : '',
@@ -353,6 +463,6 @@ function nonEmptyString(v) {
  */
 function unknownKeys(obj, allowed, file, where, errors, line = null) {
   for (const key of Object.keys(obj)) {
-    if (!allowed.includes(key)) errors.push(issue('E02', file, line, `${where}に知らない項目 ${key} がある`));
+    if (!allowed.includes(key)) errors.push(issue('E02', file, line, `${where} has unknown key ${key}`));
   }
 }

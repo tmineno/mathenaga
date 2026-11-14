@@ -17,13 +17,14 @@ import {
 } from './core/order.js';
 import { checkReferences, checkVerified } from './core/references.js';
 import { resolveRefs } from './core/resolve.js';
-import { checkField, checkFrontMatter, checkLines } from './core/schema.js';
+import { checkField, checkFrontMatter, checkLines, checkSite } from './core/schema.js';
 import { parseChapterDir, splitFrontMatter } from './core/source.js';
 import { parseYaml, readContent } from './io/content.js';
 import { writeOutput } from './io/output.js';
 import { createMarkdown } from './render/markdown.js';
 import { renderTex } from './render/math.js';
-import { generateSite } from './site/pages.js';
+import { generateSite } from './ui/html/pages.js';
+import { LOCALES } from './ui/locales/index.js';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BASE_PATH = /^\/(?:[A-Za-z0-9._~-]+\/)*$/;
@@ -50,20 +51,40 @@ export async function analyze({ contentDir, basePath, repoUrl = '' }) {
   const errors = [];
   const notices = [];
   if (!BASE_PATH.test(basePath)) {
-    errors.push(issue('E13', '-', null, `MATHENAGA_BASE_PATH「${basePath}」は / で始まり / で終わる形で書く`));
+    errors.push(issue('E13', '-', null, `SITE_BASE_PATH "${basePath}" must start and end with /`));
   }
   if (repoUrl !== '' && !REPO_URL.test(repoUrl)) {
     errors.push(
-      issue('E13', '-', null, `MATHENAGA_REPO_URL「${repoUrl}」は https://github.com/<owner>/<repo> の形で書く`),
+      issue('E13', '-', null, `SITE_REPO_URL "${repoUrl}" must have the form https://github.com/<owner>/<repo>`),
     );
   }
   if (errors.length > 0) return { errors, notices, ctx: null };
   const raw = await readContent(contentDir);
   const md = createMarkdown();
 
+  // サイトの設定・ロゴ・テーマ(content-format.md「サイトの設定」、ADR-009)
+  const siteFile = 'site.yml';
+  /** @type {import('./core/schema.js').SiteConfig | null} */
+  let siteConfig = null;
+  if (!raw.site) errors.push(issue('E01', siteFile, null, 'site.yml is missing'));
+  else {
+    const parsed = parseYaml(raw.site.text, siteFile);
+    if (parsed.error) errors.push(parsed.error);
+    else {
+      const dictionaries = Object.fromEntries(Object.entries(LOCALES).map(([id, l]) => [id, l.messages]));
+      const r = checkSite(parsed.value, siteFile, dictionaries);
+      errors.push(...r.errors);
+      siteConfig = r.site;
+    }
+  }
+  if (!raw.logo) errors.push(issue('E01', 'assets/logo.txt', null, 'assets/logo.txt is missing'));
+  // 言語ごとの処理。lang が使えないときも、残りの検査を続けるために最初の言語で読む(エラーで止まるので出力はしない)
+  const locale = LOCALES[siteConfig?.lang ?? ''] ?? Object.values(LOCALES)[0];
+  const messages = { ...locale.messages, ...(siteConfig?.messages ?? {}) };
+
   let lines = [];
   const linesFile = 'lines.yml';
-  if (!raw.lines) errors.push(issue('E01', linesFile, null, 'lines.yml がない'));
+  if (!raw.lines) errors.push(issue('E01', linesFile, null, 'lines.yml is missing'));
   else {
     const parsed = parseYaml(raw.lines.text, linesFile);
     if (parsed.error) errors.push(parsed.error);
@@ -113,7 +134,7 @@ export async function analyze({ contentDir, basePath, repoUrl = '' }) {
           'E15',
           verifiedFile,
           null,
-          `確認の記録が JSON として読めない(${String(/** @type {any} */ (e)?.message ?? e)})`,
+          `verification record is not valid JSON (${String(/** @type {any} */ (e)?.message ?? e)})`,
         ),
       );
     }
@@ -131,19 +152,19 @@ export async function analyze({ contentDir, basePath, repoUrl = '' }) {
           'E03',
           `chapters/${c.dir}/`,
           null,
-          `章フォルダ名「${c.dir}」は「章番号-章の ID」の形で書く(例:03-completeness-fixed-point)`,
+          `chapter folder name "${c.dir}" must be <chapter number>-<chapter ID> (example: 03-completeness-fixed-point)`,
         ),
       );
       continue;
     }
     const problem = idProblem(dir.id);
-    if (problem) errors.push(issue('E03', `chapters/${c.dir}/`, null, `章の ID:${problem}`));
+    if (problem) errors.push(issue('E03', `chapters/${c.dir}/`, null, `chapter ID: ${problem}`));
     if (c.text === null) {
-      errors.push(issue('E01', c.file, null, '章フォルダに index.md がない'));
+      errors.push(issue('E01', c.file, null, 'chapter folder has no index.md'));
       continue;
     }
     const src = splitFrontMatter(c.text);
-    if (src.unclosed) errors.push(issue('E01', c.file, 1, 'front matter が --- で閉じていない'));
+    if (src.unclosed) errors.push(issue('E01', c.file, 1, 'front matter is not closed with ---'));
     let fmValue;
     if (src.yaml !== null) {
       const parsed = parseYaml(src.yaml, c.file, 1);
@@ -169,7 +190,7 @@ export async function analyze({ contentDir, basePath, repoUrl = '' }) {
     chapterFiles.set(dir.id, { dirPath: c.dirPath, figures: c.figures });
   }
 
-  const g = buildSite({ lines, fields, chapters, linesFile, references, referencesFile });
+  const g = buildSite({ lines, fields, chapters, linesFile, references, referencesFile, text: locale.text, messages });
   errors.push(...g.errors);
   notices.push(...g.notices);
   const site = g.site;
@@ -184,7 +205,8 @@ export async function analyze({ contentDir, basePath, repoUrl = '' }) {
   errors.push(...refs.errors);
   const cited = new Set([...citations.values()].flatMap((m) => [...m.keys()]));
   for (const id of site.references.keys()) {
-    if (!cited.has(id)) notices.push(issue('N04', referencesFile, null, `文献 ${id} はどの章からも引かれていない`));
+    if (!cited.has(id))
+      notices.push(issue('N04', referencesFile, null, `reference ${id} is not cited from any chapter`));
   }
 
   /** @type {Map<any, string>} */
@@ -194,7 +216,7 @@ export async function analyze({ contentDir, basePath, repoUrl = '' }) {
       const r = renderTex(m.token.content, m.display);
       if (r.error !== null)
         errors.push(
-          issue('E10', c.file, m.line, `KaTeX が解釈できない数式「${m.token.content.slice(0, 40)}」:${r.error}`),
+          issue('E10', c.file, m.line, `KaTeX cannot parse the formula "${m.token.content.slice(0, 40)}": ${r.error}`),
         );
       else mathHtml.set(m.token, r.html);
     }
@@ -208,7 +230,7 @@ export async function analyze({ contentDir, basePath, repoUrl = '' }) {
             'E11',
             c.file,
             img.line,
-            `図「${img.src}」がない(図は章フォルダの figures/ に置き、相対パスで参照する)`,
+            `figure "${img.src}" not found (put figures in the chapter folder's figures/ and refer to them by relative path)`,
           ),
         );
       }
@@ -233,6 +255,11 @@ export async function analyze({ contentDir, basePath, repoUrl = '' }) {
     basePath,
     repoUrl,
     chapterFiles,
+    siteConfig,
+    locale,
+    messages,
+    logo: raw.logo,
+    theme: raw.theme?.text ?? '',
   };
   return { errors: sortIssues(errors), notices: sortIssues(notices), ctx: errors.length ? null : ctx };
 }
@@ -254,10 +281,51 @@ export async function build({ contentDir, outDir, basePath, repoUrl = '' }) {
   return { errors, notices, written: true };
 }
 
+/** 環境変数の新しい名前 → 古い名前(build.md「入力」、ADR-009) */
+const ENV_NAMES = [
+  ['SITE_BASE_PATH', 'MATHENAGA_BASE_PATH'],
+  ['SITE_REPO_URL', 'MATHENAGA_REPO_URL'],
+];
+
+/**
+ * ビルドの環境変数を読む(build.md「入力」)。古い名前(MATHENAGA_*)も受け付ける。
+ * Preconditions: なし。
+ * Postconditions: ベースパス(既定は /)とリポジトリの URL(既定は空)を返す。古い名前を使ったら N05、
+ *   新しい名前と古い名前に違う値があれば E13 を返す。値の形式は analyze() が確かめる。
+ * Failure modes: 例外は投げない。
+ * Side effects: なし。
+ * @param {Record<string, string | undefined>} env
+ * @returns {{ basePath: string, repoUrl: string, errors: import('./core/issues.js').Issue[], notices: import('./core/issues.js').Issue[] }}
+ */
+export function readEnv(env) {
+  const errors = [];
+  const notices = [];
+  /** @type {Record<string, string>} */
+  const values = {};
+  for (const [name, old] of ENV_NAMES) {
+    const value = env[name] || '';
+    const oldValue = env[old] || '';
+    values[name] = value || oldValue;
+    if (!oldValue) continue;
+    if (value && value !== oldValue) {
+      errors.push(issue('E13', '-', null, `${name} and ${old} have different values; remove ${old}`));
+    } else {
+      notices.push(issue('N05', '-', null, `${old} is an old name; use ${name}`));
+    }
+  }
+  return { basePath: values.SITE_BASE_PATH || '/', repoUrl: values.SITE_REPO_URL, errors, notices };
+}
+
 /** `npm run build` の入口。 */
 export async function main() {
-  const basePath = process.env.MATHENAGA_BASE_PATH || '/';
-  const repoUrl = process.env.MATHENAGA_REPO_URL || '';
+  const env = readEnv(process.env);
+  for (const n of env.notices) console.log(formatIssue(n));
+  if (env.errors.length > 0) {
+    for (const e of env.errors) console.error(formatIssue(e));
+    process.exitCode = 1;
+    return;
+  }
+  const { basePath, repoUrl } = env;
   const result = await build({
     contentDir: path.join(ROOT, 'content'),
     outDir: path.join(ROOT, 'dist'),
@@ -267,11 +335,11 @@ export async function main() {
   for (const n of result.notices) console.log(formatIssue(n));
   if (result.errors.length > 0) {
     for (const e of result.errors) console.error(formatIssue(e));
-    console.error(`ビルドを止めた:エラー ${result.errors.length}件。dist/ は変えていない`);
+    console.error(`build stopped: ${result.errors.length} error(s); dist/ is unchanged`);
     process.exitCode = 1;
     return;
   }
-  console.log(`dist/ に書き出した(通知 ${result.notices.length}件)`);
+  console.log(`wrote dist/ (${result.notices.length} notice(s))`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -110,8 +110,8 @@ export function checkMaps(site, linesFile) {
   const errors = [];
   const notices = [];
   const maps = [
-    { name: '全体の図', drawn: new Set(site.stations.map((s) => s.id)), planned: true },
-    ...site.fields.map((f) => ({ name: `${f.title}の図`, drawn: site.scope.get(f.id) ?? new Set(), planned: false })),
+    { name: 'whole map', drawn: new Set(site.stations.map((s) => s.id)), planned: true },
+    ...site.fields.map((f) => ({ name: `${f.title} map`, drawn: site.scope.get(f.id) ?? new Set(), planned: false })),
   ];
   for (const m of maps) {
     const layout = layoutMap(site, m.drawn, { planned: m.planned });
@@ -122,7 +122,7 @@ export function checkMaps(site, linesFile) {
             'E12',
             linesFile,
             null,
-            `${m.name}:支線 ${x.line.name} の最初の駅は未執筆の第${x.first.chapter.number}章の「${x.first.name}」で、planned の requires が幹線の駅も、路線ファイルで前にある支線の駅も指していない`,
+            `${m.name}: the first station of branch line ${x.line.name} is "${x.first.name}" of planned chapter ${x.first.chapter.number}, and its planned requires points to neither a trunk line station nor a station of a branch line earlier in the lines file`,
           ),
         );
         continue;
@@ -132,24 +132,28 @@ export function checkMaps(site, linesFile) {
           'E12',
           x.first.chapter.file,
           x.first.model.line,
-          `${m.name}:支線 ${x.line.name} の最初の駅 ${x.first.id} が、幹線の駅も、路線ファイルで前にある支線の駅も前提にしていない`,
+          `${m.name}: the first station ${x.first.id} of branch line ${x.line.name} requires neither a trunk line station nor a station of a branch line earlier in the lines file`,
         ),
       );
     }
     for (const x of layout.lateStarts) {
-      const later = x.later.map((s) => s.id).join('、');
-      const where = x.first.planned ? `未執筆の第${x.first.chapter.number}章の「${x.first.name}」` : `${x.first.id}`;
+      const later = x.later.map((s) => s.id).join(', ');
+      const where = x.first.planned
+        ? `"${x.first.name}" of planned chapter ${x.first.chapter.number}`
+        : `${x.first.id}`;
       errors.push(
         issue(
           'E12',
           x.first.planned ? linesFile : x.first.chapter.file,
           x.first.planned ? null : x.first.model.line,
-          `${m.name}:始発の路線 ${x.line.name} の最初の駅 ${where} が、路線ファイルで後ろにある路線の駅(${later})を前提にしている`,
+          `${m.name}: the first station ${where} of starting line ${x.line.name} requires a station of a line later in the lines file (${later})`,
         ),
       );
     }
     for (const f of layout.fallbacks) {
-      notices.push(issue('N03', linesFile, null, `${m.name}:支線 ${f.line.name} を${f.drawn}描いた(${f.reason})`));
+      notices.push(
+        issue('N03', linesFile, null, `${m.name}: branch line ${f.line.name} was drawn ${f.drawn} (${f.reason})`),
+      );
     }
   }
   return { errors, notices };

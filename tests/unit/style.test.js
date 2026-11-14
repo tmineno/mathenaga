@@ -6,7 +6,7 @@ import fs from 'node:fs/promises';
 import { test } from 'node:test';
 
 test('style.css: OS のダークとテーマのダークの値は同じ', async () => {
-  const css = await fs.readFile(new URL('../../src/site/assets/style.css', import.meta.url), 'utf8');
+  const css = await fs.readFile(new URL('../../src/ui/theme/00-tokens.css', import.meta.url), 'utf8');
   const media = /@media \(prefers-color-scheme: dark\) \{\s*:root:not\(\[data-theme='light'\]\) \{([^}]*)\}\s*\}/.exec(
     css,
   );

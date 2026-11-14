@@ -1,0 +1,82 @@
+/* MathEnaga のページの見た目(docs/spec/site.md「Performance / Safety」)。
+   路線の色は assets/lines.css が --lc に入れる。 */
+:root {
+  --paper: #f3f5f8;
+  --surface: #ffffff;
+  --ink: #18202e;
+  --muted: #596377;
+  --rule: #d7dde6;
+  --accent: #5b45b8;
+  --accent-soft: #ece8fa;
+  /* 路線図で強調する章の札と駅の札の地(route-map.md「印と凡例」)。ダークでは地との明るさの差が小さいので強める */
+  --card-hl: #ece8fa;
+  --ok: #0f7f73;
+  --ok-soft: #e0f2ef;
+  --warn: #a3560f;
+  --warn-soft: #fbeedf;
+  --font-display:
+    'Zen Kaku Gothic New', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', 'Yu Gothic', system-ui, sans-serif;
+  --font-body: 'BIZ UDPGothic', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', 'Yu Gothic', system-ui, sans-serif;
+  --font-code: 'Barlow Semi Condensed', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;
+  /* ページの段の幅。上端のバー・本文・路線図の枠の左右の端を、この幅でそろえる。 */
+  --page: 1160px;
+  color-scheme: light;
+}
+/* ダークの値。OS の設定に合わせるとき(下の @media)と、表示の設定でダークを選んだとき([data-theme='dark'])の
+   2か所に同じ値を書く(site.md「表示の設定」)。2つが同じであることはテストが確かめる。
+   color-scheme は、<img> の SVG の中の prefers-color-scheme にも渡る。 */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --paper: #10141b;
+    --surface: #181d26;
+    --ink: #e4e8ef;
+    --muted: #a0a9b9;
+    --rule: #2a313e;
+    --accent: #aa98f2;
+    --accent-soft: #221d38;
+    --card-hl: #40366f;
+    --ok: #4dc1b3;
+    --ok-soft: #112e2a;
+    --warn: #e69c59;
+    --warn-soft: #31230f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme='dark'] {
+  --paper: #10141b;
+  --surface: #181d26;
+  --ink: #e4e8ef;
+  --muted: #a0a9b9;
+  --rule: #2a313e;
+  --accent: #aa98f2;
+  --accent-soft: #221d38;
+  --card-hl: #40366f;
+  --ok: #4dc1b3;
+  --ok-soft: #112e2a;
+  --warn: #e69c59;
+  --warn-soft: #31230f;
+  color-scheme: dark;
+}
+/* 本文の幅(site.md「表示の設定」)。初期値は :root の --page */
+:root[data-width='narrow'] {
+  --page: 860px;
+}
+:root[data-width='wide'] {
+  --page: 1400px;
+}
+
+* {
+  box-sizing: border-box;
+}
+/* 文字の大きさ(site.md「表示の設定」)。本文の段とポップアップの文字は rem で書き、ここで拡大・縮小する。
+   上端のバー・路線図・設定のメニュー・選択メニュー・起票のアイコンの文字は px で書き、変えない。 */
+html {
+  -webkit-text-size-adjust: 100%;
+  font-size: 16px;
+}
+html[data-text='small'] {
+  font-size: 14px;
+}
+html[data-text='large'] {
+  font-size: 18px;
+}

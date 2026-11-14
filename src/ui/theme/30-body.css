@@ -1,0 +1,435 @@
+/* 本文の枠 */
+.wrap {
+  max-width: var(--page);
+  margin: 0 auto;
+  padding: 32px 16px 72px;
+  display: grid;
+  gap: 40px;
+  grid-template-columns: minmax(0, 1fr);
+}
+.wrap > * {
+  min-width: 0;
+}
+.chapter {
+  display: grid;
+  gap: 28px;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+.chapter > * {
+  min-width: 0;
+}
+.chapter section {
+  scroll-margin-top: 112px;
+}
+.chapter > section.station,
+.chapter > section.start,
+.chapter > section.review,
+.chapter > section.quiz,
+.chapter > section.ahead {
+  border-top: 1px solid var(--rule);
+  padding-top: 28px;
+}
+.ch-head {
+  display: grid;
+  gap: 14px;
+}
+.eyebrow {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+}
+.ch-title {
+  font-size: clamp(1.8rem, 3.6vw, 2.4rem);
+}
+.ch-sub {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 1.15rem;
+  color: var(--muted);
+  margin-top: -6px;
+}
+.here {
+  display: grid;
+  gap: 6px;
+  font-size: 0.875rem;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 12px 16px;
+}
+.here div {
+  display: grid;
+  grid-template-columns: 5.5em minmax(0, 1fr);
+  gap: 8px;
+}
+.here dt {
+  color: var(--muted);
+  font-weight: 700;
+}
+.here dd {
+  margin: 0;
+  min-width: 0;
+}
+.sec-h {
+  font-size: 1.25rem;
+}
+.chapter h2 {
+  font-size: 1.35rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+.chapter h3 {
+  font-size: 1rem;
+  color: var(--muted);
+}
+.en {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* 表示番号の札 */
+.badge {
+  display: inline-block;
+  font-family: var(--font-code);
+  font-weight: 600;
+  font-size: 0.82em;
+  line-height: 1.45;
+  padding: 0 0.35em;
+  border: 2px solid currentColor;
+  border-radius: 5px;
+  color: var(--lc, var(--muted));
+}
+.chapter h2 .badge {
+  font-size: 0.8rem;
+}
+
+/* 分野の選択肢 */
+.chooser {
+  border: 1px solid var(--accent);
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: grid;
+  gap: 10px;
+}
+.chooser-t {
+  font-weight: 700;
+}
+.chooser-b {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pick {
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  padding: 6px 16px;
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  background: var(--surface);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.pick:hover {
+  background: var(--accent-soft);
+}
+
+/* 共通版と分野版 */
+.vgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.vgroup > .v {
+  min-width: 0;
+}
+.vgroup > .v.common {
+  order: -2;
+}
+.vgroup > details.v.primary {
+  order: -1;
+}
+.vgroup > details.v:not(.primary) {
+  border: 1px dashed var(--rule);
+  border-radius: 8px;
+}
+.vgroup > details.v:not(.primary) > summary {
+  cursor: pointer;
+  padding: 6px 12px;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.vgroup > details.v:not(.primary)[open] > summary {
+  border-bottom: 1px dashed var(--rule);
+}
+.vgroup > details.v:not(.primary) > .v-body {
+  padding: 12px 16px;
+}
+.vgroup > details.v.primary > summary {
+  list-style: none;
+  cursor: default;
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.6;
+  padding: 1px 8px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+.vgroup > details.v.primary > summary::-webkit-details-marker {
+  display: none;
+}
+.vgroup[data-kind='goal'] > .v.common,
+.vgroup[data-kind='goal'] > details.v.primary {
+  border: 2px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+.vgroup[data-kind='goal'] .flow {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.1rem;
+  line-height: 1.7;
+}
+.vgroup[data-kind='goal'] > details.v.primary > summary,
+.tag.tag-goal {
+  background: var(--accent);
+  color: var(--surface);
+  border-color: transparent;
+}
+.vgroup[data-kind='application'] > details.v.primary {
+  border: 1px solid var(--ok);
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 14px 18px;
+}
+.vgroup[data-kind='application'] > details.v.primary > summary {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.vgroup[data-kind='motivation'] > details.v.primary > summary {
+  background: var(--paper);
+  color: var(--muted);
+  border: 1px solid var(--rule);
+}
+
+/* 駅 */
+.station.is-out > :not(h2) {
+  opacity: 0.45;
+}
+.out-label {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+  border: 1px dashed var(--muted);
+  border-radius: 999px;
+  padding: 0 10px;
+}
+.goal-note {
+  font-size: 0.875rem;
+  border: 1px solid var(--ok);
+  background: var(--ok-soft);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.gk {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 0 6px;
+  margin-right: 8px;
+  vertical-align: 1px;
+}
+.gk.final {
+  background: var(--ink);
+  color: var(--paper);
+}
+.gk.partial {
+  background: var(--surface);
+  color: var(--ok);
+  border: 1px solid var(--ok);
+}
+.box {
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 14px 18px;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+.box > *,
+.flow > *,
+.qs > li > *,
+.v-body > * {
+  min-width: 0;
+}
+.qs > li,
+.sec,
+.mapsec,
+.map-v,
+.ch-head,
+.chooser {
+  grid-template-columns: minmax(0, 1fr);
+}
+.tag {
+  justify-self: start;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.6;
+  padding: 1px 8px;
+  border-radius: 4px;
+  background: var(--paper);
+  color: var(--muted);
+  border: 1px solid var(--rule);
+}
+.tag-en {
+  font-weight: 400;
+  letter-spacing: 0;
+  margin-left: 8px;
+  opacity: 0.8;
+}
+.box.def .tag {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: transparent;
+}
+.box.thm {
+  border: 2px solid var(--accent);
+}
+.box.thm .tag {
+  background: var(--accent);
+  color: var(--surface);
+  border-color: transparent;
+}
+.box.proof-sketch .tag,
+.thm-part.proof-sketch > .tag,
+details.fold.proof > summary > .tag {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: transparent;
+}
+.box.drop-assumption,
+.box.pitfall {
+  border-color: var(--warn);
+}
+.box.drop-assumption .tag,
+.box.pitfall .tag {
+  background: var(--warn-soft);
+  color: var(--warn);
+  border-color: transparent;
+}
+/* 補足(remark)。読み飛ばしてよいので、ほかの枠より控えめにする(site.md「駅の表示」) */
+.box.remark {
+  border-style: dashed;
+}
+/* 注の一覧(site.md「注と参考文献の表示」) */
+.notes {
+  border-top: 1px solid var(--rule);
+  padding-top: 8px;
+  font-size: 0.875em;
+}
+.notes-h {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+.note-list,
+.refs {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 4px;
+}
+.note-item,
+.ref-item {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.note-no,
+.ref-no {
+  color: var(--muted);
+  font-weight: 700;
+  margin-right: 8px;
+}
+.note-back {
+  margin-left: 6px;
+  text-decoration: none;
+}
+.note-ref {
+  font-size: 0.7em;
+  line-height: 0;
+  margin: 0 1px;
+}
+.note-ref a,
+a.cite {
+  text-decoration: none;
+}
+.note-ref a:hover,
+a.cite:hover {
+  text-decoration: underline;
+}
+/* 定理の枠の中の証明の骨格。定理の本文と線で区切る(site.md「駅の表示」) */
+.thm-part {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  border-top: 1px solid var(--rule);
+  padding-top: 12px;
+}
+details.fold {
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--surface);
+}
+details.fold > summary {
+  cursor: pointer;
+  padding: 10px 18px;
+  font-weight: 700;
+}
+details.fold[open] > summary {
+  border-bottom: 1px solid var(--rule);
+}
+/* 証明の詳細の見出しは札の大きさにそろえる(開閉の三角も札の文字に合わせて小さくする) */
+details.fold.proof > summary {
+  padding: 8px 14px;
+  font-size: 0.75rem;
+}
+.fold-body {
+  padding: 14px 18px;
+  min-width: 0;
+}
+.qs {
+  padding-left: 1.4em;
+  display: grid;
+  gap: 18px;
+}
+.qs > li {
+  display: grid;
+  gap: 10px;
+}
+.next {
+  list-style: none;
+  padding-left: 0;
+  display: grid;
+  gap: 10px;
+}
+.next b {
+  font-family: var(--font-display);
+  margin-right: 8px;
+}

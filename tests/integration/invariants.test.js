@@ -8,7 +8,7 @@ import path from 'node:path';
 import { after, describe, test } from 'node:test';
 import * as yaml from 'js-yaml';
 import { layoutMap } from '../../src/core/map.js';
-import { versionOf } from '../../src/site/pages.js';
+import { versionOf } from '../../src/ui/html/pages.js';
 import {
   CONTENT,
   CURRENT_CONTENT,
@@ -81,7 +81,7 @@ for (const [name, src, load] of MANUSCRIPTS) {
       for (const n of result.notices.filter((x) => x.code === 'N01')) {
         const m = /\(([^)]*)\)$/.exec(n.message);
         assert.ok(m, `N01 の駅の一覧が読めない:${n.message}`);
-        for (const id of zero) assert.ok(!m[1].split('、').includes(id), `第0章の駅 ${id} が N01 に出ている`);
+        for (const id of zero) assert.ok(!m[1].split(', ').includes(id), `第0章の駅 ${id} が N01 に出ている`);
       }
     });
 

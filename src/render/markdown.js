@@ -106,7 +106,7 @@ export function createMarkdown() {
       .filter((c) => c.parts.length > 0)
       .map((c) => `${c.mark}${c.parts.map(part).join('')}`)
       .join(' ');
-    return `</span><figcaption><span class="fig-no">図 ${esc(fig.label)}</span>${caption ? ` ${caption}` : ''}</figcaption></figure>\n`;
+    return `</span><figcaption><span class="fig-no">${esc(fig.no)}</span>${caption ? ` ${caption}` : ''}</figcaption></figure>\n`;
   };
   for (const type of NUMBERED) {
     const base = md.renderer.rules[type];
