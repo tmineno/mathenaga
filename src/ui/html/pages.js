@@ -21,10 +21,7 @@ import { lookScript } from '../shared/settings.js';
 import { birdSvg, blocks, FAVICON_SIZE, faviconPng, faviconSvg, logoSvg, parseBitmap, trim } from './logo.js';
 
 const UI = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-/** ロゴのドットマップ(サイトの設定に移すまでの置き場所) */
-const LOGO = path.join(UI, '..', 'site', 'assets', 'logo.txt');
 const KATEX_DIR = path.dirname(createRequire(import.meta.url).resolve('katex'));
-const SITE_NAME = 'MathEnaga';
 const OUT_OF_SCOPE = 'この分野の目標には不要(読み飛ばし可)';
 const ISSUE_TIP = 'この駅についてGitHub Issueに起票する';
 /** 吹き出しのアイコン */
@@ -44,10 +41,18 @@ const BLOCK_LABELS = {
   pitfall: '落とし穴',
   remark: '補足',
 };
-const FONTS =
-  '<link rel="preconnect" href="https://fonts.googleapis.com">' +
-  '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
-  '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Zen+Kaku+Gothic+New:wght@500;700&family=Barlow+Semi+Condensed:wght@600&display=swap">';
+/**
+ * 書体の読み込み(site.md「Performance / Safety」の書体)。site.yml の fonts がなければ何も読み込まない。
+ * @param {string} url  Google Fonts の CSS の URL(検査済み)
+ */
+function fontLinks(url) {
+  if (!url) return '';
+  return (
+    '<link rel="preconnect" href="https://fonts.googleapis.com">' +
+    '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
+    `<link rel="stylesheet" href="${h(url)}">`
+  );
+}
 
 /**
  * サイト全体のファイルを作る。
@@ -59,7 +64,7 @@ const FONTS =
  * @returns {Promise<Map<string, import('../../io/output.js').OutputFile>>}
  */
 export async function generateSite(ctx) {
-  const logo = trim(parseBitmap(await fs.readFile(LOGO, 'utf8'), 'src/site/assets/logo.txt'));
+  const logo = trim(parseBitmap(ctx.logo.text, ctx.logo.file));
   const bird = blocks(logo)[0];
   const r = new Renderer(ctx, { logo, bird });
   /** @type {Map<string, import('../../io/output.js').OutputFile>} */
@@ -74,8 +79,11 @@ export async function generateSite(ctx) {
     }
   }
   files.set('defs.json', r.definitionIndex());
-  files.set('assets/style.css', await themeCss());
-  files.set('assets/app.js', await clientScript());
+  files.set('assets/style.css', [await themeCss(), ...(ctx.theme ? [ctx.theme] : [])].join('\n'));
+  files.set(
+    'assets/app.js',
+    await clientScript({ storagePrefix: ctx.siteConfig.storagePrefix, messages: ctx.messages }),
+  );
   files.set('assets/lines.css', lineCss(ctx.site.lines));
   files.set('assets/favicon.svg', faviconSvg(bird));
   files.set('assets/favicon.png', faviconPng(bird));
@@ -116,11 +124,13 @@ export async function themeCss() {
 /**
  * 閲覧時のスクリプト(docs/spec/build.md「出力」)。src/ui/client/index.js から読むモジュールを、esbuild で1つの即時関数にまとめる。
  * Preconditions: esbuild がインストール済み。
- * Postconditions: まとめたスクリプトを返す。同じソースからは同じ文字列になる。
+ * サイトの文言と保存キーの接頭辞は、ENAGA_SITE として埋め込む(src/ui/client/site.js)。
+ * Postconditions: まとめたスクリプトを返す。同じソースと同じ site からは同じ文字列になる。
  * Failure modes: モジュールが解決できない・構文の誤りがあれば例外。
  * Side effects: src/ui/client/ と src/ui/shared/ を読む。
+ * @param {{ storagePrefix: string, messages: Record<string, string> }} site
  */
-export async function clientScript() {
+export async function clientScript(site) {
   const out = await esbuild({
     entryPoints: [path.join(UI, 'client', 'index.js')],
     bundle: true,
@@ -129,6 +139,7 @@ export async function clientScript() {
     charset: 'utf8',
     legalComments: 'none',
     logLevel: 'silent',
+    define: { ENAGA_SITE: JSON.stringify(site) },
   });
   return out.outputFiles[0].text;
 }
@@ -153,9 +164,6 @@ export function lineCss(lines) {
   const dark = (scope) => lines.map((l) => `${scope} .l-${l.id}{--lc:${l.colorDark}}`).join('\n');
   return `${light}\n@media (prefers-color-scheme: dark){\n${dark(":root:not([data-theme='light'])")}\n}\n${dark(":root[data-theme='dark']")}\n`;
 }
-
-/** head の中で表示の設定を html の属性に移すスクリプト(src/ui/shared/settings.js) */
-const LOOK_SCRIPT = lookScript();
 
 /**
  * トークン i が段落として数えるもの(site.md「位置情報つきのコピー」)なら、data-p を付けるトークンを返す。
@@ -183,7 +191,11 @@ class Renderer {
   constructor(ctx, art) {
     this.ctx = ctx;
     /** トップページの見出しのロゴ */
-    this.logoSvg = logoSvg(art.logo, { className: 'logo', label: SITE_NAME });
+    /** サイト名(site.yml の name) */
+    this.siteName = ctx.siteConfig.name;
+    this.logoSvg = logoSvg(art.logo, { className: 'logo', label: this.siteName });
+    /** head の中で表示の設定を html の属性に移すスクリプト(src/ui/shared/settings.js) */
+    this.lookScript = lookScript(ctx.siteConfig.storagePrefix);
     /** 上端のバーのアイコン */
     this.birdSvg = birdSvg(art.bird, 'mark-icon');
     /** @type {import('../../core/graph.js').Site} */
@@ -367,7 +379,7 @@ class Renderer {
     if (numbers.size === 0) return '';
     const items = [...numbers].map(([id, n]) => {
       const r = this.site.references.get(id);
-      return `<li id="${h(id)}" class="ref-item" data-p="${n}"><span class="ref-no">[${n}]</span> <span class="ref-body">${r ? bibliography(r) : h(id)}</span></li>`;
+      return `<li id="${h(id)}" class="ref-item" data-p="${n}"><span class="ref-no">[${n}]</span> <span class="ref-body">${r ? this.ctx.locale.bibliography(r) : h(id)}</span></li>`;
     });
     return `<section class="refs-sec" id="_references" data-loc="参考文献"${this.sectionIssue(c, '参考文献', '_references')}><h2 class="sec-h" data-p="0">参考文献</h2><ol class="refs">${items.join('')}</ol></section>`;
   }
@@ -503,15 +515,15 @@ class Renderer {
         .map((st) => ({ id: st.id, code: st.code, name: st.name, ch: st.chapter.number, chapter: st.chapter.id })),
     ).replace(/</g, '\\u003c');
     return `<!doctype html>
-<html lang="ja" data-base="${h(this.base)}" data-defs="${h(this.asset('defs.json'))}">
+<html lang="${h(this.ctx.siteConfig.lang)}" data-base="${h(this.base)}" data-defs="${h(this.asset('defs.json'))}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>${LOOK_SCRIPT}</script>
+<script>${this.lookScript}</script>
 <title>${h(p.title)}</title>
 <link rel="icon" href="${this.asset('assets/favicon.png')}" type="image/png" sizes="${FAVICON_SIZE}x${FAVICON_SIZE}">
 <link rel="icon" href="${this.asset('assets/favicon.svg')}" type="image/svg+xml">
-${FONTS}
+${fontLinks(this.ctx.siteConfig.fonts)}
 <link rel="stylesheet" href="${this.asset('assets/katex/katex.min.css')}">
 <link rel="stylesheet" href="${this.asset('assets/style.css')}">
 <link rel="stylesheet" href="${this.asset('assets/lines.css')}">
@@ -532,7 +544,7 @@ ${p.main}
 
   /** @param {string} crumb */
   barStart(crumb) {
-    return `<a class="mark" href="${this.base}">${this.birdSvg}${SITE_NAME}</a><span class="crumb">${h(crumb)}</span>`;
+    return `<a class="mark" href="${this.base}">${this.birdSvg}${h(this.siteName)}</a><span class="crumb">${h(crumb)}</span>`;
   }
 
   // ---------- トップページ ----------
@@ -555,7 +567,12 @@ ${p.main}
     const main = `<section class="intro"><h1 class="logo-h">${this.logoSvg}</h1></section>
 <section class="sec"><h2 class="sec-h">路線図</h2><div class="map-v">${map.html}</div></section>
 <section class="sec"><h2 class="sec-h">分野</h2><ul class="field-list">${fields}</ul></section>`;
-    return this.page({ title: SITE_NAME, bodyClass: 'page-top', bar: `${this.barStart('')}${BOOKMARK_OPEN}`, main });
+    return this.page({
+      title: this.siteName,
+      bodyClass: 'page-top',
+      bar: `${this.barStart('')}${BOOKMARK_OPEN}`,
+      main,
+    });
   }
 
   // ---------- 分野の入口ページ ----------
@@ -595,7 +612,7 @@ ${p.main}
 <section class="sec"><h2 class="sec-h">路線図</h2><div class="map-v">${map.html}</div></section>
 <section class="sec"><h2 class="sec-h">通る章</h2><div class="tbl-scroll"><table class="chap"><thead><tr><th>章</th><th>この分野で通る駅</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
     return this.page({
-      title: `${f.title} | ${SITE_NAME}`,
+      title: `${f.title} | ${this.siteName}`,
       bodyClass: 'page-field',
       bar: `${this.barStart('分野の入口')}${BOOKMARK_OPEN}`,
       main,
@@ -727,7 +744,9 @@ ${c.subtitle ? `<p class="ch-sub">${h(c.subtitle)}</p>` : ''}
     ].join('');
     const aheadSec = `<section class="ahead" id="_ahead"><h2 class="sec-h">この先</h2>${ahead}</section>`;
 
-    const source = this.repoUrl ? ` data-source="${h(`${this.repoUrl}/blob/main/content/${c.file}`)}"` : '';
+    const source = this.repoUrl
+      ? ` data-source="${h(`${this.repoUrl}/blob/${this.ctx.siteConfig.repoBranch}/content/${c.file}`)}"`
+      : '';
     const main = `<article class="chapter" data-chapter="${c.number}" data-id="${h(c.id)}"${source}>
 ${head}
 ${chooser}
@@ -740,7 +759,7 @@ ${questions}
 ${this.referencesSection(c)}
 ${aheadSec}
 </article>`;
-    return this.page({ title: `第${c.number}章 ${c.title} | ${SITE_NAME}`, bodyClass: 'page-chapter', bar, main });
+    return this.page({ title: `第${c.number}章 ${c.title} | ${this.siteName}`, bodyClass: 'page-chapter', bar, main });
   }
 
   /** @param {any} c @param {import('../../core/graph.js').StationInfo} st */
@@ -964,36 +983,4 @@ ${notes}${items.join('')}${appHtml}${this.notesList(
     }
     return `${JSON.stringify(out)}\n`;
   }
-}
-
-/**
- * 参考文献の項目の書誌(site.md「注と参考文献の表示」)。要素を「、」で区切って「。」で終え、
- * その後に ISBN と DOI のリンクを空白で区切って置く。書名・題名に仮名か漢字があれば和文として扱う。
- * @param {import('../../core/references.js').Reference} r
- */
-export function bibliography(r) {
-  const ja = /[\u3040-\u30ff\u3400-\u9fff]/.test(r.title);
-  const authors = r.authors.length >= 4 ? `${h(r.authors[0])}ほか` : r.authors.map(h).join('、');
-  /** @type {string[]} */
-  const parts = [authors];
-  if (r.type === 'book') {
-    // 多巻本の巻は、書名の後に空白を挟んで書名と一緒に囲む(『解析入門 II』)
-    const title = r.volume ? `${h(r.title)} ${h(r.volume)}` : h(r.title);
-    parts.push(ja ? `『${title}』` : `<i>${title}</i>`);
-    if (r.edition) parts.push(h(r.edition));
-    if (r.publisher) parts.push(h(r.publisher));
-  } else {
-    parts.push(ja ? `「${h(r.title)}」` : `“${h(r.title)}”`);
-    if (r.journal) parts.push(ja ? h(r.journal) : `<i>${h(r.journal)}</i>`);
-    if (r.volume) parts.push(`${h(r.volume)}${r.issue ? `(${h(r.issue)})` : ''}`);
-    if (r.pages) parts.push(h(r.pages));
-  }
-  parts.push(String(r.year));
-  let out = `${parts.join('、')}。`;
-  if (r.isbn) out += ` ISBN ${h(r.isbn)}`;
-  if (r.doi) {
-    const url = `https://doi.org/${r.doi}`;
-    out += ` <a href="${h(url)}">${h(url)}</a>`;
-  }
-  return out;
 }

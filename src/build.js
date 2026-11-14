@@ -17,13 +17,14 @@ import {
 } from './core/order.js';
 import { checkReferences, checkVerified } from './core/references.js';
 import { resolveRefs } from './core/resolve.js';
-import { checkField, checkFrontMatter, checkLines } from './core/schema.js';
+import { checkField, checkFrontMatter, checkLines, checkSite } from './core/schema.js';
 import { parseChapterDir, splitFrontMatter } from './core/source.js';
 import { parseYaml, readContent } from './io/content.js';
 import { writeOutput } from './io/output.js';
 import { createMarkdown } from './render/markdown.js';
 import { renderTex } from './render/math.js';
 import { generateSite } from './ui/html/pages.js';
+import { LOCALES } from './ui/locales/index.js';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BASE_PATH = /^\/(?:[A-Za-z0-9._~-]+\/)*$/;
@@ -60,6 +61,26 @@ export async function analyze({ contentDir, basePath, repoUrl = '' }) {
   if (errors.length > 0) return { errors, notices, ctx: null };
   const raw = await readContent(contentDir);
   const md = createMarkdown();
+
+  // サイトの設定・ロゴ・テーマ(content-format.md「サイトの設定」、ADR-009)
+  const siteFile = 'site.yml';
+  /** @type {import('./core/schema.js').SiteConfig | null} */
+  let siteConfig = null;
+  if (!raw.site) errors.push(issue('E01', siteFile, null, 'site.yml is missing'));
+  else {
+    const parsed = parseYaml(raw.site.text, siteFile);
+    if (parsed.error) errors.push(parsed.error);
+    else {
+      const dictionaries = Object.fromEntries(Object.entries(LOCALES).map(([id, l]) => [id, l.messages]));
+      const r = checkSite(parsed.value, siteFile, dictionaries);
+      errors.push(...r.errors);
+      siteConfig = r.site;
+    }
+  }
+  if (!raw.logo) errors.push(issue('E01', 'assets/logo.txt', null, 'assets/logo.txt is missing'));
+  // 言語ごとの処理。lang が使えないときも、残りの検査を続けるために最初の言語で読む(エラーで止まるので出力はしない)
+  const locale = LOCALES[siteConfig?.lang ?? ''] ?? Object.values(LOCALES)[0];
+  const messages = { ...locale.messages, ...(siteConfig?.messages ?? {}) };
 
   let lines = [];
   const linesFile = 'lines.yml';
@@ -169,7 +190,7 @@ export async function analyze({ contentDir, basePath, repoUrl = '' }) {
     chapterFiles.set(dir.id, { dirPath: c.dirPath, figures: c.figures });
   }
 
-  const g = buildSite({ lines, fields, chapters, linesFile, references, referencesFile });
+  const g = buildSite({ lines, fields, chapters, linesFile, references, referencesFile, text: locale.text });
   errors.push(...g.errors);
   notices.push(...g.notices);
   const site = g.site;
@@ -233,6 +254,11 @@ export async function analyze({ contentDir, basePath, repoUrl = '' }) {
     basePath,
     repoUrl,
     chapterFiles,
+    siteConfig,
+    locale,
+    messages,
+    logo: raw.logo,
+    theme: raw.theme?.text ?? '',
   };
   return { errors: sortIssues(errors), notices: sortIssues(notices), ctx: errors.length ? null : ctx };
 }

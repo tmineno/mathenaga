@@ -228,6 +228,116 @@ function checkPlanned(value, lineId, file, where, errors) {
 }
 
 /**
+ * @typedef {object} SiteConfig  サイトの設定(content-format.md「サイトの設定」、ADR-009)
+ * @property {string} name           サイト名
+ * @property {string} lang           ページの言語(言語ごとの処理の ID)
+ * @property {string} storagePrefix  ブラウザに保存するキーの接頭辞
+ * @property {string} fonts          書体の CSS の URL。空なら書体を読み込まない
+ * @property {string} repoBranch     原稿のファイルの URL に使うブランチ名
+ * @property {Record<string, string>} messages  上書きする文言
+ */
+
+const STORAGE_PREFIX = /^[a-z][a-z0-9-]*$/;
+const FONTS_ORIGIN = 'https://fonts.googleapis.com/';
+const BRANCH = /^[A-Za-z0-9._/-]+$/;
+const PLACEHOLDER = /\{([A-Za-z]+)\}/g;
+
+/**
+ * サイトの設定を検査する。
+ * Preconditions: data は site.yml を解釈した値。dictionaries は言語の ID → その言語の文言の辞書。
+ * Postconditions: 設定を返す。誤りは errors に入れる。誤りがあっても、読めた項目で設定を作る。
+ * Failure modes: 項目の組でなければ site は null。
+ * Side effects: なし。
+ * @param {unknown} data
+ * @param {string} file
+ * @param {Record<string, Record<string, string>>} dictionaries
+ * @returns {{ site: SiteConfig | null, errors: import('./issues.js').Issue[] }}
+ */
+export function checkSite(data, file, dictionaries) {
+  const errors = [];
+  if (!isObject(data)) {
+    errors.push(issue('E01', file, null, 'site.yml must be a mapping of keys to values'));
+    return { site: null, errors };
+  }
+  unknownKeys(data, ['name', 'lang', 'storage_prefix', 'fonts', 'repo_branch', 'messages'], file, 'site.yml', errors);
+  for (const key of ['name', 'lang', 'storage_prefix']) {
+    if (data[key] === undefined || data[key] === null) errors.push(issue('E08', file, null, `${key} is missing`));
+  }
+  if (data.name !== undefined && data.name !== null && !nonEmptyString(data.name)) {
+    errors.push(issue('E03', file, null, 'name must be a non-empty string'));
+  }
+  const lang = typeof data.lang === 'string' ? data.lang : '';
+  const dictionary = Object.hasOwn(dictionaries, lang) ? dictionaries[lang] : null;
+  if (data.lang !== undefined && data.lang !== null && !dictionary) {
+    errors.push(
+      issue(
+        'E02',
+        file,
+        null,
+        `lang "${data.lang}" has no language processing (available: ${Object.keys(dictionaries).join(', ')})`,
+      ),
+    );
+  }
+  const prefix = data.storage_prefix;
+  if (prefix !== undefined && prefix !== null && !(typeof prefix === 'string' && STORAGE_PREFIX.test(prefix))) {
+    errors.push(issue('E03', file, null, `storage_prefix "${prefix}" must start with a-z and use only a-z, 0-9 and -`));
+  }
+  const fonts = data.fonts;
+  if (fonts !== undefined && fonts !== null && !(typeof fonts === 'string' && fonts.startsWith(FONTS_ORIGIN))) {
+    errors.push(issue('E03', file, null, `fonts "${fonts}" must start with ${FONTS_ORIGIN}`));
+  }
+  const branch = data.repo_branch;
+  if (branch !== undefined && branch !== null && !(typeof branch === 'string' && BRANCH.test(branch))) {
+    errors.push(issue('E03', file, null, `repo_branch "${branch}" must be a branch name`));
+  }
+  /** @type {Record<string, string>} */
+  const messages = {};
+  if (data.messages !== undefined && data.messages !== null) {
+    if (!isObject(data.messages))
+      errors.push(issue('E03', file, null, 'messages must be a mapping of keys to strings'));
+    else {
+      for (const [key, value] of Object.entries(data.messages)) {
+        if (dictionary && !Object.hasOwn(dictionary, key)) {
+          errors.push(issue('E02', file, null, `messages: "${key}" is not a message of lang "${lang}"`));
+          continue;
+        }
+        if (typeof value !== 'string') {
+          errors.push(issue('E03', file, null, `messages: "${key}" must be a string`));
+          continue;
+        }
+        if (dictionary) {
+          const allowed = new Set([...dictionary[key].matchAll(PLACEHOLDER)].map((m) => m[1]));
+          const extra = [...value.matchAll(PLACEHOLDER)].map((m) => m[1]).filter((n) => !allowed.has(n));
+          if (extra.length > 0) {
+            errors.push(
+              issue(
+                'E03',
+                file,
+                null,
+                `messages: "${key}" uses {${extra.join('}, {')}}, which the message does not have`,
+              ),
+            );
+            continue;
+          }
+        }
+        messages[key] = value;
+      }
+    }
+  }
+  return {
+    site: {
+      name: typeof data.name === 'string' ? data.name.trim() : '',
+      lang,
+      storagePrefix: typeof prefix === 'string' ? prefix : '',
+      fonts: typeof fonts === 'string' ? fonts : '',
+      repoBranch: typeof branch === 'string' ? branch : 'main',
+      messages,
+    },
+    errors,
+  };
+}
+
+/**
  * 分野ファイルを検査する。
  * Preconditions: data は fields/<id>.yml を解釈した値、id はファイル名から拡張子を除いたもの。
  * Postconditions: 分野を返す。誤りは errors に入れる。

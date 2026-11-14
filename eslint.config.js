@@ -11,7 +11,7 @@ export default [
   },
   {
     files: ['src/ui/client/**/*.js', 'src/ui/shared/**/*.js'],
-    languageOptions: { globals: { ...globals.browser } },
+    languageOptions: { globals: { ...globals.browser, ENAGA_SITE: 'readonly' } },
   },
   {
     files: ['tests/browser/**/*.js'],

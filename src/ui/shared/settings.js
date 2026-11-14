@@ -15,13 +15,22 @@ export const CHOICES = {
 /** html の data-<項目> 属性で切り替える項目(CSS と head の中のスクリプトが読む) */
 export const LOOK = ['theme', 'text', 'width'];
 
-/** ブラウザに保存するキー(docs/spec/site.md「ブラウザに保存するもの」) */
-export const KEYS = {
-  field: 'mathenaga-field',
-  settings: 'mathenaga-settings',
-  zoom: 'mathenaga-map-zoom',
-  bookmarks: 'mathenaga-bookmarks',
-};
+/**
+ * ブラウザに保存するキー(docs/spec/site.md「ブラウザに保存するもの」、docs/spec/ui-contract.md)。
+ * Preconditions: prefix は site.yml の storage_prefix(検査済み)。
+ * Postconditions: 4つのキーを返す。どれも `<prefix>-` で始まる。
+ * Failure modes: なし。
+ * Side effects: なし。
+ * @param {string} prefix
+ */
+export function storageKeys(prefix) {
+  return {
+    field: `${prefix}-field`,
+    settings: `${prefix}-settings`,
+    zoom: `${prefix}-map-zoom`,
+    bookmarks: `${prefix}-bookmarks`,
+  };
+}
 
 /**
  * ページを描く前に、保存した表示の設定のうちテーマ・文字の大きさ・本文の幅を html の属性に移す、head の中のスクリプト
@@ -31,9 +40,10 @@ export const KEYS = {
  * Postconditions: script 要素の中身にする文字列を返す。受け付ける値は、LOOK の項目の初期値以外の選択肢である。
  * Failure modes: なし。
  * Side effects: なし。
+ * @param {string} prefix  ブラウザに保存するキーの接頭辞
  * @returns {string}
  */
-export function lookScript() {
+export function lookScript(prefix) {
   const accepted = LOOK.map(
     (k) =>
       `${k}:[${CHOICES[k]
@@ -42,7 +52,7 @@ export function lookScript() {
         .join(',')}]`,
   ).join(',');
   return (
-    `try{var s=JSON.parse(localStorage.getItem('${KEYS.settings}')||'null'),r=document.documentElement,o={${accepted}};` +
+    `try{var s=JSON.parse(localStorage.getItem('${storageKeys(prefix).settings}')||'null'),r=document.documentElement,o={${accepted}};` +
     "if(s&&typeof s==='object')for(var k in o)if(o[k].indexOf(s[k])>=0)r.setAttribute('data-'+k,s[k])}catch(e){}"
   );
 }

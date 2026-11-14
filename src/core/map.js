@@ -42,63 +42,55 @@ export const GEOM = {
 };
 
 /**
- * 文字列のおおよその幅。全角は 1em、それ以外は 0.58em とみなす。
- * @param {string} s
- * @param {number} [font]
+ * @typedef {object} TextRules  文字の扱い。言語ごとの処理(src/ui/locales/)が決め、site.text で渡す
+ * @property {(ch: string) => number} charWidth  1文字のおおよその幅(em)
+ * @property {Array<(chars: string[], i: number) => boolean>} breakTiers  折り返す位置の選び方。前のものほど優先する
  */
-export function textWidth(s, font = GEOM.stFont) {
+
+/**
+ * 文字列のおおよその幅。1文字の幅は rules.charWidth が決める。
+ * @param {string} s
+ * @param {number} font
+ * @param {TextRules} rules
+ */
+export function textWidth(s, font, rules) {
   let w = 0;
-  for (const ch of s) w += /** @type {number} */ (ch.codePointAt(0)) >= 0x2e80 ? font : font * 0.58;
+  for (const ch of s) w += rules.charWidth(ch) * font;
   return w;
-}
-
-/** 「途中の目標」の札の幅 */
-const PILL_W = Math.round(textWidth('途中の目標', GEOM.pillFont) + 12);
-
-/** @param {string} ch */
-function script(ch) {
-  const cp = /** @type {number} */ (ch.codePointAt(0));
-  if (cp >= 0x30a0 && cp <= 0x30ff) return 'kata';
-  if (cp >= 0x3040 && cp <= 0x309f) return 'hira';
-  if (cp >= 0x4e00 && cp <= 0x9fff) return 'kanji';
-  return 'other';
 }
 
 /**
  * 文字列を幅 width に収まる行に折り返す(route-map.md「配置」6)。行に入るだけ詰めたうえで、
- * 「の」「・」の後ろ、「と」「や」の後ろ、文字の種類の変わり目の順に、折り返す位置を選ぶ。
+ * rules.breakTiers の順に、折り返す位置を選ぶ。
  * Preconditions: width は1文字の幅より大きい。
  * Postconditions: 1行以上の配列を返す。行をつなぐと元の文字列になる(行頭と行末の空白を除く)。
  * Failure modes: なし。
  * Side effects: なし。
  * @param {string} text
  * @param {number} width
- * @param {number} [font]
+ * @param {number} font
+ * @param {TextRules} rules
  * @returns {string[]}
  */
-export function wrapText(text, width, font = GEOM.stFont) {
+export function wrapText(text, width, font, rules) {
   const out = [];
   let rest = [...text];
   while (rest.length > 0) {
-    if (textWidth(rest.join(''), font) <= width) {
+    if (textWidth(rest.join(''), font, rules) <= width) {
       out.push(rest.join(''));
       break;
     }
     let fit = 0;
     let w = 0;
     for (const ch of rest) {
-      const cw = textWidth(ch, font);
+      const cw = textWidth(ch, font, rules);
       if (w + cw > width) break;
       w += cw;
       fit++;
     }
     fit = Math.max(1, fit);
     const r = rest;
-    const tiers = [
-      (/** @type {number} */ i) => 'の・'.includes(r[i - 1]),
-      (/** @type {number} */ i) => 'とや'.includes(r[i - 1]) || r[i - 1] === ' ',
-      (/** @type {number} */ i) => script(r[i - 1]) !== script(r[i]),
-    ];
+    const tiers = rules.breakTiers.map((t) => (/** @type {number} */ i) => t(r, i));
     // 行が短くなりすぎる位置では折り返さない
     const least = Math.max(2, Math.ceil(fit * 0.4));
     let cut = -1;
@@ -123,11 +115,11 @@ export function wrapText(text, width, font = GEOM.stFont) {
  * 行の数を max までにする。収まらなければ最後の行の末尾を「…」で省く。
  * @param {string[]} lines @param {number} max @param {number} width @param {number} font
  */
-function clampLines(lines, max, width, font) {
+function clampLines(lines, max, width, font, rules) {
   if (lines.length <= max) return lines;
   const head = lines.slice(0, max - 1);
   let last = [...lines.slice(max - 1).join('')];
-  while (last.length > 1 && textWidth(`${last.join('')}…`, font) > width) last = last.slice(0, -1);
+  while (last.length > 1 && textWidth(`${last.join('')}…`, font, rules) > width) last = last.slice(0, -1);
   return [...head, `${last.join('')}…`];
 }
 
@@ -460,7 +452,7 @@ export function prerequisiteArrows(lines, shown, branches) {
  * @property {number} y
  * @property {number} w
  * @property {number} h
- * @property {TextLine} head      「第N章」の行
+ * @property {TextLine & { textW: number }} head  「第N章」の行。textW は文字の幅(w は札の内側の幅)
  * @property {TextLine[]} titleLines
  * @property {PlacedStation[]} rows
  * @property {Overview[]} overview  縮小したときの札の文字。[0] が概要、[1] が章のタイトルだけ
@@ -527,33 +519,38 @@ function round(v) {
  * @param {any} chapter
  * @param {import('./graph.js').StationInfo[]} stations
  * @param {Map<string, import('./schema.js').Goal>} goals
+ * @param {TextRules} rules
  */
-function measureCard(chapter, stations, goals) {
+function measureCard(chapter, stations, goals, rules) {
   const g = GEOM;
   const inner = g.cardW - 2 * g.pad;
   const head = { text: '', x: g.pad, y: g.pad, w: inner, h: g.headH };
   let y = g.pad + g.headH + g.headGap;
-  const titleLines = clampLines(wrapText(chapter.title, inner, g.titleFont), 2, inner, g.titleFont).map((text) => {
-    const line = { text, x: g.pad, y, w: textWidth(text, g.titleFont), h: g.titleLineH };
-    y += g.titleLineH;
-    return line;
-  });
+  const titleLines = clampLines(wrapText(chapter.title, inner, g.titleFont, rules), 2, inner, g.titleFont, rules).map(
+    (text) => {
+      const line = { text, x: g.pad, y, w: textWidth(text, g.titleFont, rules), h: g.titleLineH };
+      y += g.titleLineH;
+      return line;
+    },
+  );
   y += g.titleGap;
   const rows = stations.map((info) => {
     const goal = goals.get(info.id) ?? null;
     const partial = goal && goal.kind === 'partial' ? goal : null;
     const nameX = info.planned ? g.pad : g.pad + g.plateW + g.plateGap;
-    const lines = wrapText(info.name, g.cardW - g.pad - nameX, g.stFont);
+    const lines = wrapText(info.name, g.cardW - g.pad - nameX, g.stFont, rules);
     const top = y;
     const name = lines.map((text, i) => ({
       text,
       x: nameX,
       y: top + i * g.stLineH,
-      w: textWidth(text, g.stFont),
+      w: textWidth(text, g.stFont, rules),
       h: g.stLineH,
     }));
     let h = Math.max(g.plateH, lines.length * g.stLineH);
-    const pill = partial ? { x: nameX, y: top + h + 2, w: PILL_W, h: g.pillH } : null;
+    const pill = partial
+      ? { x: nameX, y: top + h + 2, w: Math.round(textWidth('途中の目標', g.pillFont, rules) + 12), h: g.pillH }
+      : null;
     if (pill) h += 2 + g.pillH;
     const plate = info.planned ? null : { x: g.pad, y: top + (g.stLineH - g.plateH) / 2, w: g.plateW, h: g.plateH };
     y += h + g.rowGap;
@@ -573,7 +570,8 @@ function measureCard(chapter, stations, goals) {
   });
   y += g.pad - g.rowGap;
   // 札の高さは、縮小したときの章のタイトル(3行まで)も入る高さにする(route-map.md「配置」6)
-  const lines = (/** @type {number} */ font) => Math.min(OV_MAX_LINES, wrapText(chapter.title, inner, font).length);
+  const lines = (/** @type {number} */ font) =>
+    Math.min(OV_MAX_LINES, wrapText(chapter.title, inner, font, rules).length);
   const h = Math.max(
     y,
     2 * g.pad + g.ov1HeadH + g.ov1Gap + lines(g.ov1TitleFont) * g.ov1TitleLineH,
@@ -595,25 +593,26 @@ const OV_MAX_LINES = 3;
  * @param {string} headText  「第N章」の行の文字
  * @param {string} title
  * @param {number} h
+ * @param {TextRules} rules
  * @returns {Overview[]}
  */
-function measureOverview(headText, title, h) {
+function measureOverview(headText, title, h, rules) {
   const g = GEOM;
   const inner = g.cardW - 2 * g.pad;
   /** @param {number} top @param {number} font @param {number} lineH */
   const fit = (top, font, lineH) => {
     const max = Math.max(1, Math.floor((h - g.pad - top) / lineH));
-    return clampLines(wrapText(title, inner, font), max, inner, font).map((text, i) => ({
+    return clampLines(wrapText(title, inner, font, rules), max, inner, font, rules).map((text, i) => ({
       text,
       x: g.pad,
       y: top + i * lineH,
-      w: textWidth(text, font),
+      w: textWidth(text, font, rules),
       h: lineH,
     }));
   };
   // 「このページ」「未執筆」を添えると入らないときは「第N章」だけにする
-  const text = textWidth(headText, g.ov1HeadFont) <= inner ? headText : headText.split(' ')[0];
-  const head = { text, x: g.pad, y: g.pad, w: textWidth(text, g.ov1HeadFont), h: g.ov1HeadH };
+  const text = textWidth(headText, g.ov1HeadFont, rules) <= inner ? headText : headText.split(' ')[0];
+  const head = { text, x: g.pad, y: g.pad, w: textWidth(text, g.ov1HeadFont, rules), h: g.ov1HeadH };
   return [
     { head, lines: fit(g.pad + g.ov1HeadH + g.ov1Gap, g.ov1TitleFont, g.ov1TitleLineH) },
     { head: null, lines: fit(g.pad, g.ov2TitleFont, g.ov2TitleLineH) },
@@ -678,7 +677,7 @@ export function layoutMap(site, drawn, opts = {}) {
   const cards = new Map();
   /** @param {any} chapter @param {import('./graph.js').StationInfo[]} stations @param {string} lineId @param {number} col @param {number} tier */
   const addCard = (chapter, stations, lineId, col, tier) => {
-    const m = measureCard(chapter, stations, goals);
+    const m = measureCard(chapter, stations, goals, site.text);
     const current = !chapter.planned && chapter.id === (opts.highlight ?? null);
     const head = headText(chapter, current);
     /** @type {Card} */
@@ -695,10 +694,10 @@ export function layoutMap(site, drawn, opts = {}) {
       y: 0,
       w: g.cardW,
       h: m.h,
-      head: { ...m.head, text: head },
+      head: { ...m.head, text: head, textW: textWidth(head, GEOM.headFont, site.text) },
       titleLines: m.titleLines,
       rows: /** @type {any} */ (m.rows),
-      overview: measureOverview(head, chapter.title, m.h),
+      overview: measureOverview(head, chapter.title, m.h, site.text),
     };
     for (const r of card.rows) r.card = card;
     cards.set(chapter.number, card);
@@ -1417,7 +1416,7 @@ export function layoutMap(site, drawn, opts = {}) {
     for (const route of routes) {
       const conn = route.conn;
       if (!conn.label || quiet.has(conn.id)) continue;
-      const w = round(textWidth(conn.label, g.labelFont) + 2);
+      const w = round(textWidth(conn.label, g.labelFont, site.text) + 2);
       const h = g.labelH;
       /** 候補と、近さの点数(小さいほど先に試す) @type {Array<Box & { score: number }>} */
       const candidates = [];
@@ -1570,7 +1569,7 @@ export function layoutBoxes(layout) {
       /** @type {Box} */ b,
       /** @type {number} */ lod = 0,
     ) => boxes.push({ kind, owner, card: c.number, lod, x: c.x + b.x, y: c.y + b.y, w: b.w, h: b.h });
-    inCard('head', own, { ...c.head, w: textWidth(c.head.text, GEOM.headFont) });
+    inCard('head', own, { ...c.head, w: c.head.textW });
     for (const t of c.titleLines) inCard('title', own, t);
     for (const r of c.rows) {
       const owner = r.info.code || r.info.name;

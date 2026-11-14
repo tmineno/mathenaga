@@ -1,6 +1,6 @@
 // 路線図の章の札の強調(P-03)と、図の拡大・縮小・ドラッグ(docs/spec/route-map.md「リンク」「図の操作」)。
 
-import { KEYS } from '../shared/settings.js';
+import { KEYS } from './site.js';
 import { all } from './dom.js';
 import { getItem, setItem } from './storage.js';
 

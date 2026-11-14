@@ -7,6 +7,7 @@ import path from 'node:path';
 import { after, describe, test } from 'node:test';
 import { layoutBoxes, layoutMap, mapDescription, wrapText } from '../../src/core/map.js';
 import { otherLineGuide } from '../../src/core/navigation.js';
+import { text as jaText } from '../../src/ui/locales/ja.js';
 import {
   MERGE_LINE,
   addFinalGoal,
@@ -933,11 +934,11 @@ describe('route-map: 重なりの検査そのもの', () => {
 
 describe('route-map: 駅名の折り返し', () => {
   test('行に入るだけ詰め、「の」「・」の後ろ、文字の種類の変わり目で折り返す', () => {
-    assert.deepEqual(wrapText('バナッハの不動点定理', 78, 13), ['バナッハの', '不動点定理']);
-    assert.deepEqual(wrapText('リース・フィッシャーの定理', 124, 12), ['リース・', 'フィッシャーの定理']);
-    assert.deepEqual(wrapText('ヒルベルト空間', 78, 13), ['ヒルベルト', '空間']);
-    assert.deepEqual(wrapText('コンパクト性と連結性', 100, 13), ['コンパクト性と', '連結性']);
-    assert.deepEqual(wrapText('記号の読み方', 124, 12), ['記号の読み方']);
+    assert.deepEqual(wrapText('バナッハの不動点定理', 78, 13, jaText), ['バナッハの', '不動点定理']);
+    assert.deepEqual(wrapText('リース・フィッシャーの定理', 124, 12, jaText), ['リース・', 'フィッシャーの定理']);
+    assert.deepEqual(wrapText('ヒルベルト空間', 78, 13, jaText), ['ヒルベルト', '空間']);
+    assert.deepEqual(wrapText('コンパクト性と連結性', 100, 13, jaText), ['コンパクト性と', '連結性']);
+    assert.deepEqual(wrapText('記号の読み方', 124, 12, jaText), ['記号の読み方']);
   });
 });
 

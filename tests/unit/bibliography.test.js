@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { bibliography } from '../../src/ui/html/pages.js';
+import { bibliography } from '../../src/ui/locales/ja.js';
 
 /** @param {Partial<import('../../src/core/references.js').Reference>} r */
 const ref = (r) =>

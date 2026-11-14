@@ -1,6 +1,6 @@
 // 分野の切り替え(P-05)と、折りたたみの開閉(docs/spec/site.md「分野の切り替え」「ページと URL」)。
 
-import { KEYS } from '../shared/settings.js';
+import { KEYS } from './site.js';
 import { all, isChapter } from './dom.js';
 import { settings } from './settings.js';
 

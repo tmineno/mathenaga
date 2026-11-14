@@ -2,7 +2,8 @@
 // テーマ・文字の大きさ・本文の幅は、head の中のスクリプト(pages.js の LOOK_SCRIPT)が描く前に html の属性へ移す。
 // ここでは設定の読み書きと、残りの項目(折りたたみ・ポップアップ)の反映の土台を受け持つ。
 
-import { CHOICES, LOOK, KEYS } from '../shared/settings.js';
+import { CHOICES, LOOK } from '../shared/settings.js';
+import { KEYS } from './site.js';
 import { root } from './dom.js';
 import { readObject } from './storage.js';
 

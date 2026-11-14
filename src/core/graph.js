@@ -41,6 +41,7 @@ export const KIND_NAMES = {
 
 /**
  * @typedef {object} Site
+ * @property {import('./map.js').TextRules} text  路線図の文字の扱い(言語ごとの処理。ADR-009)
  * @property {import('./schema.js').Line[]} lines
  * @property {Map<string, import('./schema.js').Line>} lineById
  * @property {import('./schema.js').Field[]} fields    ID の文字コード順
@@ -66,7 +67,7 @@ export const KIND_NAMES = {
  *   誤りがあっても、正しく読めた部分で Site を作る。
  * Failure modes: 例外は投げない。
  * Side effects: なし。
- * @param {{ lines: import('./schema.js').Line[], fields: import('./schema.js').Field[], chapters: import('./chapter.js').ChapterModel[], linesFile: string, references?: import('./references.js').Reference[], referencesFile?: string }} input
+ * @param {{ lines: import('./schema.js').Line[], fields: import('./schema.js').Field[], chapters: import('./chapter.js').ChapterModel[], linesFile: string, references?: import('./references.js').Reference[], referencesFile?: string, text: import('./map.js').TextRules }} input
  * @returns {{ site: Site, errors: import('./issues.js').Issue[], notices: import('./issues.js').Issue[] }}
  */
 export function buildSite(input) {
@@ -301,6 +302,7 @@ export function buildSite(input) {
 
   /** @type {Site} */
   const site = {
+    text: input.text,
     lines,
     lineById,
     fields,

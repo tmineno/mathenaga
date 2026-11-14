@@ -1,7 +1,8 @@
 // 表示の設定のメニュー(P-09)(docs/spec/site.md「表示の設定」)。
 // 右下の歯車のボタンと、その上に開くメニュー。スクリプトが動くときだけ作る。
 
-import { LOOK, KEYS } from '../shared/settings.js';
+import { LOOK } from '../shared/settings.js';
+import { KEYS } from './site.js';
 import { isChapter } from './dom.js';
 import { apply, applyFolds, currentField } from './field.js';
 import { mapResets } from './map.js';

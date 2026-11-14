@@ -21,7 +21,7 @@ import {
   trim,
 } from '../../src/ui/html/logo.js';
 
-const LOGO = path.join(ROOT, 'src/site/assets/logo.txt');
+const LOGO = path.join(ROOT, 'content/assets/logo.txt');
 
 describe('logo: ドットマップ', () => {
   test('行の長さが不ぞろいなら、ファイル名と行番号を出して止まる', () => {
