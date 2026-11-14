@@ -1,5 +1,6 @@
-# format → lint → typecheck → test。どれかが失敗したらマージできないよう、
-# GitHub のブランチ保護でこのジョブ(check)を必須にする。docs/spec/build.md「CI と公開」。
+# format → test(enaga check)。どれかが失敗したらマージできないよう、
+# GitHub のブランチ保護でこのジョブ(check)を必須にする。ツールは enaga のリポジトリにあり、
+# lint と typecheck はそちらの CI で行う(enaga の docs/spec/build.md「CI と公開」、ADR-010)。
 name: CI
 
 on:
@@ -25,20 +26,16 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run format:check
-      - run: npm run lint
-      - run: npm run typecheck
-      # テストはヘッドレスでだけ起動するので、ヘッドレス版の Chromium だけを入れる。
-      - name: Install the browser for the viewing tests
+      - run: npm run build
+      # 確かめはヘッドレスでだけ起動するので、ヘッドレス版の Chromium だけを入れる。
+      - name: Install the browser for the site checks
         run: npx playwright install --with-deps --only-shell chromium
-      - run: npm test
+      - run: npm run check
       # 文献の一覧か確認の記録を変えた PR でだけ、検索 API で確認をやり直す。CI でネットワークを使うのは
-      # この手順だけ。手で書いた確認の記録はここで見つかる(docs/spec/reference-check.md、ADR-005)。
+      # この手順(と依存の取得)だけ。手で書いた確認の記録はここで見つかる(enaga の docs/spec/reference-check.md)。
       - name: Re-check the references changed in the pull request
         if: github.event_name == 'pull_request'
         run: |
-          changed=$(git diff --name-only HEAD^1 HEAD)
-          for dir in content tests/fixtures/content; do
-            if printf '%s\n' "$changed" | grep -qxE "$dir/references(\.yml|\.verified\.json)"; then
-              npm run refs:verify -- --check --content "$dir"
-            fi
-          done
+          if git diff --name-only HEAD^1 HEAD | grep -qxE 'content/references(\.yml|\.verified\.json)'; then
+            npm run refs:verify -- --check
+          fi
