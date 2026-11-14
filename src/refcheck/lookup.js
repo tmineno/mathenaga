@@ -4,7 +4,7 @@
 import { compactIsbn, isbnProblem, toIsbn13 } from '../core/references.js';
 import { familyFromName, firstYear } from './match.js';
 
-export const USER_AGENT = 'mathenaga-reference-check';
+export const USER_AGENT = 'enaga-reference-check';
 
 /**
  * @typedef {object} HttpResponse
