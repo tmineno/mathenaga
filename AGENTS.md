@@ -4,11 +4,11 @@
 
 ## 0. 優先順位
 
-1. [content-format.md](https://github.com/tmineno/enaga/blob/v0.1.0/docs/spec/content-format.md):原稿の形式と、ビルドが検査する規則。原稿の形式の正本です。この文書と食い違ったら、仕様が正しいものとします。
+1. [content-format.md](https://github.com/tmineno/enaga/blob/v0.1.1/docs/spec/content-format.md):原稿の形式と、ビルドが検査する規則。原稿の形式の正本です。この文書と食い違ったら、仕様が正しいものとします。
 2. この文書:書き方、品質、確かめ方、作業の流れ。
 3. 手本:完成稿の [第0章](content/chapters/00-reading-basics/index.md)、[第1章](content/chapters/01-convergence-metric/index.md)、[第3章](content/chapters/03-completeness-fixed-point/index.md)。迷ったら、これらと同じ書き方にします。
 
-サイトの考え方(路線・駅・分野)と用語は enaga の [docs/spec/README.md](https://github.com/tmineno/enaga/blob/v0.1.0/docs/spec/README.md) にあります。書き始める前に読んでください。
+サイトの考え方(路線・駅・分野)と用語は enaga の [docs/spec/README.md](https://github.com/tmineno/enaga/blob/v0.1.1/docs/spec/README.md) にあります。書き始める前に読んでください。
 
 ## 1. 読者と目的
 
@@ -180,14 +180,14 @@ line: 〈路線の ID〉
 ### 文献
 
 - 文献を引くのは、引いた箇所にその内容が書いてあることを確かめたときだけにする(その箇所の本文を読んで照合した、または人間が確かめた)。確かめられない文献は引かず、報告に書く。
-- 文献を `content/references.yml` に足すときは、書誌を出版社や雑誌のページ、本の奥付など、確認に使う検索 API とは別の情報源から書き、`npm run refs:verify` を通す([reference-check.md](https://github.com/tmineno/enaga/blob/v0.1.0/docs/spec/reference-check.md))。API の記録から書誌を書き写さない。書き写すと、照合が意味をなくす。
+- 文献を `content/references.yml` に足すときは、書誌を出版社や雑誌のページ、本の奥付など、確認に使う検索 API とは別の情報源から書き、`npm run refs:verify` を通す([reference-check.md](https://github.com/tmineno/enaga/blob/v0.1.1/docs/spec/reference-check.md))。API の記録から書誌を書き写さない。書き写すと、照合が意味をなくす。
 - `refs:verify` が `mismatch`(一致しない)と出したら、識別子を検索結果から選び直して通そうとしない。本の書評の DOI のように、別の実在の記録に当たることがある。食い違いを報告に書き、人間に判断を求める。
 - 確認の記録(`content/references.verified.json`)を手で書かない。
 
 ## 9. ビルドと確認
 
 1. `npm run build`:エラーが0件であること。文献を足したり書き換えたりしたら、先に `npm run refs:verify` を実行し、確認の記録もコミットする(しないと E15)。通知を読み、書いた章が N02(確認問題がない章)に出ないこと、書いた駅が N01(分野での応用がない駅)にできるだけ出ないことを確かめる(第0章の駅は除く)。
-2. `npm run check`:すべて通ること(先に `npx playwright install chromium` が要る)。この原稿(`content/`)で、重なりがない、数式の個数が一致する、などの値を書かない不変条件と、README のバナーを確かめる([ADR-004](https://github.com/tmineno/enaga/blob/v0.1.0/docs/adr/ADR-004-frozen-test-manuscript.md)、[ADR-010](https://github.com/tmineno/enaga/blob/v0.1.0/docs/adr/ADR-010-separate-repository.md))。落ちたら原稿を直す。原稿ではなくツールの誤りなら、原稿で回避せずに人間に報告する(ツールは enaga のリポジトリで直す)。
+2. `npm run check`:すべて通ること(先に `npx playwright install chromium` が要る)。この原稿(`content/`)で、重なりがない、数式の個数が一致する、などの値を書かない不変条件と、README のバナーを確かめる([ADR-004](https://github.com/tmineno/enaga/blob/v0.1.1/docs/adr/ADR-004-frozen-test-manuscript.md)、[ADR-010](https://github.com/tmineno/enaga/blob/v0.1.1/docs/adr/ADR-010-separate-repository.md))。落ちたら原稿を直す。原稿ではなくツールの誤りなら、原稿で回避せずに人間に報告する(ツールは enaga のリポジトリで直す)。
 3. `npm run dev`:章ページを幅 1200px と 400px で開き、分野を切り替えて、数式・表・リスト・応用の表示と、用語のポップアップを目で確かめる。
 
 ## 10. 作業の流れ
