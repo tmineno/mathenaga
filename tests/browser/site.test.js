@@ -2212,3 +2212,33 @@ describe('ブラウザでの受け入れテスト', { concurrency: true }, () =>
     });
   });
 });
+
+describe('ui-contract 3. 取り決めの要素がないときは、その機能だけが動かない', () => {
+  test('#_stations を消した章ページでは、しおりのボタンは出ず、分野の切り替えと用語ポップアップは動き、例外は0件', async () => {
+    const { context, page, errors } = await open();
+    try {
+      await page.route(/\/chapters\/completeness-fixed-point\/$/, async (route) => {
+        const res = await route.fetch();
+        const body = (await res.text()).replace(
+          /<script type="application\/json" id="_stations">[\s\S]*?<\/script>/,
+          '',
+        );
+        assert.ok(!body.includes('id="_stations"'));
+        await route.fulfill({ response: res, body });
+      });
+      await page.goto(`${server.url}${CH3}`);
+      assert.equal(await page.locator('#_stations').count(), 0);
+      // しおり:駅のしおりのボタンは hidden のまま
+      assert.equal(await page.locator('button.bm[data-bm]:visible').count(), 0);
+      // 分野の切り替え
+      await page.locator('.switch [data-set-field="physics"]').click();
+      assert.equal(await page.locator('.switch [data-set-field="physics"]').getAttribute('aria-pressed'), 'true');
+      // 用語ポップアップ
+      await page.locator('button.term').first().focus();
+      await page.locator('#_pop:not([hidden])').waitFor();
+      assert.deepEqual(errors, []);
+    } finally {
+      await context.close();
+    }
+  });
+});

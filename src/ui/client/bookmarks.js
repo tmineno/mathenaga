@@ -2,7 +2,7 @@
 // 駅のしおりのボタンで駅を入れ・外し、上端のバーのボタンで一覧を開く。駅の ID の並びとして保存する。
 // 一覧の表示番号・駅名・章は、ページに埋め込んだ駅の索引(_stations)から引く。
 
-import { KEYS } from '../shared/settings.js';
+import { KEYS } from './site.js';
 import { all, base } from './dom.js';
 import { getItem, setItem } from './storage.js';
 
@@ -10,14 +10,23 @@ import { getItem, setItem } from './storage.js';
  * しおりを始める(ボタン・一覧・ほかのタブとの同期)。
  * Preconditions: なし。
  * Postconditions: しおりのボタンと一覧が動き、保存した駅の ID の並びと合う。返す clear で全部消せる。
+ *   駅の索引(#_stations)がないページでは、ボタンも一覧も出さず、clear は保存した値だけを消す(ui-contract.md「Failure modes」)。
  * Failure modes: 保存した値の形が違えば空として扱う。駅の索引が壊れていれば一覧は空になる。
  * Side effects: 一覧のパネルを body に足す、イベントリスナーの登録、しおりの保存。
  * @returns {{ clear: () => void }}
  */
 export function initBookmarks() {
+  var index = document.getElementById('_stations');
+  if (!index) {
+    return {
+      clear: function () {
+        setItem(KEYS.bookmarks, null);
+      },
+    };
+  }
   var stations;
   try {
-    stations = JSON.parse((document.getElementById('_stations') || {}).textContent || '[]');
+    stations = JSON.parse(index.textContent || '[]');
   } catch {
     stations = [];
   }
